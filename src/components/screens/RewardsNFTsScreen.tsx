@@ -67,10 +67,12 @@ export function RewardsNFTsScreen() {
     tier, 
     subtractBB, 
     addBZ, 
+    addBB,
     addXP,
     totalUpgrades,
     totalConversions,
-    totalTapIncome
+    totalTapIncome,
+    totalTaps
   } = useGameState();
   
   const [dailyStreak, setDailyStreak] = useState(0);
@@ -188,17 +190,7 @@ export function RewardsNFTsScreen() {
     }
   };
 
-  // Check total taps for Golden Bunny
-  const getTotalTaps = (): number => {
-    try {
-      const saved = localStorage.getItem("bunergy_total_taps");
-      return saved ? parseInt(saved) : 0;
-    } catch {
-      return 0;
-    }
-  };
-
-  // NFTs with requirements
+  // NFTs with requirements (now using totalTaps from context)
   const nfts: NFT[] = [
     {
       key: "early_adopter",
@@ -257,7 +249,7 @@ export function RewardsNFTsScreen() {
       description: "The ultimate tapping achievement.",
       price: 5,
       requirement: "5M taps total",
-      requirementMet: getTotalTaps() >= 5000000,
+      requirementMet: totalTaps >= 5000000,
       owned: ownedNFTs.includes("golden_bunny")
     },
     {
@@ -282,10 +274,11 @@ export function RewardsNFTsScreen() {
 
     if (reward.type === "BZ") {
       addBZ(reward.amount);
+    } else if (reward.type === "BB") {
+      addBB(reward.amount);
     } else if (reward.type === "XP") {
       addXP(reward.amount);
     }
-    // BB reward would be added when backend is ready
 
     const newStreak = nextDay;
     setDailyStreak(newStreak);
@@ -301,10 +294,11 @@ export function RewardsNFTsScreen() {
           // Award the reward
           if (challenge.reward.type === "BZ") {
             addBZ(challenge.reward.amount);
+          } else if (challenge.reward.type === "BB") {
+            addBB(challenge.reward.amount);
           } else if (challenge.reward.type === "XP") {
             addXP(challenge.reward.amount);
           }
-          // BB reward would be added when backend is ready
           
           return { ...challenge, claimed: true };
         }
@@ -342,7 +336,7 @@ export function RewardsNFTsScreen() {
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">Rewards & NFTs</h1>
         <p className="text-sm text-muted-foreground">
-          Claim daily rewards and collect exclusive NFTs
+          Claim daily rewards, complete challenges, and collect exclusive NFTs
         </p>
       </div>
 
@@ -381,7 +375,7 @@ export function RewardsNFTsScreen() {
                     <Check className="h-4 w-4 mx-auto text-green-600" />
                   ) : (
                     <p className="text-xs font-bold">
-                      {reward.amount.toLocaleString()} {reward.type}
+                      {reward.type === "BB" ? reward.amount.toFixed(3) : reward.amount.toLocaleString()} {reward.type}
                     </p>
                   )}
                 </div>
@@ -398,7 +392,7 @@ export function RewardsNFTsScreen() {
             {canClaimDaily ? (
               <>
                 <Gift className="mr-2 h-5 w-5" />
-                Claim {currentDayReward.amount.toLocaleString()} {currentDayReward.type}
+                Claim {currentDayReward.type === "BB" ? currentDayReward.amount.toFixed(3) : currentDayReward.amount.toLocaleString()} {currentDayReward.type}
               </>
             ) : (
               "Come back tomorrow!"
@@ -443,7 +437,7 @@ export function RewardsNFTsScreen() {
                       <div className="flex items-center gap-2 mt-1">
                         <TrendingUp className="h-3 w-3 text-green-600" />
                         <span className="text-xs font-medium">
-                          +{challenge.reward.amount.toLocaleString()} {challenge.reward.type}
+                          +{challenge.reward.type === "BB" ? challenge.reward.amount.toFixed(3) : challenge.reward.amount.toLocaleString()} {challenge.reward.type}
                         </span>
                       </div>
                     </div>
