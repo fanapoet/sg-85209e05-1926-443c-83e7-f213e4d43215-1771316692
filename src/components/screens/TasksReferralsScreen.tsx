@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Circle, Trophy, Users, Star, ArrowRight, Loader2 } from "lucide-react";
+import { CheckCircle2, Trophy, Star, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -75,115 +75,98 @@ export function TasksReferralsScreen() {
   const [referralLink, setReferralLink] = useState<string>("");
   const [referralStats, setReferralStats] = useState<ReferralStats | null>(null);
   const [claimedMilestones, setClaimedMilestones] = useState<number[]>([]);
-  const [loading, setLoading] = useState(false);
+  
+  // Loading & Error states
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string>("");
   const [userId, setUserId] = useState<string | null>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
 
   // Initialize user and referral code
   useEffect(() => {
-    const initUser = async () => {
+    const initReferralSystem = async () => {
+      console.log("🚀 Initializing Referral System...");
+      setIsLoading(true);
+      setErrorMessage("");
+
       try {
-        setIsInitializing(true);
-        const { data: { user } } = await supabase.auth.getUser();
+        // 1. Get User
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
         
-        if (user) {
-          setUserId(user.id);
-          
-          // Get or create profile with referral code
-          const profile = await getOrCreateProfile(user.id);
-          setReferralCode(profile.referralCode);
-          setReferralLink(`https://t.me/bunergy_bot/app?startapp=${profile.referralCode.toLowerCase()}`);
-        }
-      } catch (err) {
-        console.error("Error initializing user:", err);
-        toast({
-          title: "Connection Error",
-          description: "Failed to load referral data. Please refresh the app.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsInitializing(false);
-      }
-    };
+        if (authError) throw new Error(`Auth Error: ${authError.message}`);
+        if (!user) throw new Error("No authenticated user found. Please try refreshing.");
+        
+        console.log("✅ User authenticated:", user.id);
+        setUserId(user.id);
 
-    initUser();
-  }, [toast]);
+        // 2. Get Profile & Referral Code
+        console.log("🔍 Fetching profile...");
+        const profile = await getOrCreateProfile(user.id);
+        
+        if (!profile.referralCode) throw new Error("Failed to generate referral code.");
+        
+        console.log("✅ Profile loaded:", profile);
+        setReferralCode(profile.referralCode);
+        setReferralLink(`https://t.me/bunergy_bot/app?startapp=${profile.referralCode.toLowerCase()}`);
 
-  // Load referral stats
-  useEffect(() => {
-    if (!userId) return;
-
-    const loadReferralData = async () => {
-      try {
-        const [stats, milestones] = await Promise.all([
-          getReferralStats(userId),
-          getClaimedMilestones(userId)
-        ]);
+        // 3. Get Referral Stats
+        console.log("🔍 Fetching stats...");
+        const stats = await getReferralStats(user.id);
         setReferralStats(stats);
+        
+        // 4. Get Milestones
+        const milestones = await getClaimedMilestones(user.id);
         setClaimedMilestones(milestones);
+
+        // 5. Check for incoming referral (if opened via link)
+        await handleIncomingReferral(user.id);
+
+        console.log("✨ Referral System Initialized Successfully!");
       } catch (err) {
-        console.error("Error loading referral data:", err);
+        console.error("❌ Initialization failed:", err);
+        setErrorMessage(err instanceof Error ? err.message : "Unknown error occurred");
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    loadReferralData();
-    const interval = setInterval(loadReferralData, 30000); // Refresh every 30s
-    return () => clearInterval(interval);
-  }, [userId]);
+    initReferralSystem();
+  }, []);
 
-  // Handle referral binding from URL
-  useEffect(() => {
-    if (!userId) return;
+  // Handle incoming referral from URL start_param
+  const handleIncomingReferral = async (currentUserId: string) => {
+    try {
+      const alreadyReferred = await checkReferralExists(currentUserId);
+      if (alreadyReferred) return;
 
-    const handleReferralBinding = async () => {
-      try {
-        // Check if already referred
-        const alreadyReferred = await checkReferralExists(userId);
-        if (alreadyReferred) return;
+      const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_parameter;
+      if (!startParam || !startParam.toLowerCase().startsWith("ref")) return;
 
-        // Get start param from Telegram
-        const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_parameter;
-        if (!startParam || !startParam.toLowerCase().startsWith("ref")) return;
-
-        const inviterCode = startParam.toUpperCase();
-        
-        // Find inviter by code
-        const inviterId = await findInviterByCode(inviterCode);
-        if (!inviterId) {
-          console.log("Invalid referral code");
-          return;
-        }
-
-        // Create referral relationship
-        const result = await createReferral(inviterId, userId, inviterCode);
-        
-        if (result.success) {
-          // Claim one-time bonus for both parties
-          const bonusResult = await claimReferralBonus(inviterId, userId);
-          
-          if (bonusResult.success) {
-            // Invitee gets 500 BZ
-            if (bonusResult.inviteeReward) {
-              addBZ(bonusResult.inviteeReward);
-              toast({
-                title: "Welcome Bonus!",
-                description: `You received ${bonusResult.inviteeReward} BZ for joining!`,
-              });
-            }
-            
-            // Inviter will get 1000 BZ + 1000 XP on their next app open
-            // (handled in their app session)
-          }
-        }
-      } catch (err) {
-        console.error("Error handling referral binding:", err);
+      console.log("🔗 Processing referral link:", startParam);
+      const inviterCode = startParam.toUpperCase();
+      const inviterId = await findInviterByCode(inviterCode);
+      
+      if (!inviterId) {
+        console.warn("⚠️ Invalid inviter code");
+        return;
       }
-    };
 
-    handleReferralBinding();
-  }, [userId, addBZ, toast]);
+      const result = await createReferral(inviterId, currentUserId, inviterCode);
+      if (result.success) {
+        const bonusResult = await claimReferralBonus(inviterId, currentUserId);
+        if (bonusResult.success && bonusResult.inviteeReward) {
+          addBZ(bonusResult.inviteeReward);
+          toast({
+            title: "Welcome Bonus!",
+            description: `You received ${bonusResult.inviteeReward} BZ for joining!`,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("⚠️ Error processing referral:", err);
+    }
+  };
 
-  // Load claimed tasks
+  // Load claimed tasks from local storage
   useEffect(() => {
     const saved = localStorage.getItem("bunergy_claimed_tasks");
     if (saved) {
@@ -224,7 +207,6 @@ export function TasksReferralsScreen() {
   const handleClaimPendingEarnings = async () => {
     if (!userId || !referralStats) return;
 
-    setLoading(true);
     try {
       const result = await claimPendingEarnings(userId);
       if (result.success && result.amount > 0) {
@@ -251,15 +233,12 @@ export function TasksReferralsScreen() {
         description: "Failed to claim earnings. Please try again.",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   const handleClaimMilestone = async (milestoneCount: number, xpReward: number) => {
     if (!userId || claimedMilestones.includes(milestoneCount)) return;
 
-    setLoading(true);
     try {
       const result = await checkAndClaimMilestone(userId, referralCount);
       if (result.milestone && result.xpReward) {
@@ -272,8 +251,6 @@ export function TasksReferralsScreen() {
       }
     } catch (err) {
       console.error("Error claiming milestone:", err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -406,17 +383,6 @@ export function TasksReferralsScreen() {
     );
   };
 
-  if (isInitializing) {
-    return (
-      <div className="pb-24 p-4 max-w-2xl mx-auto flex items-center justify-center min-h-screen">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
-          <p className="text-muted-foreground">Loading referral data...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="pb-24 p-4 max-w-2xl mx-auto space-y-6">
       <div className="space-y-2">
@@ -448,204 +414,110 @@ export function TasksReferralsScreen() {
           </div>
         </TabsContent>
 
-        <TabsContent value="referrals" className="space-y-6 mt-4">
-          <Card className="p-6 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border-blue-200 dark:border-blue-800">
-            <div className="text-center space-y-4">
-              <Users className="h-12 w-12 mx-auto text-blue-500" />
-              <div>
-                <h3 className="text-xl font-bold">Invite Friends</h3>
-                <p className="text-muted-foreground">Share your unique referral code!</p>
-              </div>
-              
-              <div className="space-y-3">
-                <div className="p-4 bg-background/50 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm font-medium mb-2">Your Referral Code</p>
-                  <code className="text-2xl font-bold bg-muted p-3 rounded block">
-                    {referralCode || "Loading..."}
-                  </code>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Linked to your Telegram account
-                  </p>
-                </div>
-
-                <div className="p-3 bg-background/50 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-xs font-medium mb-1">Direct Link</p>
-                  <code className="text-xs bg-muted p-2 rounded block break-all">
-                    {referralLink || "Loading..."}
-                  </code>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
-                  <p className="font-semibold text-green-700 dark:text-green-400">Friend Gets</p>
-                  <p className="text-xl font-bold text-green-600">+500 BZ</p>
-                  <p className="text-xs text-muted-foreground">Instant bonus</p>
-                </div>
-                <div className="p-3 bg-purple-50 dark:bg-purple-950 rounded-lg border border-purple-200 dark:border-purple-800">
-                  <p className="font-semibold text-purple-700 dark:text-purple-400">You Get</p>
-                  <p className="text-xl font-bold text-purple-600">+1,000 BZ</p>
-                  <p className="text-xs text-muted-foreground">+ 1,000 XP</p>
-                </div>
-              </div>
-
-              <div className="p-3 bg-orange-50 dark:bg-orange-950 rounded-lg border border-orange-200 dark:border-orange-800">
-                <p className="text-sm font-semibold text-orange-700 dark:text-orange-400 mb-1">
-                  💰 Lifetime Share: 20%
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Earn 20% of all BZ your referrals generate from tapping and idle income forever!
-                </p>
-              </div>
-
-              <Button 
-                className="w-full gap-2" 
-                size="lg" 
-                onClick={() => {
-                  if (referralLink) {
-                    if (window.Telegram?.WebApp) {
-                      window.Telegram.WebApp.openTelegramLink(
-                        `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent("Join me on Bunergy and earn rewards!")}`
-                      );
-                    }
-                    navigator.clipboard.writeText(referralLink);
-                    toast({
-                      title: "Link Copied!",
-                      description: "Share this link with your friends to earn rewards.",
-                    });
-                  }
-                }}
-              >
-                <ArrowRight className="h-4 w-4" />
-                Share Referral Link
-              </Button>
-            </div>
-          </Card>
-
-          {/* Pending Income */}
+        <TabsContent value="referrals" className="space-y-4">
           <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="font-semibold">Pending Referral Income</h3>
-                <p className="text-xs text-muted-foreground">20% share from your referrals</p>
-              </div>
-              <Badge variant="outline" className="text-lg">
-                {referralStats ? referralStats.pending_earnings.toLocaleString() : "0"} BZ
-              </Badge>
-            </div>
-            <Button 
-              className="w-full" 
-              variant="default"
-              disabled={loading || !referralStats || referralStats.pending_earnings === 0}
-              onClick={handleClaimPendingEarnings}
-            >
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Claim Pending Income
-            </Button>
-          </Card>
-
-          {/* Referral Milestones */}
-          <Card className="p-4">
-            <h3 className="font-semibold mb-3">Referral Milestones</h3>
-            <div className="space-y-3">
-              {[
-                { count: 5, reward: 5000 },
-                { count: 10, reward: 15000 },
-                { count: 25, reward: 50000 },
-                { count: 50, reward: 150000 }
-              ].map((milestone) => {
-                const reached = referralCount >= milestone.count;
-                const claimed = claimedMilestones.includes(milestone.count);
-
-                return (
-                  <div 
-                    key={milestone.count}
-                    className={`p-3 rounded-lg border-2 ${
-                      claimed
-                        ? "bg-green-50 dark:bg-green-950 border-green-500" 
-                        : reached
-                        ? "bg-blue-50 dark:bg-blue-950 border-blue-500"
-                        : "bg-muted border-muted-foreground/20"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {claimed ? (
-                          <CheckCircle2 className="h-5 w-5 text-green-600" />
-                        ) : (
-                          <Circle className="h-5 w-5 text-muted-foreground" />
-                        )}
-                        <div>
-                          <p className="font-semibold">{milestone.count} Referrals</p>
-                          <p className="text-xs text-muted-foreground">
-                            Reward: {milestone.reward.toLocaleString()} XP
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={reached ? "default" : "outline"}>
-                          {referralCount}/{milestone.count}
-                        </Badge>
-                        {reached && !claimed && (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            disabled={loading}
-                            onClick={() => handleClaimMilestone(milestone.count, milestone.reward)}
-                          >
-                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Claim"}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-
-          {/* Referral List */}
-          <div className="space-y-4">
-            <h3 className="font-semibold">Your Referrals ({referralStats?.total_referrals || 0})</h3>
-            {!referralStats || referralStats.total_referrals === 0 ? (
-              <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg">
-                <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>No referrals yet.</p>
-                <p className="text-sm">Share your code to start earning!</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {referralStats.referrals.slice(0, 10).map((ref, i) => (
-                  <Card key={ref.invitee_id} className="p-3 flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold">
-                        {String.fromCharCode(65 + (i % 26))}
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">
-                          User {ref.invitee_id.slice(0, 8)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Earned: {ref.total_earned.toLocaleString()} BZ
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant="outline" className="text-green-600">
-                        +{ref.your_share.toLocaleString()} BZ
-                      </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">Your share</p>
-                    </div>
-                  </Card>
-                ))}
-                {referralStats.total_referrals > 10 && (
-                  <p className="text-center text-sm text-muted-foreground pt-2">
-                    And {referralStats.total_referrals - 10} more referrals...
-                  </p>
-                )}
+            <h3 className="font-semibold mb-3">Your Referral Code</h3>
+            
+            {isLoading && !errorMessage && (
+              <div className="text-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-2" />
+                <p className="text-muted-foreground">Loading referral data...</p>
               </div>
             )}
-          </div>
+
+            {errorMessage && (
+              <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded p-4 mb-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="h-2 w-2 rounded-full bg-red-500" />
+                  <p className="font-semibold text-red-700 dark:text-red-300">Connection Error</p>
+                </div>
+                <p className="text-sm text-red-600 dark:text-red-400 mb-3">{errorMessage}</p>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={() => window.location.reload()}
+                >
+                  Refresh App
+                </Button>
+              </div>
+            )}
+
+            {!isLoading && !errorMessage && referralCode && (
+              <>
+                <div className="bg-muted p-4 rounded-lg text-center mb-4">
+                  <p className="text-3xl font-bold tracking-wider font-mono">{referralCode}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Your Unique Invite Code</p>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">Share your invite link:</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={referralLink}
+                      readOnly
+                      className="flex-1 px-3 py-2 bg-muted rounded text-sm border focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(referralLink);
+                        toast({ title: "Copied!", description: "Link copied to clipboard" });
+                      }}
+                    >
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-6 border-t">
+                  <div className="grid grid-cols-2 gap-4 text-center">
+                    <div>
+                      <p className="text-2xl font-bold">{referralStats?.total_referrals || 0}</p>
+                      <p className="text-xs text-muted-foreground">Total Referrals</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-green-600">{(referralStats?.pending_earnings || 0).toLocaleString()}</p>
+                      <p className="text-xs text-muted-foreground">Pending BZ</p>
+                    </div>
+                  </div>
+
+                  {referralStats?.pending_earnings ? (
+                     referralStats.pending_earnings > 0 && (
+                      <Button 
+                        className="w-full mt-4" 
+                        onClick={handleClaimPendingEarnings}
+                        variant="default"
+                      >
+                        Claim {referralStats.pending_earnings.toLocaleString()} BZ
+                      </Button>
+                    )
+                  ) : null}
+                </div>
+              </>
+            )}
+          </Card>
+          
+          {!isLoading && !errorMessage && referralStats?.referrals && referralStats.referrals.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="font-semibold">Your Referrals</h3>
+              {referralStats.referrals.map((ref) => (
+                <Card key={ref.invitee_id} className="p-3 flex justify-between items-center">
+                  <div>
+                    <p className="font-medium">User {ref.invitee_id.slice(0, 8)}...</p>
+                    <p className="text-xs text-muted-foreground">
+                      Joined {new Date(ref.invited_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-green-600">+{ref.your_share.toLocaleString()} BZ</p>
+                    <p className="text-xs text-muted-foreground">Your 20% Share</p>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>

@@ -22,6 +22,8 @@ export type Database = {
           email: string | null
           full_name: string | null
           id: string
+          referral_code: string | null
+          telegram_id: number | null
           updated_at: string | null
         }
         Insert: {
@@ -30,6 +32,8 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id: string
+          referral_code?: string | null
+          telegram_id?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -38,43 +42,48 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           id?: string
+          referral_code?: string | null
+          telegram_id?: number | null
           updated_at?: string | null
         }
         Relationships: []
       }
       referral_earnings: {
         Row: {
-          amount: number
           claimed: boolean | null
           claimed_at: string | null
-          earned_at: string | null
-          earnings_type: string
           id: string
+          idle_earnings: number | null
           invitee_id: string
           inviter_id: string
-          share_amount: number
+          last_snapshot_idle: number | null
+          last_snapshot_tap: number | null
+          tap_earnings: number | null
+          total_pending: number | null
         }
         Insert: {
-          amount: number
           claimed?: boolean | null
           claimed_at?: string | null
-          earned_at?: string | null
-          earnings_type: string
           id?: string
+          idle_earnings?: number | null
           invitee_id: string
           inviter_id: string
-          share_amount: number
+          last_snapshot_idle?: number | null
+          last_snapshot_tap?: number | null
+          tap_earnings?: number | null
+          total_pending?: number | null
         }
         Update: {
-          amount?: number
           claimed?: boolean | null
           claimed_at?: string | null
-          earned_at?: string | null
-          earnings_type?: string
           id?: string
+          idle_earnings?: number | null
           invitee_id?: string
           inviter_id?: string
-          share_amount?: number
+          last_snapshot_idle?: number | null
+          last_snapshot_tap?: number | null
+          tap_earnings?: number | null
+          total_pending?: number | null
         }
         Relationships: []
       }
@@ -104,30 +113,27 @@ export type Database = {
       }
       referrals: {
         Row: {
+          bonus_claimed: boolean | null
           id: string
           invited_at: string | null
           invitee_id: string
-          invitee_reward_claimed: boolean | null
           inviter_id: string
-          inviter_reward_claimed: boolean | null
           referral_code: string
         }
         Insert: {
+          bonus_claimed?: boolean | null
           id?: string
           invited_at?: string | null
           invitee_id: string
-          invitee_reward_claimed?: boolean | null
           inviter_id: string
-          inviter_reward_claimed?: boolean | null
           referral_code: string
         }
         Update: {
+          bonus_claimed?: boolean | null
           id?: string
           invited_at?: string | null
           invitee_id?: string
-          invitee_reward_claimed?: boolean | null
           inviter_id?: string
-          inviter_reward_claimed?: boolean | null
           referral_code?: string
         }
         Relationships: []
