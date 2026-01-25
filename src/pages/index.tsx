@@ -16,49 +16,71 @@ type TabKey = "tap" | "boost" | "build" | "convert" | "xp" | "rewards" | "tasks"
 export default function Home() {
   const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("tap");
+  const [debugInfo, setDebugInfo] = useState<string>("");
 
   useEffect(() => {
-    // Multiple detection attempts to ensure accuracy
-    let attempts = 0;
-    const maxAttempts = 5;
+    // Clear corrupted tasks data on first load (one-time migration)
+    const migrationKey = "bunergy_tasks_migration_v2";
+    if (typeof window !== "undefined" && !localStorage.getItem(migrationKey)) {
+      try {
+        // Clear potentially corrupted task data
+        localStorage.removeItem("bunergy_tasks");
+        localStorage.setItem(migrationKey, "done");
+        console.log("Tasks data cleared for fresh start");
+      } catch (e) {
+        console.error("Migration error:", e);
+      }
+    }
+
+    // Enhanced Telegram detection with multiple checks
+    let detectionComplete = false;
     
-    const checkTelegram = () => {
-      attempts++;
-      
-      // Check for Telegram WebApp
+    const detectTelegram = () => {
+      if (detectionComplete) return;
+
+      // Check 1: Telegram WebApp object
       const tg = (window as any).Telegram?.WebApp;
       
-      if (tg && typeof tg.initData !== "undefined") {
-        // Confirmed Telegram environment
+      // Check 2: Telegram platform
+      const isTgPlatform = (window as any).Telegram?.WebApp?.platform;
+      
+      // Check 3: Init data (most reliable)
+      const hasInitData = tg && typeof tg.initData === "string";
+      
+      // Check 4: User agent hints
+      const userAgent = navigator.userAgent.toLowerCase();
+      const isTelegramUA = userAgent.includes("telegram");
+
+      const debug = `TG Object: ${!!tg}, Platform: ${isTgPlatform || "none"}, InitData: ${hasInitData}, UA: ${isTelegramUA}`;
+      setDebugInfo(debug);
+      console.log("Telegram Detection:", debug);
+
+      // Consider it Telegram if ANY strong indicator is present
+      const isTelegram = hasInitData || (tg && isTgPlatform) || isTelegramUA;
+
+      if (isTelegram) {
+        detectionComplete = true;
         setIsInTelegram(true);
         
         // Initialize Telegram Mini App
         try {
-          tg.ready();
-          tg.expand();
-          
-          // Apply Telegram theme
-          const applyTheme = () => {
-            const isDark = tg.colorScheme === "dark";
-            document.documentElement.classList.toggle("dark", isDark);
-          };
-          
-          applyTheme();
-          
-          // Listen for theme changes
-          tg.onEvent("themeChanged", applyTheme);
-          
-          return () => {
-            tg.offEvent("themeChanged", applyTheme);
-          };
+          if (tg) {
+            tg.ready();
+            tg.expand();
+            
+            // Apply Telegram theme
+            const applyTheme = () => {
+              const isDark = tg.colorScheme === "dark";
+              document.documentElement.classList.toggle("dark", isDark);
+            };
+            
+            applyTheme();
+            tg.onEvent("themeChanged", applyTheme);
+          }
         } catch (error) {
           console.error("Telegram initialization error:", error);
         }
         
-        return true;
-      } else if (attempts >= maxAttempts) {
-        // Not in Telegram after multiple attempts
-        setIsInTelegram(false);
         return true;
       }
       
@@ -66,14 +88,19 @@ export default function Home() {
     };
 
     // Immediate check
-    if (checkTelegram()) return;
+    if (detectTelegram()) return;
     
-    // Retry checks with increasing delays
-    const timers = [100, 300, 600, 1000].map((delay, index) => 
+    // Retry with delays (SDK might load asynchronously)
+    const timers = [50, 150, 300, 600, 1000, 2000].map((delay, index) => 
       setTimeout(() => {
-        if (checkTelegram()) {
+        if (detectTelegram()) {
           // Clear remaining timers
           timers.slice(index + 1).forEach(clearTimeout);
+        } else if (delay === 2000) {
+          // Final attempt failed - not in Telegram
+          detectionComplete = true;
+          setIsInTelegram(false);
+          console.log("Final verdict: Not in Telegram environment");
         }
       }, delay)
     );
@@ -89,7 +116,12 @@ export default function Home() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-3">
           <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
-          <div className="text-muted-foreground text-sm">Loading Bunergy...</div>
+          <div className="text-muted-foreground text-sm">Detecting environment...</div>
+          {debugInfo && (
+            <div className="text-xs text-muted-foreground/60 max-w-xs mx-auto font-mono">
+              {debugInfo}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -100,7 +132,7 @@ export default function Home() {
     return <TelegramBlocker />;
   }
 
-  // Main app shell
+  // Main app shell (only in Telegram)
   return (
     <>
       <SEO
