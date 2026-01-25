@@ -143,33 +143,52 @@ export function BuildScreen() {
   });
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [powerSurgeUsed, setPowerSurgeUsed] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load persisted state
+  // Load persisted state ONCE on mount
   useEffect(() => {
-    const savedParts = localStorage.getItem("buildParts");
-    const savedIdle = localStorage.getItem("idleState");
-    const savedPowerSurge = localStorage.getItem("powerSurgeUsed");
+    try {
+      const savedParts = localStorage.getItem("buildParts");
+      const savedIdle = localStorage.getItem("idleState");
+      const savedPowerSurge = localStorage.getItem("powerSurgeUsed");
 
-    if (savedParts) {
-      const loaded = JSON.parse(savedParts);
-      setPartStates(loaded);
-    } else {
-      // Initialize all parts at L0
+      if (savedParts) {
+        const loaded = JSON.parse(savedParts);
+        setPartStates(loaded);
+      } else {
+        // Initialize all parts at L0
+        const initial: Record<PartKey, PartState> = {};
+        allParts.forEach(part => {
+          initial[part.key] = { level: 0, upgrading: false, upgradeStartTime: 0, upgradeEndTime: 0 };
+        });
+        setPartStates(initial);
+        localStorage.setItem("buildParts", JSON.stringify(initial));
+      }
+
+      if (savedIdle) {
+        setIdleState(JSON.parse(savedIdle));
+      } else {
+        const defaultIdle = { lastClaimTime: Date.now(), activeBuildKey: null };
+        setIdleState(defaultIdle);
+        localStorage.setItem("idleState", JSON.stringify(defaultIdle));
+      }
+
+      if (savedPowerSurge) {
+        setPowerSurgeUsed(JSON.parse(savedPowerSurge));
+      }
+
+      setIsLoaded(true);
+    } catch (error) {
+      console.error("Failed to load build state:", error);
+      // Initialize fresh state on error
       const initial: Record<PartKey, PartState> = {};
       allParts.forEach(part => {
         initial[part.key] = { level: 0, upgrading: false, upgradeStartTime: 0, upgradeEndTime: 0 };
       });
       setPartStates(initial);
+      setIsLoaded(true);
     }
-
-    if (savedIdle) {
-      setIdleState(JSON.parse(savedIdle));
-    }
-
-    if (savedPowerSurge) {
-      setPowerSurgeUsed(JSON.parse(savedPowerSurge));
-    }
-  }, []);
+  }, []); // Run ONLY once on mount
 
   // Clock tick
   useEffect(() => {
@@ -181,6 +200,8 @@ export function BuildScreen() {
 
   // Auto-complete builds
   useEffect(() => {
+    if (!isLoaded) return;
+
     const now = Date.now();
     let updated = false;
     const newStates = { ...partStates };
@@ -195,8 +216,9 @@ export function BuildScreen() {
         updated = true;
 
         if (idleState.activeBuildKey === key) {
-          setIdleState(prev => ({ ...prev, activeBuildKey: null }));
-          localStorage.setItem("idleState", JSON.stringify({ ...idleState, activeBuildKey: null }));
+          const newIdleState = { ...idleState, activeBuildKey: null };
+          setIdleState(newIdleState);
+          localStorage.setItem("idleState", JSON.stringify(newIdleState));
         }
       }
     });
@@ -205,23 +227,14 @@ export function BuildScreen() {
       setPartStates(newStates);
       localStorage.setItem("buildParts", JSON.stringify(newStates));
     }
-  }, [currentTime, partStates, idleState]);
+  }, [currentTime, isLoaded]); // Remove partStates and idleState from dependencies
 
   // Update global bzPerHour whenever partStates change
   useEffect(() => {
+    if (!isLoaded) return;
     const totalYield = getTotalHourlyYield();
     setBzPerHour(totalYield);
-  }, [partStates, setBzPerHour]);
-
-  const savePartStates = (states: Record<PartKey, PartState>) => {
-    setPartStates(states);
-    localStorage.setItem("buildParts", JSON.stringify(states));
-  };
-
-  const saveIdleState = (state: IdleState) => {
-    setIdleState(state);
-    localStorage.setItem("idleState", JSON.stringify(state));
-  };
+  }, [partStates, isLoaded, setBzPerHour]);
 
   // Timer duration by level
   const getUpgradeTime = (level: number): number => {
@@ -284,13 +297,11 @@ export function BuildScreen() {
 
     let surgeBonus = 0;
     if (!powerSurgeUsed) {
-      if (hours < 1) {
-        surgeBonus = 0;
-      } else if (hours < 2) {
+      if (hours >= 1 && hours < 2) {
         surgeBonus = baseIncome * 0.25;
-      } else if (hours < 3) {
+      } else if (hours >= 2 && hours < 3) {
         surgeBonus = baseIncome * 0.10;
-      } else if (hours <= 4) {
+      } else if (hours >= 3 && hours <= 4) {
         surgeBonus = baseIncome * 0.05;
       }
     }
@@ -308,7 +319,9 @@ export function BuildScreen() {
     const accrued = getAccruedIncome();
     if (accrued.total > 0) {
       addBZ(accrued.total);
-      saveIdleState({ ...idleState, lastClaimTime: Date.now() });
+      const newIdleState = { ...idleState, lastClaimTime: Date.now() };
+      setIdleState(newIdleState);
+      localStorage.setItem("idleState", JSON.stringify(newIdleState));
       markIdleClaimed(); // Track for tasks
       
       if (accrued.surge > 0) {
@@ -347,10 +360,13 @@ export function BuildScreen() {
         }
       };
 
-      savePartStates(newStates);
+      setPartStates(newStates);
+      localStorage.setItem("buildParts", JSON.stringify(newStates));
 
       if (upgradeTime > 0) {
-        saveIdleState({ ...idleState, activeBuildKey: part.key });
+        const newIdleState = { ...idleState, activeBuildKey: part.key };
+        setIdleState(newIdleState);
+        localStorage.setItem("idleState", JSON.stringify(newIdleState));
       }
     }
   };
@@ -411,6 +427,14 @@ export function BuildScreen() {
     return `${seconds}s`;
   };
 
+  if (!isLoaded) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-screen">
+        <p className="text-muted-foreground">Loading build state...</p>
+      </div>
+    );
+  }
+
   const accrued = getAccruedIncome();
   const hourlyYield = getTotalHourlyYield();
   const tierMultiplier = getTierMultiplier();
@@ -459,13 +483,22 @@ export function BuildScreen() {
             </p>
           </div>
 
-          {!powerSurgeUsed && accrued.hours > 0 && (
+          {!powerSurgeUsed && (
             <div className="text-xs bg-orange-100 dark:bg-orange-900 p-2 rounded">
-              <div className="font-semibold mb-1">PowerSurge Bonus Active:</div>
-              <div className="space-y-0.5 text-muted-foreground">
-                <div>&lt;1h: +0% • 1-2h: +25%</div>
-                <div>2-3h: +10% • 3-4h: +5% • &gt;4h: 0%</div>
+              <div className="flex items-center gap-1 font-semibold mb-1">
+                <Flame className="h-3 w-3 text-orange-500" />
+                <span>PowerSurge Bonus Available:</span>
               </div>
+              <div className="space-y-0.5 text-muted-foreground">
+                <div>1-2h: +25% • 2-3h: +10% • 3-4h: +5%</div>
+                <div className="text-[10px]">Claim within optimal windows for maximum bonus!</div>
+              </div>
+            </div>
+          )}
+
+          {powerSurgeUsed && (
+            <div className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded text-muted-foreground">
+              PowerSurge bonus already claimed today. Reset at midnight.
             </div>
           )}
 
