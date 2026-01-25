@@ -58,7 +58,7 @@ export function TasksReferralsScreen() {
     addBZ, 
     addBB, 
     addXP,
-    incrementReferrals 
+    addReferral 
   } = useGameState();
 
   // Referral state
