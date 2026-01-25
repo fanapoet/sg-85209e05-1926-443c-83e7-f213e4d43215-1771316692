@@ -1,8 +1,462 @@
+import { useGameState } from "@/contexts/GameStateContext";
+import { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { 
+  Gift, 
+  Trophy, 
+  Users, 
+  Hammer, 
+  ArrowLeftRight, 
+  Zap, 
+  Star, 
+  Crown,
+  Check,
+  Lock,
+  Calendar,
+  Target,
+  TrendingUp
+} from "lucide-react";
+
+interface DailyReward {
+  day: number;
+  type: "BZ" | "BB" | "XP";
+  amount: number;
+}
+
+interface WeeklyChallenge {
+  key: string;
+  name: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+  target: number;
+  progress: number;
+  reward: { type: "BZ" | "BB" | "XP"; amount: number };
+}
+
+interface NFT {
+  key: string;
+  name: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+  price: number; // BB
+  requirement: string;
+  requirementMet: boolean;
+  owned: boolean;
+}
+
+const dailyRewards: DailyReward[] = [
+  { day: 1, type: "BZ", amount: 1000 },
+  { day: 2, type: "BZ", amount: 2000 },
+  { day: 3, type: "BB", amount: 0.001 },
+  { day: 4, type: "XP", amount: 500 },
+  { day: 5, type: "BZ", amount: 5000 },
+  { day: 6, type: "BB", amount: 0.002 },
+  { day: 7, type: "XP", amount: 1000 }
+];
+
 export function RewardsNFTsScreen() {
+  const { bz, bb, xp, referralCount, tier, subtractBB, addBZ, addXP } = useGameState();
+  const [dailyStreak, setDailyStreak] = useState(0);
+  const [lastClaimDate, setLastClaimDate] = useState<string | null>(null);
+  const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
+
+  // Load saved state
+  useEffect(() => {
+    const savedStreak = localStorage.getItem("dailyStreak");
+    const savedLastClaim = localStorage.getItem("lastClaimDate");
+    const savedNFTs = localStorage.getItem("ownedNFTs");
+
+    if (savedStreak) setDailyStreak(parseInt(savedStreak));
+    if (savedLastClaim) setLastClaimDate(savedLastClaim);
+    if (savedNFTs) setOwnedNFTs(JSON.parse(savedNFTs));
+  }, []);
+
+  // Weekly challenges (mock progress for now)
+  const weeklyChallenges: WeeklyChallenge[] = [
+    {
+      key: "builder",
+      name: "Builder Challenge",
+      icon: Hammer,
+      description: "Upgrade 10 build parts this week",
+      target: 10,
+      progress: 0,
+      reward: { type: "BZ", amount: 10000 }
+    },
+    {
+      key: "recruiter",
+      name: "Recruiter Challenge",
+      icon: Users,
+      description: "Invite 3 new friends this week",
+      target: 3,
+      progress: Math.min(referralCount, 3),
+      reward: { type: "XP", amount: 2000 }
+    },
+    {
+      key: "converter",
+      name: "Converter Challenge",
+      icon: ArrowLeftRight,
+      description: "Convert 1,000,000 BZ to BB",
+      target: 1000000,
+      progress: 0,
+      reward: { type: "BB", amount: 0.005 }
+    }
+  ];
+
+  // NFTs with requirements
+  const nfts: NFT[] = [
+    {
+      key: "early_adopter",
+      name: "Early Adopter",
+      icon: Star,
+      description: "Welcome to Bunergy! Free for all players.",
+      price: 0,
+      requirement: "Free",
+      requirementMet: true,
+      owned: ownedNFTs.includes("early_adopter")
+    },
+    {
+      key: "social_king",
+      name: "Social King",
+      icon: Users,
+      description: "Master of connections and community.",
+      price: 2,
+      requirement: "20 referrals",
+      requirementMet: referralCount >= 20,
+      owned: ownedNFTs.includes("social_king")
+    },
+    {
+      key: "builder_pro",
+      name: "Builder Pro",
+      icon: Hammer,
+      description: "Expert in construction and upgrades.",
+      price: 2,
+      requirement: "Complete Stage 2",
+      requirementMet: false, // TODO: Check Build completion
+      owned: ownedNFTs.includes("builder_pro")
+    },
+    {
+      key: "tap_legend",
+      name: "Tap Legend",
+      icon: Zap,
+      description: "Legendary tapping power unleashed.",
+      price: 4,
+      requirement: "Earn 10M BZ from tapping",
+      requirementMet: false, // TODO: Track tap earnings
+      owned: ownedNFTs.includes("tap_legend")
+    },
+    {
+      key: "energy_master",
+      name: "Energy Master",
+      icon: Trophy,
+      description: "Perfect energy management achieved.",
+      price: 3,
+      requirement: "Max all energy boosters",
+      requirementMet: false, // TODO: Check booster levels
+      owned: ownedNFTs.includes("energy_master")
+    },
+    {
+      key: "golden_bunny",
+      name: "Golden Bunny",
+      icon: Crown,
+      description: "The ultimate tapping achievement.",
+      price: 5,
+      requirement: "5M taps total",
+      requirementMet: false, // TODO: Track total taps
+      owned: ownedNFTs.includes("golden_bunny")
+    },
+    {
+      key: "diamond_crystal",
+      name: "Diamond Crystal",
+      icon: Trophy,
+      description: "Reached the pinnacle of experience.",
+      price: 7,
+      requirement: "500k+ XP",
+      requirementMet: xp >= 500000,
+      owned: ownedNFTs.includes("diamond_crystal")
+    }
+  ];
+
+  const handleDailyClaim = () => {
+    const today = new Date().toDateString();
+    
+    if (lastClaimDate === today) return;
+
+    const nextDay = (dailyStreak % 7) + 1;
+    const reward = dailyRewards[nextDay - 1];
+
+    if (reward.type === "BZ") {
+      addBZ(reward.amount);
+    } else if (reward.type === "XP") {
+      addXP(reward.amount);
+    }
+    // BB reward would be added when backend is ready
+
+    const newStreak = nextDay;
+    setDailyStreak(newStreak);
+    setLastClaimDate(today);
+    localStorage.setItem("dailyStreak", newStreak.toString());
+    localStorage.setItem("lastClaimDate", today);
+  };
+
+  const handlePurchaseNFT = (nft: NFT) => {
+    if (nft.owned || !nft.requirementMet) return;
+    if (nft.price === 0) {
+      // Free claim
+      const updated = [...ownedNFTs, nft.key];
+      setOwnedNFTs(updated);
+      localStorage.setItem("ownedNFTs", JSON.stringify(updated));
+      return;
+    }
+
+    if (bb >= nft.price && subtractBB(nft.price)) {
+      const updated = [...ownedNFTs, nft.key];
+      setOwnedNFTs(updated);
+      localStorage.setItem("ownedNFTs", JSON.stringify(updated));
+    }
+  };
+
+  const canClaimDaily = lastClaimDate !== new Date().toDateString();
+  const currentDayReward = dailyRewards[dailyStreak % 7];
+
+  const formatBB = (value: number): string => value.toFixed(6);
+
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Rewards & NFTs Screen</h1>
-      <p className="text-muted-foreground mt-2">Coming in Phase 3</p>
+    <div className="p-6 space-y-4 max-w-2xl mx-auto pb-24">
+      {/* Header */}
+      <div className="space-y-2">
+        <h1 className="text-2xl font-bold">Rewards & NFTs</h1>
+        <p className="text-sm text-muted-foreground">
+          Claim daily rewards and collect exclusive NFTs
+        </p>
+      </div>
+
+      {/* Daily Rewards */}
+      <Card className="p-4">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Daily Rewards</h3>
+            </div>
+            <Badge variant="outline">
+              Day {(dailyStreak % 7) + 1}/7
+            </Badge>
+          </div>
+
+          <div className="grid grid-cols-7 gap-2">
+            {dailyRewards.map((reward, index) => {
+              const dayNum = index + 1;
+              const isClaimed = dailyStreak >= dayNum && dailyStreak < dayNum + 7;
+              const isCurrent = (dailyStreak % 7) + 1 === dayNum;
+
+              return (
+                <div
+                  key={dayNum}
+                  className={`p-2 rounded-lg border-2 text-center ${
+                    isCurrent
+                      ? "border-primary bg-primary/10"
+                      : isClaimed
+                      ? "border-green-500 bg-green-50 dark:bg-green-950"
+                      : "border-muted bg-muted/50"
+                  }`}
+                >
+                  <p className="text-xs font-medium mb-1">D{dayNum}</p>
+                  {isClaimed && !isCurrent ? (
+                    <Check className="h-4 w-4 mx-auto text-green-600" />
+                  ) : (
+                    <p className="text-xs font-bold">
+                      {reward.amount.toLocaleString()} {reward.type}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <Button
+            onClick={handleDailyClaim}
+            disabled={!canClaimDaily}
+            className="w-full"
+            size="lg"
+          >
+            {canClaimDaily ? (
+              <>
+                <Gift className="mr-2 h-5 w-5" />
+                Claim {currentDayReward.amount.toLocaleString()} {currentDayReward.type}
+              </>
+            ) : (
+              "Come back tomorrow!"
+            )}
+          </Button>
+        </div>
+      </Card>
+
+      {/* Weekly Challenges */}
+      <Card className="p-4">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Target className="h-5 w-5 text-primary" />
+            <h3 className="font-semibold">Weekly Challenges</h3>
+          </div>
+
+          <div className="space-y-3">
+            {weeklyChallenges.map((challenge) => {
+              const Icon = challenge.icon;
+              const progressPercent = (challenge.progress / challenge.target) * 100;
+              const isComplete = challenge.progress >= challenge.target;
+
+              return (
+                <div key={challenge.key} className="p-3 bg-muted rounded-lg">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-primary/10">
+                      <Icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold">{challenge.name}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {challenge.description}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <TrendingUp className="h-3 w-3 text-green-600" />
+                        <span className="text-xs font-medium">
+                          +{challenge.reward.amount.toLocaleString()} {challenge.reward.type}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Progress</span>
+                      <span className="font-medium">
+                        {challenge.progress} / {challenge.target}
+                      </span>
+                    </div>
+                    <Progress value={progressPercent} className="h-2" />
+                  </div>
+
+                  <Button
+                    disabled={!isComplete}
+                    className="w-full mt-3"
+                    size="sm"
+                    variant={isComplete ? "default" : "secondary"}
+                  >
+                    {isComplete ? (
+                      <>
+                        <Check className="mr-2 h-4 w-4" />
+                        Claim Reward
+                      </>
+                    ) : (
+                      "In Progress"
+                    )}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
+
+      {/* NFTs */}
+      <Card className="p-4">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Exclusive NFTs</h3>
+            </div>
+            <Badge variant="outline">
+              {ownedNFTs.length}/{nfts.length} Owned
+            </Badge>
+          </div>
+
+          <div className="space-y-3">
+            {nfts.map((nft) => {
+              const Icon = nft.icon;
+
+              return (
+                <Card
+                  key={nft.key}
+                  className={`p-4 ${
+                    nft.owned
+                      ? "border-green-500 bg-green-50 dark:bg-green-950"
+                      : !nft.requirementMet
+                      ? "opacity-60"
+                      : ""
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`p-3 rounded-lg ${nft.owned ? "bg-green-500/20" : "bg-primary/10"}`}>
+                      <Icon className={`h-6 w-6 ${nft.owned ? "text-green-600" : "text-primary"}`} />
+                    </div>
+
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-semibold">{nft.name}</h4>
+                        {nft.owned && (
+                          <Badge variant="default" className="bg-green-600">
+                            <Check className="h-3 w-3 mr-1" />
+                            Owned
+                          </Badge>
+                        )}
+                      </div>
+
+                      <p className="text-sm text-muted-foreground mb-2">
+                        {nft.description}
+                      </p>
+
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          {nft.requirementMet ? (
+                            <Check className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <Lock className="h-4 w-4 text-orange-600" />
+                          )}
+                          <span className={nft.requirementMet ? "text-green-600" : "text-orange-600"}>
+                            {nft.requirement}
+                          </span>
+                        </div>
+                        <Badge variant="outline">
+                          {nft.price === 0 ? "Free" : `${formatBB(nft.price)} BB`}
+                        </Badge>
+                      </div>
+
+                      <Button
+                        onClick={() => handlePurchaseNFT(nft)}
+                        disabled={nft.owned || !nft.requirementMet}
+                        className="w-full"
+                        size="sm"
+                        variant={nft.requirementMet && !nft.owned ? "default" : "secondary"}
+                      >
+                        {nft.owned ? (
+                          "Already Owned"
+                        ) : !nft.requirementMet ? (
+                          <>
+                            <Lock className="mr-2 h-4 w-4" />
+                            Locked
+                          </>
+                        ) : nft.price === 0 ? (
+                          <>
+                            <Gift className="mr-2 h-4 w-4" />
+                            Claim Free NFT
+                          </>
+                        ) : (
+                          <>
+                            Purchase for {formatBB(nft.price)} BB
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }
