@@ -5,7 +5,16 @@ import { Card } from "@/components/ui/card";
 import { Zap, Clock } from "lucide-react";
 
 export function TapScreen() {
-  const { bz, energy, maxEnergy, addBZ, setEnergy, tier, bzPerHour, incrementTaps } = useGameState();
+  const { 
+    bz, 
+    energy, 
+    maxEnergy, 
+    addBZ, 
+    setEnergy, 
+    tier, 
+    incrementTaps 
+  } = useGameState();
+
   const [lastTapTime, setLastTapTime] = useState(0);
   const [quickChargeUses, setQuickChargeUses] = useState(5);
   const [quickChargeCooldown, setQuickChargeCooldown] = useState(0);
@@ -58,24 +67,20 @@ export function TapScreen() {
     return data[key] || 1;
   };
 
-  // Update display values when boosters change
+  // Sync with global state and boosters
   useEffect(() => {
     const checkBoosters = () => {
       const energyCapacityLevel = getBoosterLevel("energyCapacity");
       const recoveryRateLevel = getBoosterLevel("recoveryRate");
       
-      // Energy Capacity: base 1500 + (level - 1) × 100
       const newMaxEnergy = 1500 + (energyCapacityLevel - 1) * 100;
       setDisplayMaxEnergy(newMaxEnergy);
       
-      // Recovery Rate: base 0.3 + (level - 1) × 0.05
       const newRecoveryRate = 0.3 + (recoveryRateLevel - 1) * 0.05;
       setRecoveryRate(newRecoveryRate);
     };
 
     checkBoosters();
-    
-    // Check every second in case boosters were upgraded
     const interval = setInterval(checkBoosters, 1000);
     return () => clearInterval(interval);
   }, []);
@@ -83,7 +88,6 @@ export function TapScreen() {
   const incomePerTapLevel = getBoosterLevel("incomePerTap");
   const energyPerTapLevel = getBoosterLevel("energyPerTap");
 
-  // Calculate tier bonus multiplier
   const getTierMultiplier = (): number => {
     if (tier === "Bronze") return 1.0;
     if (tier === "Silver") return 1.05;
@@ -100,16 +104,17 @@ export function TapScreen() {
 
   const handleTap = (e: React.MouseEvent<HTMLButtonElement>) => {
     const now = Date.now();
-    if (now - lastTapTime < 110) return; // 110ms cooldown
+    if (now - lastTapTime < 110) return; // Anti-autoclicker
 
     if (energy < energyCost) return;
 
+    // Update global state
     setEnergy(energy - energyCost);
     addBZ(tapReward);
-    incrementTaps(1); // Track for tasks
+    incrementTaps(1, tapReward); // Track taps AND income for tasks/NFTs
     setLastTapTime(now);
 
-    // Floating number animation
+    // Visual feedback
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
@@ -129,7 +134,7 @@ export function TapScreen() {
 
     setEnergy(displayMaxEnergy);
     setQuickChargeUses((prev) => prev - 1);
-    const cooldownEnd = Date.now() + 3600000; // 1h
+    const cooldownEnd = Date.now() + 3600000;
     setQuickChargeCooldown(3600000);
 
     localStorage.setItem("quickCharge", JSON.stringify({
@@ -149,7 +154,7 @@ export function TapScreen() {
 
   return (
     <div className="p-6 space-y-6 max-w-2xl mx-auto">
-      {/* Energy Display */}
+      {/* Energy Bar */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
@@ -171,17 +176,16 @@ export function TapScreen() {
         </p>
       </Card>
 
-      {/* Tap Button */}
+      {/* Main Tap Button */}
       <div className="relative flex items-center justify-center py-8">
         <button
           onClick={handleTap}
           disabled={energy < energyCost}
-          className="relative w-48 h-48 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 shadow-2xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
+          className="relative w-48 h-48 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 shadow-2xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed select-none touch-manipulation"
+          style={{ WebkitTapHighlightColor: "transparent" }}
         >
           <div className="absolute inset-0 rounded-full bg-white/20 animate-ping" />
-          <div className="relative z-10 text-white font-bold text-2xl">
-            TAP
-          </div>
+          <div className="relative z-10 text-white font-bold text-2xl">TAP</div>
           <div className="relative z-10 text-white text-sm mt-1">
             {tapReward > 0 && `+${tapReward.toLocaleString()}`}
             {tierMultiplier > 1 && ` (+${Math.floor((tierMultiplier - 1) * 100)}%)`}
@@ -204,18 +208,14 @@ export function TapScreen() {
         ))}
       </div>
 
-      {/* QuickCharge */}
+      {/* QuickCharge Panel */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
             <h3 className="font-semibold">QuickCharge</h3>
-            <p className="text-xs text-muted-foreground">
-              Instantly restore energy to full
-            </p>
+            <p className="text-xs text-muted-foreground">Instantly restore energy to full</p>
           </div>
-          <div className="text-sm font-medium text-muted-foreground">
-            {quickChargeUses}/5 uses
-          </div>
+          <div className="text-sm font-medium text-muted-foreground">{quickChargeUses}/5 uses</div>
         </div>
 
         <Button
@@ -225,37 +225,21 @@ export function TapScreen() {
           variant={canQuickCharge ? "default" : "secondary"}
         >
           {quickChargeCooldown > 0 ? (
-            <>
-              <Clock className="mr-2 h-4 w-4" />
-              Cooldown: {formatCooldown(quickChargeCooldown)}
-            </>
+            <><Clock className="mr-2 h-4 w-4" />Cooldown: {formatCooldown(quickChargeCooldown)}</>
           ) : energy >= displayMaxEnergy * 0.5 ? (
             "Available when energy < 50%"
           ) : quickChargeUses <= 0 ? (
             "No uses remaining"
           ) : (
-            <>
-              <Zap className="mr-2 h-4 w-4" />
-              Use QuickCharge
-            </>
+            <><Zap className="mr-2 h-4 w-4" />Use QuickCharge</>
           )}
         </Button>
-
-        <p className="text-xs text-muted-foreground mt-2 text-center">
-          5 uses per 24h • 1h cooldown after use • Only when energy &lt; 50%
-        </p>
       </Card>
 
       <style jsx>{`
         @keyframes float {
-          0% {
-            opacity: 1;
-            transform: translateY(0);
-          }
-          100% {
-            opacity: 0;
-            transform: translateY(-80px);
-          }
+          0% { opacity: 1; transform: translateY(0); }
+          100% { opacity: 0; transform: translateY(-80px); }
         }
       `}</style>
     </div>
