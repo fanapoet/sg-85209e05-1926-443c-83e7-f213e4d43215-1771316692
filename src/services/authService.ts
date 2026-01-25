@@ -1,181 +1,159 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { User, Session } from "@supabase/supabase-js";
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  user_metadata?: any;
-  created_at?: string;
-}
-
-export interface AuthError {
-  message: string;
-  code?: string;
-}
-
-// Dynamic URL Helper
-const getURL = () => {
-  let url = process?.env?.NEXT_PUBLIC_VERCEL_URL ?? 
-           process?.env?.NEXT_PUBLIC_SITE_URL ?? 
-           'http://localhost:3000'
-  
-  // Handle undefined or null url
-  if (!url) {
-    url = 'http://localhost:3000';
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        initData?: string;
+        initDataUnsafe?: {
+          user?: {
+            id: number;
+            first_name: string;
+            last_name?: string;
+            username?: string;
+            language_code?: string;
+          };
+          start_parameter?: string;
+        };
+      };
+    };
   }
-  
-  // Ensure url has protocol
-  url = url.startsWith('http') ? url : `https://${url}`
-  
-  // Ensure url ends with slash
-  url = url.endsWith('/') ? url : `${url}/`
-  
-  return url
 }
 
-export const authService = {
-  // Get current user
-  async getCurrentUser(): Promise<AuthUser | null> {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user ? {
-      id: user.id,
-      email: user.email || "",
-      user_metadata: user.user_metadata,
-      created_at: user.created_at
-    } : null;
-  },
-
-  // Get current session
-  async getCurrentSession(): Promise<Session | null> {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session;
-  },
-
-  // Sign up with email and password
-  async signUp(email: string, password: string): Promise<{ user: AuthUser | null; error: AuthError | null }> {
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${getURL()}auth/confirm-email`
-        }
-      });
-
-      if (error) {
-        return { user: null, error: { message: error.message, code: error.status?.toString() } };
-      }
-
-      const authUser = data.user ? {
-        id: data.user.id,
-        email: data.user.email || "",
-        user_metadata: data.user.user_metadata,
-        created_at: data.user.created_at
-      } : null;
-
-      return { user: authUser, error: null };
-    } catch (error) {
-      return { 
-        user: null, 
-        error: { message: "An unexpected error occurred during sign up" } 
-      };
-    }
-  },
-
-  // Sign in with email and password
-  async signIn(email: string, password: string): Promise<{ user: AuthUser | null; error: AuthError | null }> {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        return { user: null, error: { message: error.message, code: error.status?.toString() } };
-      }
-
-      const authUser = data.user ? {
-        id: data.user.id,
-        email: data.user.email || "",
-        user_metadata: data.user.user_metadata,
-        created_at: data.user.created_at
-      } : null;
-
-      return { user: authUser, error: null };
-    } catch (error) {
-      return { 
-        user: null, 
-        error: { message: "An unexpected error occurred during sign in" } 
-      };
-    }
-  },
-
-  // Sign out
-  async signOut(): Promise<{ error: AuthError | null }> {
-    try {
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        return { error: { message: error.message } };
-      }
-
-      return { error: null };
-    } catch (error) {
-      return { 
-        error: { message: "An unexpected error occurred during sign out" } 
-      };
-    }
-  },
-
-  // Reset password
-  async resetPassword(email: string): Promise<{ error: AuthError | null }> {
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${getURL()}auth/reset-password`,
-      });
-
-      if (error) {
-        return { error: { message: error.message } };
-      }
-
-      return { error: null };
-    } catch (error) {
-      return { 
-        error: { message: "An unexpected error occurred during password reset" } 
-      };
-    }
-  },
-
-  // Confirm email (REQUIRED)
-  async confirmEmail(token: string, type: 'signup' | 'recovery' | 'email_change' = 'signup'): Promise<{ user: AuthUser | null; error: AuthError | null }> {
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({
-        token_hash: token,
-        type: type
-      });
-
-      if (error) {
-        return { user: null, error: { message: error.message, code: error.status?.toString() } };
-      }
-
-      const authUser = data.user ? {
-        id: data.user.id,
-        email: data.user.email || "",
-        user_metadata: data.user.user_metadata,
-        created_at: data.user.created_at
-      } : null;
-
-      return { user: authUser, error: null };
-    } catch (error) {
-      return { 
-        user: null, 
-        error: { message: "An unexpected error occurred during email confirmation" } 
-      };
-    }
-  },
-
-  // Listen to auth state changes
-  onAuthStateChange(callback: (event: string, session: Session | null) => void) {
-    return supabase.auth.onAuthStateChange(callback);
+/**
+ * Get Telegram user data from WebApp
+ */
+export function getTelegramUser() {
+  const tg = window.Telegram?.WebApp;
+  if (!tg?.initDataUnsafe?.user) {
+    return null;
   }
-};
+  return tg.initDataUnsafe.user;
+}
+
+/**
+ * Check if user is in Telegram environment
+ */
+export function isInTelegram(): boolean {
+  return !!(window.Telegram?.WebApp?.initData);
+}
+
+/**
+ * Auto-authenticate or create user based on Telegram identity
+ * Uses anonymous authentication with Telegram metadata
+ * This is the main entry point for Telegram Mini App authentication
+ */
+export async function authenticateWithTelegram() {
+  console.log("🔐 Starting Telegram authentication...");
+
+  // 1. Check if in Telegram
+  if (!isInTelegram()) {
+    throw new Error("NOT_IN_TELEGRAM");
+  }
+
+  // 2. Get Telegram user data
+  const telegramUser = getTelegramUser();
+  if (!telegramUser) {
+    throw new Error("NO_TELEGRAM_USER");
+  }
+
+  console.log("✅ Telegram user detected:", {
+    id: telegramUser.id,
+    username: telegramUser.username,
+    first_name: telegramUser.first_name,
+  });
+
+  // 3. Check if already authenticated with Supabase
+  const { data: { user: existingUser } } = await supabase.auth.getUser();
+  
+  if (existingUser) {
+    console.log("✅ Already authenticated with Supabase:", existingUser.id);
+    return existingUser;
+  }
+
+  // 4. Try to find existing user by Telegram ID in profiles
+  console.log("🔍 Searching for existing account by Telegram ID...");
+  const { data: existingProfile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("telegram_id", telegramUser.id)
+    .single();
+
+  if (existingProfile) {
+    console.log("✅ Found existing account, signing in...");
+    // User exists but not authenticated - use anonymous auth and link
+    const { data: authData, error: anonError } = await supabase.auth.signInAnonymously({
+      options: {
+        data: {
+          telegram_id: telegramUser.id,
+          username: telegramUser.username,
+          first_name: telegramUser.first_name,
+          last_name: telegramUser.last_name,
+        },
+      },
+    });
+
+    if (anonError || !authData.user) {
+      console.error("❌ Failed to sign in:", anonError);
+      throw new Error(`AUTH_FAILED: ${anonError?.message || "Unknown error"}`);
+    }
+
+    console.log("✅ Signed in successfully:", authData.user.id);
+    return authData.user;
+  }
+
+  // 5. Create new anonymous user
+  console.log("🆕 Creating new anonymous user...");
+  
+  const { data: authData, error: signUpError } = await supabase.auth.signInAnonymously({
+    options: {
+      data: {
+        telegram_id: telegramUser.id,
+        username: telegramUser.username,
+        first_name: telegramUser.first_name,
+        last_name: telegramUser.last_name,
+      },
+    },
+  });
+
+  if (signUpError || !authData.user) {
+    console.error("❌ Failed to create account:", signUpError);
+    throw new Error(`AUTH_FAILED: ${signUpError?.message || "Unknown error"}`);
+  }
+
+  console.log("✅ New account created:", authData.user.id);
+  console.log("🎉 Authentication successful:", authData.user.id);
+  return authData.user;
+}
+
+/**
+ * Sign out current user
+ */
+export async function signOut() {
+  const { error } = await supabase.auth.signOut();
+  if (error) {
+    console.error("Error signing out:", error);
+    throw error;
+  }
+}
+
+/**
+ * Get current authenticated user
+ */
+export async function getCurrentUser() {
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) {
+    console.error("Error getting current user:", error);
+    return null;
+  }
+  return user;
+}
+
+/**
+ * Listen to auth state changes
+ */
+export function onAuthStateChange(callback: (user: any) => void) {
+  return supabase.auth.onAuthStateChange((_event, session) => {
+    callback(session?.user ?? null);
+  });
+}

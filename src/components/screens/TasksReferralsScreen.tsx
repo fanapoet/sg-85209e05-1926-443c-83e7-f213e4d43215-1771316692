@@ -8,6 +8,7 @@ import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Trophy, Star, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { authenticateWithTelegram } from "@/services/authService";
 import {
   getOrCreateProfile,
   getReferralStats,
@@ -20,26 +21,6 @@ import {
   findInviterByCode,
   type ReferralStats
 } from "@/services/referralService";
-
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        initDataUnsafe?: {
-          start_parameter?: string;
-          user?: {
-            id: number;
-            first_name: string;
-            last_name?: string;
-            username?: string;
-            language_code?: string;
-          };
-        };
-        openTelegramLink?: (url: string) => void;
-      };
-    };
-  }
-}
 
 interface Task {
   id: string;
@@ -89,11 +70,13 @@ export function TasksReferralsScreen() {
       setErrorMessage("");
 
       try {
-        // 1. Get User
-        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        // 1. Authenticate with Telegram
+        console.log("🔐 Authenticating...");
+        const user = await authenticateWithTelegram();
         
-        if (authError) throw new Error(`Auth Error: ${authError.message}`);
-        if (!user) throw new Error("No authenticated user found. Please try refreshing.");
+        if (!user) {
+          throw new Error("Authentication failed. Please try reopening the app.");
+        }
         
         console.log("✅ User authenticated:", user.id);
         setUserId(user.id);
@@ -102,7 +85,9 @@ export function TasksReferralsScreen() {
         console.log("🔍 Fetching profile...");
         const profile = await getOrCreateProfile(user.id);
         
-        if (!profile.referralCode) throw new Error("Failed to generate referral code.");
+        if (!profile.referralCode) {
+          throw new Error("Failed to generate referral code.");
+        }
         
         console.log("✅ Profile loaded:", profile);
         setReferralCode(profile.referralCode);
@@ -112,25 +97,41 @@ export function TasksReferralsScreen() {
         console.log("🔍 Fetching stats...");
         const stats = await getReferralStats(user.id);
         setReferralStats(stats);
+        console.log("✅ Stats loaded:", stats);
         
         // 4. Get Milestones
         const milestones = await getClaimedMilestones(user.id);
         setClaimedMilestones(milestones);
+        console.log("✅ Milestones loaded:", milestones);
 
         // 5. Check for incoming referral (if opened via link)
         await handleIncomingReferral(user.id);
 
         console.log("✨ Referral System Initialized Successfully!");
-      } catch (err) {
+      } catch (err: any) {
         console.error("❌ Initialization failed:", err);
-        setErrorMessage(err instanceof Error ? err.message : "Unknown error occurred");
+        
+        // User-friendly error messages
+        let message = "Failed to load referrals. ";
+        
+        if (err.message === "NOT_IN_TELEGRAM") {
+          message = "This app only works inside Telegram.";
+        } else if (err.message === "NO_TELEGRAM_USER") {
+          message = "Could not get your Telegram identity. Please reopen the app.";
+        } else if (err.message?.includes("AUTH_FAILED")) {
+          message = "Authentication failed. Please try again.";
+        } else {
+          message += err.message || "Unknown error occurred.";
+        }
+        
+        setErrorMessage(message);
       } finally {
         setIsLoading(false);
       }
     };
 
     initReferralSystem();
-  }, []);
+  }, [referralCount]);
 
   // Handle incoming referral from URL start_param
   const handleIncomingReferral = async (currentUserId: string) => {
