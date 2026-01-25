@@ -5,8 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Circle, Trophy, Users, Star, ArrowRight, ExternalLink } from "lucide-react";
+import { CheckCircle2, Circle, Trophy, Users, Star, ArrowRight, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  generateReferralCode,
+  getReferralStats,
+  claimPendingEarnings,
+  checkAndClaimMilestone,
+  getClaimedMilestones,
+  createReferral,
+  claimInviteeReward,
+  claimInviterReward,
+  checkReferralExists,
+  type ReferralStats
+} from "@/services/referralService";
 
 interface Task {
   id: string;
@@ -34,10 +47,100 @@ export function TasksReferralsScreen() {
   } = useGameState();
   const { toast } = useToast();
   
-  // Track claimed tasks: { [taskId]: timestamp }
+  // Track claimed tasks
   const [claimedTasks, setClaimedTasks] = useState<Record<string, number>>({});
+  
+  // Referral state
+  const [referralCode, setReferralCode] = useState<string>("");
+  const [referralLink, setReferralLink] = useState<string>("");
+  const [referralStats, setReferralStats] = useState<ReferralStats | null>(null);
+  const [claimedMilestones, setClaimedMilestones] = useState<number[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Load claimed status
+  // Initialize user and referral code
+  useEffect(() => {
+    const initUser = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setUserId(user.id);
+          const code = generateReferralCode(user.id);
+          setReferralCode(code);
+          setReferralLink(`https://t.me/bunergy_bot/app?startapp=${code.toLowerCase()}`);
+        }
+      } catch (err) {
+        console.error("Error initializing user:", err);
+      }
+    };
+
+    initUser();
+  }, []);
+
+  // Load referral stats
+  useEffect(() => {
+    if (!userId) return;
+
+    const loadReferralData = async () => {
+      try {
+        const [stats, milestones] = await Promise.all([
+          getReferralStats(userId),
+          getClaimedMilestones(userId)
+        ]);
+        setReferralStats(stats);
+        setClaimedMilestones(milestones);
+      } catch (err) {
+        console.error("Error loading referral data:", err);
+      }
+    };
+
+    loadReferralData();
+    const interval = setInterval(loadReferralData, 30000); // Refresh every 30s
+    return () => clearInterval(interval);
+  }, [userId]);
+
+  // Handle referral binding from URL
+  useEffect(() => {
+    if (!userId) return;
+
+    const handleReferralBinding = async () => {
+      try {
+        // Check if already referred
+        const alreadyReferred = await checkReferralExists(userId);
+        if (alreadyReferred) return;
+
+        // Get start param from Telegram
+        const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_parameter;
+        if (!startParam || !startParam.toLowerCase().startsWith("ref")) return;
+
+        const inviterCode = startParam.toUpperCase();
+        const inviterUserId = generateReferralCode(inviterCode); // Reverse lookup
+
+        // Create referral relationship
+        const result = await createReferral(inviterUserId, userId, inviterCode);
+        
+        if (result.success) {
+          // Claim invitee reward
+          const inviteeReward = await claimInviteeReward(userId);
+          if (inviteeReward.success) {
+            addBZ(inviteeReward.reward);
+            toast({
+              title: "Welcome Bonus!",
+              description: `You received ${inviteeReward.reward} BZ for joining!`,
+            });
+          }
+
+          // Inviter reward will be claimed by inviter on their next app open
+        }
+      } catch (err) {
+        console.error("Error handling referral binding:", err);
+      }
+    };
+
+    handleReferralBinding();
+  }, [userId]);
+
+  // Load claimed tasks
   useEffect(() => {
     const saved = localStorage.getItem("bunergy_claimed_tasks");
     if (saved) {
@@ -45,7 +148,6 @@ export function TasksReferralsScreen() {
     }
   }, []);
 
-  // Check if a task is claimed
   const isClaimed = (task: Task) => {
     const claimedTime = claimedTasks[task.id];
     if (!claimedTime) return false;
@@ -56,18 +158,16 @@ export function TasksReferralsScreen() {
       return claimedDate === today;
     }
 
-    return true; // Weekly/Milestone claimed forever (or until reset logic elsewhere)
+    return true;
   };
 
   const handleClaim = (task: Task) => {
     if (isClaimed(task)) return;
 
-    // Grant Reward
     if (task.reward.type === "BZ") addBZ(task.reward.amount);
     if (task.reward.type === "BB") addBB(task.reward.amount);
     if (task.reward.type === "XP") addXP(task.reward.amount);
 
-    // Mark as claimed
     const newClaimed = { ...claimedTasks, [task.id]: Date.now() };
     setClaimedTasks(newClaimed);
     localStorage.setItem("bunergy_claimed_tasks", JSON.stringify(newClaimed));
@@ -78,8 +178,63 @@ export function TasksReferralsScreen() {
     });
   };
 
+  const handleClaimPendingEarnings = async () => {
+    if (!userId || !referralStats) return;
+
+    setLoading(true);
+    try {
+      const result = await claimPendingEarnings(userId);
+      if (result.success && result.amount > 0) {
+        addBZ(result.amount);
+        toast({
+          title: "Earnings Claimed!",
+          description: `You received ${result.amount.toLocaleString()} BZ from referrals!`,
+        });
+        
+        // Refresh stats
+        const newStats = await getReferralStats(userId);
+        setReferralStats(newStats);
+      } else {
+        toast({
+          title: "No Earnings",
+          description: "No pending earnings to claim.",
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      console.error("Error claiming earnings:", err);
+      toast({
+        title: "Error",
+        description: "Failed to claim earnings. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClaimMilestone = async (milestoneCount: number, xpReward: number) => {
+    if (!userId || claimedMilestones.includes(milestoneCount)) return;
+
+    setLoading(true);
+    try {
+      const result = await checkAndClaimMilestone(userId, referralCount);
+      if (result.milestone && result.xpReward) {
+        addXP(result.xpReward);
+        setClaimedMilestones([...claimedMilestones, result.milestone]);
+        toast({
+          title: "Milestone Reached!",
+          description: `You earned ${result.xpReward.toLocaleString()} XP for ${result.milestone} referrals!`,
+        });
+      }
+    } catch (err) {
+      console.error("Error claiming milestone:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const tasks: Task[] = [
-    // Daily Tasks
     {
       id: "daily_check_in",
       title: "Daily Check-in",
@@ -87,7 +242,7 @@ export function TasksReferralsScreen() {
       reward: { type: "BZ", amount: 500 },
       type: "daily",
       target: 1,
-      current: 1 // Always completed if app is open
+      current: 1
     },
     {
       id: "daily_taps",
@@ -102,21 +257,19 @@ export function TasksReferralsScreen() {
       id: "daily_idle",
       title: "Claim Idle Income",
       description: "Collect income from your build.",
-      reward: { type: "XP", amount: 50 },
+      reward: { type: "XP", amount: 500 },
       type: "daily",
       target: 1,
       current: hasClaimedIdleToday ? 1 : 0
     },
-
-    // Weekly Tasks (Using total counters for now, simplified)
     {
       id: "weekly_upgrade",
       title: "Upgrade 10 Parts",
-      description: "Perform 10 upgrades in the Build screen.",
+      description: "Perform 10 upgrades in Build screen.",
       reward: { type: "BZ", amount: 5000 },
       type: "weekly",
       target: 10,
-      current: totalUpgrades // Now tracks actual upgrades performed
+      current: totalUpgrades
     },
     {
       id: "weekly_convert",
@@ -136,8 +289,6 @@ export function TasksReferralsScreen() {
       target: 3,
       current: referralCount
     },
-
-    // Milestones
     {
       id: "milestone_taps",
       title: "Master Tapper",
@@ -256,17 +407,17 @@ export function TasksReferralsScreen() {
                 <div className="p-4 bg-background/50 rounded-lg border border-blue-200 dark:border-blue-800">
                   <p className="text-sm font-medium mb-2">Your Referral Code</p>
                   <code className="text-2xl font-bold bg-muted p-3 rounded block">
-                    REF{Math.random().toString(36).substring(2, 8).toUpperCase()}
+                    {referralCode || "Loading..."}
                   </code>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Share this code or use the link below
+                    Linked to your Telegram account
                   </p>
                 </div>
 
                 <div className="p-3 bg-background/50 rounded-lg border border-blue-200 dark:border-blue-800">
                   <p className="text-xs font-medium mb-1">Direct Link</p>
                   <code className="text-xs bg-muted p-2 rounded block break-all">
-                    https://t.me/bunergy_bot/app?startapp=ref_{Math.random().toString(36).substring(7)}
+                    {referralLink || "Loading..."}
                   </code>
                 </div>
               </div>
@@ -293,7 +444,24 @@ export function TasksReferralsScreen() {
                 </p>
               </div>
 
-              <Button className="w-full gap-2" size="lg">
+              <Button 
+                className="w-full gap-2" 
+                size="lg" 
+                onClick={() => {
+                  if (referralLink) {
+                    if (window.Telegram?.WebApp) {
+                      window.Telegram.WebApp.openTelegramLink(
+                        `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent("Join me on Bunergy and earn rewards!")}`
+                      );
+                    }
+                    navigator.clipboard.writeText(referralLink);
+                    toast({
+                      title: "Link Copied!",
+                      description: "Share this link with your friends to earn rewards.",
+                    });
+                  }
+                }}
+              >
                 <ArrowRight className="h-4 w-4" />
                 Share Referral Link
               </Button>
@@ -308,14 +476,16 @@ export function TasksReferralsScreen() {
                 <p className="text-xs text-muted-foreground">20% share from your referrals</p>
               </div>
               <Badge variant="outline" className="text-lg">
-                {(referralCount * 150).toLocaleString()} BZ
+                {referralStats ? referralStats.pending_earnings.toLocaleString() : "0"} BZ
               </Badge>
             </div>
             <Button 
               className="w-full" 
               variant="default"
-              disabled={referralCount === 0}
+              disabled={loading || !referralStats || referralStats.pending_earnings === 0}
+              onClick={handleClaimPendingEarnings}
             >
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Claim Pending Income
             </Button>
           </Card>
@@ -325,44 +495,65 @@ export function TasksReferralsScreen() {
             <h3 className="font-semibold mb-3">Referral Milestones</h3>
             <div className="space-y-3">
               {[
-                { count: 5, reward: "5,000 XP", reached: referralCount >= 5 },
-                { count: 10, reward: "15,000 XP", reached: referralCount >= 10 },
-                { count: 25, reward: "50,000 XP", reached: referralCount >= 25 },
-                { count: 50, reward: "150,000 XP", reached: referralCount >= 50 }
-              ].map((milestone) => (
-                <div 
-                  key={milestone.count}
-                  className={`p-3 rounded-lg border-2 ${
-                    milestone.reached 
-                      ? "bg-green-50 dark:bg-green-950 border-green-500" 
-                      : "bg-muted border-muted-foreground/20"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {milestone.reached ? (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      ) : (
-                        <Circle className="h-5 w-5 text-muted-foreground" />
-                      )}
-                      <div>
-                        <p className="font-semibold">{milestone.count} Referrals</p>
-                        <p className="text-xs text-muted-foreground">Reward: {milestone.reward}</p>
+                { count: 5, reward: 5000 },
+                { count: 10, reward: 15000 },
+                { count: 25, reward: 50000 },
+                { count: 50, reward: 150000 }
+              ].map((milestone) => {
+                const reached = referralCount >= milestone.count;
+                const claimed = claimedMilestones.includes(milestone.count);
+
+                return (
+                  <div 
+                    key={milestone.count}
+                    className={`p-3 rounded-lg border-2 ${
+                      claimed
+                        ? "bg-green-50 dark:bg-green-950 border-green-500" 
+                        : reached
+                        ? "bg-blue-50 dark:bg-blue-950 border-blue-500"
+                        : "bg-muted border-muted-foreground/20"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {claimed ? (
+                          <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        ) : (
+                          <Circle className="h-5 w-5 text-muted-foreground" />
+                        )}
+                        <div>
+                          <p className="font-semibold">{milestone.count} Referrals</p>
+                          <p className="text-xs text-muted-foreground">
+                            Reward: {milestone.reward.toLocaleString()} XP
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={reached ? "default" : "outline"}>
+                          {referralCount}/{milestone.count}
+                        </Badge>
+                        {reached && !claimed && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            disabled={loading}
+                            onClick={() => handleClaimMilestone(milestone.count, milestone.reward)}
+                          >
+                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Claim"}
+                          </Button>
+                        )}
                       </div>
                     </div>
-                    <Badge variant={milestone.reached ? "default" : "outline"}>
-                      {referralCount}/{milestone.count}
-                    </Badge>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </Card>
 
           {/* Referral List */}
           <div className="space-y-4">
-            <h3 className="font-semibold">Your Referrals ({referralCount})</h3>
-            {referralCount === 0 ? (
+            <h3 className="font-semibold">Your Referrals ({referralStats?.total_referrals || 0})</h3>
+            {!referralStats || referralStats.total_referrals === 0 ? (
               <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg">
                 <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p>No referrals yet.</p>
@@ -370,30 +561,32 @@ export function TasksReferralsScreen() {
               </div>
             ) : (
               <div className="space-y-2">
-                {Array.from({ length: Math.min(referralCount, 10) }).map((_, i) => (
-                  <Card key={i} className="p-3 flex justify-between items-center">
+                {referralStats.referrals.slice(0, 10).map((ref, i) => (
+                  <Card key={ref.invitee_id} className="p-3 flex justify-between items-center">
                     <div className="flex items-center gap-3">
                       <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold">
                         {String.fromCharCode(65 + (i % 26))}
                       </div>
                       <div>
-                        <p className="font-medium text-sm">User {1000 + i}</p>
+                        <p className="font-medium text-sm">
+                          User {ref.invitee_id.slice(0, 8)}
+                        </p>
                         <p className="text-xs text-muted-foreground">
-                          Earned: {(Math.random() * 50000).toFixed(0)} BZ
+                          Earned: {ref.total_earned.toLocaleString()} BZ
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
                       <Badge variant="outline" className="text-green-600">
-                        +{(Math.random() * 10000).toFixed(0)} BZ
+                        +{ref.your_share.toLocaleString()} BZ
                       </Badge>
                       <p className="text-xs text-muted-foreground mt-1">Your share</p>
                     </div>
                   </Card>
                 ))}
-                {referralCount > 10 && (
+                {referralStats.total_referrals > 10 && (
                   <p className="text-center text-sm text-muted-foreground pt-2">
-                    And {referralCount - 10} more referrals...
+                    And {referralStats.total_referrals - 10} more referrals...
                   </p>
                 )}
               </div>

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 type Tier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
 
@@ -113,6 +114,34 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const interval = setInterval(checkDailyReset, 60000);
     return () => clearInterval(interval);
   }, [lastResetDate]);
+
+  // Sync Referral Count from Supabase
+  useEffect(() => {
+    const syncReferrals = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+          .from("referrals")
+          .select("id")
+          .eq("inviter_id", user.id);
+
+        if (!error && data) {
+          const realCount = data.length;
+          if (realCount !== referralCount) {
+            setReferralCount(realCount);
+          }
+        }
+      } catch (err) {
+        console.error("Error syncing referrals:", err);
+      }
+    };
+
+    syncReferrals();
+    const interval = setInterval(syncReferrals, 30000); // Sync every 30s
+    return () => clearInterval(interval);
+  }, []);
 
   // Tier Calculation
   const getTier = (xpValue: number): Tier => {

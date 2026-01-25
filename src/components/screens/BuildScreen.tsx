@@ -622,7 +622,10 @@ export function BuildScreen() {
                           variant={canUpgrade && state.level < 20 ? "default" : "secondary"}
                         >
                           {!partUnlocked ? (
-                            "Locked - Upgrade Previous Part"
+                            <>
+                              <Lock className="mr-2 h-4 w-4" />
+                              Locked
+                            </>
                           ) : !unlocked ? (
                             <>
                               <Lock className="mr-2 h-4 w-4" />

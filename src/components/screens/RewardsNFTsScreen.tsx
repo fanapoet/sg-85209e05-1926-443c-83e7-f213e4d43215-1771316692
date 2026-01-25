@@ -548,9 +548,39 @@ export function RewardsNFTsScreen() {
                         )}
                       </div>
 
-                      <p className="text-sm text-muted-foreground mb-2">
+                      <p className="text-sm text-muted-foreground mb-3">
                         {nft.description}
                       </p>
+
+                      {/* Progress Display */}
+                      {!nft.owned && (
+                        <div className="mb-3 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">Progress</span>
+                            <span className={nft.requirementMet ? "text-green-600 font-semibold" : "font-medium"}>
+                              {nft.key === "social_king" && `${gameState?.referralCount || 0} / 20 referrals`}
+                              {nft.key === "builder_pro" && (isStage2Complete() ? "Stage 2 Complete ✓" : "Stage 2 Incomplete")}
+                              {nft.key === "tap_legend" && `${((gameState?.totalTapIncome || 0) / 1000000).toFixed(1)}M / 10M BZ`}
+                              {nft.key === "energy_master" && (areBoostersMaxed() ? "All Boosters Maxed ✓" : "Boosters Not Maxed")}
+                              {nft.key === "golden_bunny" && `${((gameState?.totalTaps || 0) / 1000000).toFixed(1)}M / 5M taps`}
+                              {nft.key === "diamond_crystal" && `${((gameState?.xp || 0) / 1000).toFixed(0)}k / 500k XP`}
+                              {nft.key === "early_adopter" && "Always Available"}
+                            </span>
+                          </div>
+                          {nft.key === "social_king" && (
+                            <Progress value={Math.min(((gameState?.referralCount || 0) / 20) * 100, 100)} className="h-2" />
+                          )}
+                          {nft.key === "tap_legend" && (
+                            <Progress value={Math.min(((gameState?.totalTapIncome || 0) / 10000000) * 100, 100)} className="h-2" />
+                          )}
+                          {nft.key === "golden_bunny" && (
+                            <Progress value={Math.min(((gameState?.totalTaps || 0) / 5000000) * 100, 100)} className="h-2" />
+                          )}
+                          {nft.key === "diamond_crystal" && (
+                            <Progress value={Math.min(((gameState?.xp || 0) / 500000) * 100, 100)} className="h-2" />
+                          )}
+                        </div>
+                      )}
 
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2 text-sm">
@@ -559,7 +589,7 @@ export function RewardsNFTsScreen() {
                           ) : (
                             <Lock className="h-4 w-4 text-orange-600" />
                           )}
-                          <span className={nft.requirementMet ? "text-green-600" : "text-orange-600"}>
+                          <span className={nft.requirementMet ? "text-green-600 font-medium" : "text-orange-600"}>
                             {nft.requirement}
                           </span>
                         </div>
