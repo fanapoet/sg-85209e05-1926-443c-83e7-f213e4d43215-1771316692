@@ -139,6 +139,7 @@ const allParts: Part[] = [
 
 export function BuildScreen() {
   const { bz, subtractBZ, addBZ, referralCount, tier, setBzPerHour, incrementUpgrades, markIdleClaimed } = useGameState();
+  const { toast } = useToast();
   const [partStates, setPartStates] = useState<Record<PartKey, PartState>>({});
   const [idleState, setIdleState] = useState<IdleState>({
     lastClaimTime: Date.now(),

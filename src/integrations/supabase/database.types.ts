@@ -104,7 +104,6 @@ export type Database = {
       }
       referrals: {
         Row: {
-          created_at: string | null
           id: string
           invited_at: string | null
           invitee_id: string
@@ -114,7 +113,6 @@ export type Database = {
           referral_code: string
         }
         Insert: {
-          created_at?: string | null
           id?: string
           invited_at?: string | null
           invitee_id: string
@@ -124,7 +122,6 @@ export type Database = {
           referral_code: string
         }
         Update: {
-          created_at?: string | null
           id?: string
           invited_at?: string | null
           invitee_id?: string

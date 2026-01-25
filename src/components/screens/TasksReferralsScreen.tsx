@@ -9,15 +9,15 @@ import { CheckCircle2, Circle, Trophy, Users, Star, ArrowRight, Loader2 } from "
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  generateReferralCode,
+  getOrCreateProfile,
   getReferralStats,
   claimPendingEarnings,
   checkAndClaimMilestone,
   getClaimedMilestones,
   createReferral,
-  claimInviteeReward,
-  claimInviterReward,
+  claimReferralBonus,
   checkReferralExists,
+  findInviterByCode,
   type ReferralStats
 } from "@/services/referralService";
 
@@ -77,25 +77,37 @@ export function TasksReferralsScreen() {
   const [claimedMilestones, setClaimedMilestones] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // Initialize user and referral code
   useEffect(() => {
     const initUser = async () => {
       try {
+        setIsInitializing(true);
         const { data: { user } } = await supabase.auth.getUser();
+        
         if (user) {
           setUserId(user.id);
-          const code = generateReferralCode(user.id);
-          setReferralCode(code);
-          setReferralLink(`https://t.me/bunergy_bot/app?startapp=${code.toLowerCase()}`);
+          
+          // Get or create profile with referral code
+          const profile = await getOrCreateProfile(user.id);
+          setReferralCode(profile.referralCode);
+          setReferralLink(`https://t.me/bunergy_bot/app?startapp=${profile.referralCode.toLowerCase()}`);
         }
       } catch (err) {
         console.error("Error initializing user:", err);
+        toast({
+          title: "Connection Error",
+          description: "Failed to load referral data. Please refresh the app.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsInitializing(false);
       }
     };
 
     initUser();
-  }, []);
+  }, [toast]);
 
   // Load referral stats
   useEffect(() => {
@@ -134,23 +146,34 @@ export function TasksReferralsScreen() {
         if (!startParam || !startParam.toLowerCase().startsWith("ref")) return;
 
         const inviterCode = startParam.toUpperCase();
-        const inviterUserId = generateReferralCode(inviterCode); // Reverse lookup
+        
+        // Find inviter by code
+        const inviterId = await findInviterByCode(inviterCode);
+        if (!inviterId) {
+          console.log("Invalid referral code");
+          return;
+        }
 
         // Create referral relationship
-        const result = await createReferral(inviterUserId, userId, inviterCode);
+        const result = await createReferral(inviterId, userId, inviterCode);
         
         if (result.success) {
-          // Claim invitee reward
-          const inviteeReward = await claimInviteeReward(userId);
-          if (inviteeReward.success) {
-            addBZ(inviteeReward.reward);
-            toast({
-              title: "Welcome Bonus!",
-              description: `You received ${inviteeReward.reward} BZ for joining!`,
-            });
+          // Claim one-time bonus for both parties
+          const bonusResult = await claimReferralBonus(inviterId, userId);
+          
+          if (bonusResult.success) {
+            // Invitee gets 500 BZ
+            if (bonusResult.inviteeReward) {
+              addBZ(bonusResult.inviteeReward);
+              toast({
+                title: "Welcome Bonus!",
+                description: `You received ${bonusResult.inviteeReward} BZ for joining!`,
+              });
+            }
+            
+            // Inviter will get 1000 BZ + 1000 XP on their next app open
+            // (handled in their app session)
           }
-
-          // Inviter reward will be claimed by inviter on their next app open
         }
       } catch (err) {
         console.error("Error handling referral binding:", err);
@@ -158,7 +181,7 @@ export function TasksReferralsScreen() {
     };
 
     handleReferralBinding();
-  }, [userId]);
+  }, [userId, addBZ, toast]);
 
   // Load claimed tasks
   useEffect(() => {
@@ -382,6 +405,17 @@ export function TasksReferralsScreen() {
       </Card>
     );
   };
+
+  if (isInitializing) {
+    return (
+      <div className="pb-24 p-4 max-w-2xl mx-auto flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
+          <p className="text-muted-foreground">Loading referral data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pb-24 p-4 max-w-2xl mx-auto space-y-6">
