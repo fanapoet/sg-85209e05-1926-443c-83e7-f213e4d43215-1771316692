@@ -18,33 +18,43 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabKey>("tap");
 
   useEffect(() => {
-    // Check if running inside Telegram
-    const tg = (window as any).Telegram?.WebApp;
+    // Wait for Telegram SDK to load
+    const checkTelegram = () => {
+      const tg = (window as any).Telegram?.WebApp;
+      
+      if (tg) {
+        setIsInTelegram(true);
+        
+        // Initialize Telegram Mini App
+        tg.ready();
+        tg.expand();
+        
+        // Apply Telegram theme
+        const applyTheme = () => {
+          const isDark = tg.colorScheme === "dark";
+          document.documentElement.classList.toggle("dark", isDark);
+        };
+        
+        applyTheme();
+        
+        // Listen for theme changes
+        tg.onEvent("themeChanged", applyTheme);
+        
+        return () => {
+          tg.offEvent("themeChanged", applyTheme);
+        };
+      } else {
+        setIsInTelegram(false);
+      }
+    };
+
+    // Check immediately
+    checkTelegram();
     
-    if (tg) {
-      setIsInTelegram(true);
-      
-      // Initialize Telegram Mini App
-      tg.ready();
-      tg.expand();
-      
-      // Apply Telegram theme
-      const applyTheme = () => {
-        const isDark = tg.colorScheme === "dark";
-        document.documentElement.classList.toggle("dark", isDark);
-      };
-      
-      applyTheme();
-      
-      // Listen for theme changes
-      tg.onEvent("themeChanged", applyTheme);
-      
-      return () => {
-        tg.offEvent("themeChanged", applyTheme);
-      };
-    } else {
-      setIsInTelegram(false);
-    }
+    // Also check after a delay to ensure SDK is loaded
+    const timer = setTimeout(checkTelegram, 100);
+    
+    return () => clearTimeout(timer);
   }, []);
 
   // Loading state

@@ -17,8 +17,7 @@ import {
   Zap,
   Calendar,
   Star,
-  Award,
-  ExternalLink
+  Award
 } from "lucide-react";
 
 // Task types
@@ -38,8 +37,8 @@ interface Referral {
   id: string;
   username: string;
   joinedAt: number;
-  totalEarnings: number; // Tap + Idle combined
-  pendingShare: number; // 20% of earnings since last claim
+  totalEarnings: number;
+  pendingShare: number;
 }
 
 // Milestone rewards
@@ -63,6 +62,7 @@ export function TasksReferralsScreen() {
 
   // Referral state
   const [referralCode] = useState(() => {
+    if (typeof window === "undefined") return "";
     const stored = localStorage.getItem("bunergy_referral_code");
     if (stored) return stored;
     const newCode = Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -71,6 +71,7 @@ export function TasksReferralsScreen() {
   });
 
   const [referrals, setReferrals] = useState<Referral[]>(() => {
+    if (typeof window === "undefined") return [];
     const stored = localStorage.getItem("bunergy_referrals");
     return stored ? JSON.parse(stored) : [];
   });
@@ -80,6 +81,14 @@ export function TasksReferralsScreen() {
 
   // Milestone state
   const [milestones, setMilestones] = useState<Milestone[]>(() => {
+    if (typeof window === "undefined") {
+      return [
+        { referrals: 5, xp: 5000, claimed: false },
+        { referrals: 10, xp: 15000, claimed: false },
+        { referrals: 25, xp: 50000, claimed: false },
+        { referrals: 50, xp: 150000, claimed: false }
+      ];
+    }
     const stored = localStorage.getItem("bunergy_milestones");
     if (stored) return JSON.parse(stored);
     return [
@@ -92,11 +101,105 @@ export function TasksReferralsScreen() {
 
   // Tasks state
   const [tasks, setTasks] = useState<Task[]>(() => {
+    if (typeof window === "undefined") {
+      return [
+        {
+          id: "daily_visit",
+          title: "Daily Check-in",
+          description: "Open the app today",
+          reward: { type: "BZ", amount: 1000 },
+          progress: 1,
+          target: 1,
+          icon: Calendar,
+          category: "daily"
+        },
+        {
+          id: "daily_tap",
+          title: "Tap 100 Times",
+          description: "Tap the bunny 100 times",
+          reward: { type: "BZ", amount: 2000 },
+          progress: 0,
+          target: 100,
+          icon: Zap,
+          category: "daily"
+        },
+        {
+          id: "daily_idle",
+          title: "Claim Idle Income",
+          description: "Claim your build rewards",
+          reward: { type: "XP", amount: 500 },
+          progress: 0,
+          target: 1,
+          icon: Clock,
+          category: "daily"
+        },
+        {
+          id: "weekly_upgrade",
+          title: "Upgrade 10 Parts",
+          description: "Upgrade any build parts 10 times",
+          reward: { type: "BZ", amount: 15000 },
+          progress: 0,
+          target: 10,
+          icon: TrendingUp,
+          category: "weekly"
+        },
+        {
+          id: "weekly_refer",
+          title: "Invite 3 Friends",
+          description: "Bring 3 new players this week",
+          reward: { type: "XP", amount: 3000 },
+          progress: 0,
+          target: 3,
+          icon: Users,
+          category: "weekly"
+        },
+        {
+          id: "weekly_convert",
+          title: "Convert 500K BZ",
+          description: "Convert BZ to BB",
+          reward: { type: "BB", amount: 0.1 },
+          progress: 0,
+          target: 500000,
+          icon: Target,
+          category: "weekly"
+        },
+        {
+          id: "prog_taps",
+          title: "Master Tapper",
+          description: "Reach 10,000 total taps",
+          reward: { type: "XP", amount: 10000 },
+          progress: 0,
+          target: 10000,
+          icon: Star,
+          category: "progressive"
+        },
+        {
+          id: "prog_builds",
+          title: "Expert Builder",
+          description: "Complete Stage 3",
+          reward: { type: "BB", amount: 1.0 },
+          progress: 0,
+          target: 1,
+          icon: Trophy,
+          category: "progressive"
+        },
+        {
+          id: "prog_network",
+          title: "Network Master",
+          description: "Refer 25 friends",
+          reward: { type: "XP", amount: 50000 },
+          progress: 0,
+          target: 25,
+          icon: Award,
+          category: "progressive"
+        }
+      ];
+    }
+    
     const stored = localStorage.getItem("bunergy_tasks");
     if (stored) return JSON.parse(stored);
     
     return [
-      // Daily Tasks
       {
         id: "daily_visit",
         title: "Daily Check-in",
@@ -127,8 +230,6 @@ export function TasksReferralsScreen() {
         icon: Clock,
         category: "daily"
       },
-      
-      // Weekly Tasks
       {
         id: "weekly_upgrade",
         title: "Upgrade 10 Parts",
@@ -159,8 +260,6 @@ export function TasksReferralsScreen() {
         icon: Target,
         category: "weekly"
       },
-      
-      // Progressive Tasks
       {
         id: "prog_taps",
         title: "Master Tapper",
@@ -202,35 +301,38 @@ export function TasksReferralsScreen() {
 
   // Save tasks to localStorage
   useEffect(() => {
-    localStorage.setItem("bunergy_tasks", JSON.stringify(tasks));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("bunergy_tasks", JSON.stringify(tasks));
+    }
   }, [tasks]);
 
   // Save milestones to localStorage
   useEffect(() => {
-    localStorage.setItem("bunergy_milestones", JSON.stringify(milestones));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("bunergy_milestones", JSON.stringify(milestones));
+    }
   }, [milestones]);
 
   // Save referrals to localStorage
   useEffect(() => {
-    localStorage.setItem("bunergy_referrals", JSON.stringify(referrals));
+    if (typeof window !== "undefined") {
+      localStorage.setItem("bunergy_referrals", JSON.stringify(referrals));
+    }
   }, [referrals]);
 
   // Check URL for referral code on mount
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    
     const params = new URLSearchParams(window.location.search);
     const refCode = params.get("ref");
     
     if (refCode && refCode !== referralCode) {
-      // Simulate referral binding (in production, would be server-side)
       const alreadyUsed = localStorage.getItem("bunergy_used_referral");
       
       if (!alreadyUsed) {
-        // Invitee bonus
         addBZ(500);
         localStorage.setItem("bunergy_used_referral", refCode);
-        
-        // Note: Inviter would receive +1000 BZ + 1000 XP server-side
-        // For demo, we'll just show a toast
         alert("Welcome! You received 500 BZ as a referral bonus!");
       }
     }
@@ -238,16 +340,17 @@ export function TasksReferralsScreen() {
 
   const copyReferralLink = () => {
     const link = `https://t.me/bunergy_bot?start=${referralCode}`;
-    navigator.clipboard.writeText(link);
-    setCopiedCode(true);
-    setTimeout(() => setCopiedCode(false), 2000);
+    if (typeof window !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(link);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2000);
+    }
   };
 
   const claimPendingShare = () => {
     if (pendingShareTotal > 0) {
       addBZ(pendingShareTotal);
       
-      // Reset pending shares for all referrals
       setReferrals(refs => refs.map(ref => ({
         ...ref,
         pendingShare: 0
@@ -272,7 +375,6 @@ export function TasksReferralsScreen() {
     const task = tasks.find(t => t.id === taskId);
     if (!task || task.progress < task.target) return;
     
-    // Award reward
     if (task.reward.type === "BZ") {
       addBZ(task.reward.amount);
     } else if (task.reward.type === "BB") {
@@ -281,7 +383,6 @@ export function TasksReferralsScreen() {
       addXP(task.reward.amount);
     }
     
-    // Reset task (for daily/weekly) or mark as complete (for progressive)
     if (task.category === "progressive") {
       setTasks(prev => prev.filter(t => t.id !== taskId));
     } else {
