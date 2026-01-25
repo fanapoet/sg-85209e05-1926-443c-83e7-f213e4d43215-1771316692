@@ -34,6 +34,7 @@ interface WeeklyChallenge {
   target: number;
   progress: number;
   reward: { type: "BZ" | "BB" | "XP"; amount: number };
+  claimed: boolean;
 }
 
 interface NFT {
@@ -41,7 +42,7 @@ interface NFT {
   name: string;
   icon: React.ComponentType<{ className?: string }>;
   description: string;
-  price: number; // BB
+  price: number;
   requirement: string;
   requirementMet: boolean;
   owned: boolean;
@@ -58,52 +59,144 @@ const dailyRewards: DailyReward[] = [
 ];
 
 export function RewardsNFTsScreen() {
-  const { bz, bb, xp, referralCount, tier, subtractBB, addBZ, addXP } = useGameState();
+  const { 
+    bz, 
+    bb, 
+    xp, 
+    referralCount, 
+    tier, 
+    subtractBB, 
+    addBZ, 
+    addXP,
+    totalUpgrades,
+    totalConversions,
+    totalTapIncome
+  } = useGameState();
+  
   const [dailyStreak, setDailyStreak] = useState(0);
   const [lastClaimDate, setLastClaimDate] = useState<string | null>(null);
   const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
+  const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallenge[]>([]);
 
   // Load saved state
   useEffect(() => {
     const savedStreak = localStorage.getItem("dailyStreak");
     const savedLastClaim = localStorage.getItem("lastClaimDate");
     const savedNFTs = localStorage.getItem("ownedNFTs");
+    const savedChallenges = localStorage.getItem("weeklyChallenges");
 
     if (savedStreak) setDailyStreak(parseInt(savedStreak));
     if (savedLastClaim) setLastClaimDate(savedLastClaim);
     if (savedNFTs) setOwnedNFTs(JSON.parse(savedNFTs));
+    
+    if (savedChallenges) {
+      setWeeklyChallenges(JSON.parse(savedChallenges));
+    } else {
+      // Initialize default challenges
+      const defaultChallenges: WeeklyChallenge[] = [
+        {
+          key: "builder",
+          name: "Builder Challenge",
+          icon: Hammer,
+          description: "Upgrade 10 build parts this week",
+          target: 10,
+          progress: 0,
+          reward: { type: "BZ", amount: 10000 },
+          claimed: false
+        },
+        {
+          key: "recruiter",
+          name: "Recruiter Challenge",
+          icon: Users,
+          description: "Invite 3 new friends this week",
+          target: 3,
+          progress: 0,
+          reward: { type: "XP", amount: 2000 },
+          claimed: false
+        },
+        {
+          key: "converter",
+          name: "Converter Challenge",
+          icon: ArrowLeftRight,
+          description: "Convert 1,000,000 BZ to BB",
+          target: 1000000,
+          progress: 0,
+          reward: { type: "BB", amount: 0.005 },
+          claimed: false
+        }
+      ];
+      setWeeklyChallenges(defaultChallenges);
+      localStorage.setItem("weeklyChallenges", JSON.stringify(defaultChallenges));
+    }
   }, []);
 
-  // Weekly challenges (mock progress for now)
-  const weeklyChallenges: WeeklyChallenge[] = [
-    {
-      key: "builder",
-      name: "Builder Challenge",
-      icon: Hammer,
-      description: "Upgrade 10 build parts this week",
-      target: 10,
-      progress: 0,
-      reward: { type: "BZ", amount: 10000 }
-    },
-    {
-      key: "recruiter",
-      name: "Recruiter Challenge",
-      icon: Users,
-      description: "Invite 3 new friends this week",
-      target: 3,
-      progress: Math.min(referralCount, 3),
-      reward: { type: "XP", amount: 2000 }
-    },
-    {
-      key: "converter",
-      name: "Converter Challenge",
-      icon: ArrowLeftRight,
-      description: "Convert 1,000,000 BZ to BB",
-      target: 1000000,
-      progress: 0,
-      reward: { type: "BB", amount: 0.005 }
+  // Update weekly challenges progress based on game state
+  useEffect(() => {
+    setWeeklyChallenges(prevChallenges => 
+      prevChallenges.map(challenge => {
+        if (challenge.claimed) return challenge;
+        
+        if (challenge.key === "builder") {
+          return { ...challenge, progress: Math.min(totalUpgrades, challenge.target) };
+        }
+        if (challenge.key === "recruiter") {
+          return { ...challenge, progress: Math.min(referralCount, challenge.target) };
+        }
+        if (challenge.key === "converter") {
+          return { ...challenge, progress: Math.min(totalConversions, challenge.target) };
+        }
+        return challenge;
+      })
+    );
+  }, [totalUpgrades, referralCount, totalConversions]);
+
+  // Save weekly challenges when they change
+  useEffect(() => {
+    if (weeklyChallenges.length > 0) {
+      localStorage.setItem("weeklyChallenges", JSON.stringify(weeklyChallenges));
     }
-  ];
+  }, [weeklyChallenges]);
+
+  // Check for Stage 2 completion (for Builder Pro NFT)
+  const isStage2Complete = (): boolean => {
+    const buildParts = localStorage.getItem("buildParts");
+    if (!buildParts) return false;
+    
+    try {
+      const parts = JSON.parse(buildParts);
+      const stage2Parts = Object.keys(parts).filter(k => k.startsWith("s2p"));
+      const stage2L5Count = stage2Parts.filter(k => parts[k].level >= 5).length;
+      return stage2L5Count >= 10;
+    } catch {
+      return false;
+    }
+  };
+
+  // Check if all energy boosters are maxed
+  const areBoostersMaxed = (): boolean => {
+    const boosters = localStorage.getItem("boosters");
+    if (!boosters) return false;
+    
+    try {
+      const data = JSON.parse(boosters);
+      return (
+        data.energyCapacity >= 10 &&
+        data.recoveryRate >= 10
+      );
+    } catch {
+      return false;
+    }
+  };
+
+  // Check total taps for Golden Bunny
+  const getTotalTaps = (): number => {
+    try {
+      const saved = localStorage.getItem("bunergy_total_taps");
+      return saved ? parseInt(saved) : 0;
+    } catch {
+      return 0;
+    }
+  };
 
   // NFTs with requirements
   const nfts: NFT[] = [
@@ -134,7 +227,7 @@ export function RewardsNFTsScreen() {
       description: "Expert in construction and upgrades.",
       price: 2,
       requirement: "Complete Stage 2",
-      requirementMet: false, // TODO: Check Build completion
+      requirementMet: isStage2Complete(),
       owned: ownedNFTs.includes("builder_pro")
     },
     {
@@ -144,7 +237,7 @@ export function RewardsNFTsScreen() {
       description: "Legendary tapping power unleashed.",
       price: 4,
       requirement: "Earn 10M BZ from tapping",
-      requirementMet: false, // TODO: Track tap earnings
+      requirementMet: totalTapIncome >= 10000000,
       owned: ownedNFTs.includes("tap_legend")
     },
     {
@@ -154,7 +247,7 @@ export function RewardsNFTsScreen() {
       description: "Perfect energy management achieved.",
       price: 3,
       requirement: "Max all energy boosters",
-      requirementMet: false, // TODO: Check booster levels
+      requirementMet: areBoostersMaxed(),
       owned: ownedNFTs.includes("energy_master")
     },
     {
@@ -164,7 +257,7 @@ export function RewardsNFTsScreen() {
       description: "The ultimate tapping achievement.",
       price: 5,
       requirement: "5M taps total",
-      requirementMet: false, // TODO: Track total taps
+      requirementMet: getTotalTaps() >= 5000000,
       owned: ownedNFTs.includes("golden_bunny")
     },
     {
@@ -201,8 +294,28 @@ export function RewardsNFTsScreen() {
     localStorage.setItem("lastClaimDate", today);
   };
 
+  const handleClaimChallenge = (challengeKey: string) => {
+    setWeeklyChallenges(prevChallenges => 
+      prevChallenges.map(challenge => {
+        if (challenge.key === challengeKey && challenge.progress >= challenge.target && !challenge.claimed) {
+          // Award the reward
+          if (challenge.reward.type === "BZ") {
+            addBZ(challenge.reward.amount);
+          } else if (challenge.reward.type === "XP") {
+            addXP(challenge.reward.amount);
+          }
+          // BB reward would be added when backend is ready
+          
+          return { ...challenge, claimed: true };
+        }
+        return challenge;
+      })
+    );
+  };
+
   const handlePurchaseNFT = (nft: NFT) => {
     if (nft.owned || !nft.requirementMet) return;
+    
     if (nft.price === 0) {
       // Free claim
       const updated = [...ownedNFTs, nft.key];
@@ -311,11 +424,19 @@ export function RewardsNFTsScreen() {
               return (
                 <div key={challenge.key} className="p-3 bg-muted rounded-lg">
                   <div className="flex items-start gap-3 mb-3">
-                    <div className="p-2 rounded-lg bg-primary/10">
-                      <Icon className="h-5 w-5 text-primary" />
+                    <div className={`p-2 rounded-lg ${challenge.claimed ? "bg-green-500/10" : "bg-primary/10"}`}>
+                      <Icon className={`h-5 w-5 ${challenge.claimed ? "text-green-500" : "text-primary"}`} />
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-semibold">{challenge.name}</h4>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-semibold">{challenge.name}</h4>
+                        {challenge.claimed && (
+                          <Badge variant="default" className="bg-green-600">
+                            <Check className="h-3 w-3 mr-1" />
+                            Claimed
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-sm text-muted-foreground">
                         {challenge.description}
                       </p>
@@ -332,19 +453,25 @@ export function RewardsNFTsScreen() {
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-muted-foreground">Progress</span>
                       <span className="font-medium">
-                        {challenge.progress} / {challenge.target}
+                        {challenge.progress.toLocaleString()} / {challenge.target.toLocaleString()}
                       </span>
                     </div>
                     <Progress value={progressPercent} className="h-2" />
                   </div>
 
                   <Button
-                    disabled={!isComplete}
+                    onClick={() => handleClaimChallenge(challenge.key)}
+                    disabled={!isComplete || challenge.claimed}
                     className="w-full mt-3"
                     size="sm"
-                    variant={isComplete ? "default" : "secondary"}
+                    variant={isComplete && !challenge.claimed ? "default" : "secondary"}
                   >
-                    {isComplete ? (
+                    {challenge.claimed ? (
+                      <>
+                        <Check className="mr-2 h-4 w-4" />
+                        Claimed
+                      </>
+                    ) : isComplete ? (
                       <>
                         <Check className="mr-2 h-4 w-4" />
                         Claim Reward

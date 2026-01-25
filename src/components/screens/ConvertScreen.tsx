@@ -21,7 +21,7 @@ interface Transaction {
 const ANCHOR_RATE = 1000000; // 1,000,000 BZ = 1.000000 BB
 
 export function ConvertScreen() {
-  const { bz, bb, tier, addBZ, subtractBZ, addBB, subtractBB } = useGameState();
+  const { bz, bb, tier, addBZ, subtractBZ, addBB, subtractBB, incrementConversions } = useGameState();
   const [conversionType, setConversionType] = useState<ConversionType>("bz-to-bb");
   const [inputAmount, setInputAmount] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -91,6 +91,7 @@ export function ConvertScreen() {
     if (conversionType === "bz-to-bb") {
       if (subtractBZ(amount)) {
         addBB(preview.output);
+        incrementConversions(amount); // Track for tasks/challenges
         saveTransaction({
           id: Date.now().toString(),
           timestamp: Date.now(),
