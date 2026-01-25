@@ -18,50 +18,79 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabKey>("tap");
 
   useEffect(() => {
-    // Wait for Telegram SDK to load
+    // Multiple detection attempts to ensure accuracy
+    let attempts = 0;
+    const maxAttempts = 5;
+    
     const checkTelegram = () => {
+      attempts++;
+      
+      // Check for Telegram WebApp
       const tg = (window as any).Telegram?.WebApp;
       
-      if (tg) {
+      if (tg && typeof tg.initData !== "undefined") {
+        // Confirmed Telegram environment
         setIsInTelegram(true);
         
         // Initialize Telegram Mini App
-        tg.ready();
-        tg.expand();
+        try {
+          tg.ready();
+          tg.expand();
+          
+          // Apply Telegram theme
+          const applyTheme = () => {
+            const isDark = tg.colorScheme === "dark";
+            document.documentElement.classList.toggle("dark", isDark);
+          };
+          
+          applyTheme();
+          
+          // Listen for theme changes
+          tg.onEvent("themeChanged", applyTheme);
+          
+          return () => {
+            tg.offEvent("themeChanged", applyTheme);
+          };
+        } catch (error) {
+          console.error("Telegram initialization error:", error);
+        }
         
-        // Apply Telegram theme
-        const applyTheme = () => {
-          const isDark = tg.colorScheme === "dark";
-          document.documentElement.classList.toggle("dark", isDark);
-        };
-        
-        applyTheme();
-        
-        // Listen for theme changes
-        tg.onEvent("themeChanged", applyTheme);
-        
-        return () => {
-          tg.offEvent("themeChanged", applyTheme);
-        };
-      } else {
+        return true;
+      } else if (attempts >= maxAttempts) {
+        // Not in Telegram after multiple attempts
         setIsInTelegram(false);
+        return true;
       }
+      
+      return false;
     };
 
-    // Check immediately
-    checkTelegram();
+    // Immediate check
+    if (checkTelegram()) return;
     
-    // Also check after a delay to ensure SDK is loaded
-    const timer = setTimeout(checkTelegram, 100);
+    // Retry checks with increasing delays
+    const timers = [100, 300, 600, 1000].map((delay, index) => 
+      setTimeout(() => {
+        if (checkTelegram()) {
+          // Clear remaining timers
+          timers.slice(index + 1).forEach(clearTimeout);
+        }
+      }, delay)
+    );
     
-    return () => clearTimeout(timer);
+    return () => {
+      timers.forEach(clearTimeout);
+    };
   }, []);
 
   // Loading state
   if (isInTelegram === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="animate-pulse text-foreground">Loading...</div>
+        <div className="text-center space-y-3">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
+          <div className="text-muted-foreground text-sm">Loading Bunergy...</div>
+        </div>
       </div>
     );
   }
