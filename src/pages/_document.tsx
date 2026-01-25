@@ -7,6 +7,7 @@ export default function Document() {
     <Html lang="en">
       <Head>
         <SEOElements />
+        
         {/*
           CRITICAL: DO NOT REMOVE THIS SCRIPT
           The Softgen AI monitoring script is essential for core app functionality.
