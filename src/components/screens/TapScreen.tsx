@@ -136,7 +136,7 @@ export function TapScreen() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        await recordReferralEarnings(user.id, "tap", tapReward);
+        await recordReferralEarnings(user.id, tapReward, 0);
       }
     } catch (err) {
       console.error("Error tracking referral earnings:", err);

@@ -340,7 +340,7 @@ export function BuildScreen() {
         try {
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            await recordReferralEarnings(user.id, "idle", accrued.total);
+            await recordReferralEarnings(user.id, 0, accrued.total);
           }
         } catch (err) {
           console.error("Error tracking referral earnings:", err);
