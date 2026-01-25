@@ -26,14 +26,65 @@ interface GameState {
 
 const GameStateContext = createContext<GameState | null>(null);
 
+// Safe localStorage helpers with fallbacks
+const safeGetItem = (key: string, defaultValue: any) => {
+  try {
+    if (typeof window === "undefined") return defaultValue;
+    const item = localStorage.getItem(key);
+    return item ? JSON.parse(item) : defaultValue;
+  } catch {
+    return defaultValue;
+  }
+};
+
+const safeSetItem = (key: string, value: any) => {
+  try {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+  } catch (error) {
+    console.error("Failed to save to localStorage:", error);
+  }
+};
+
 export function GameStateProvider({ children }: { children: ReactNode }) {
-  const [bz, setBz] = useState(5000);
-  const [bb, setBb] = useState(0.000000);
-  const [energy, setEnergyState] = useState(1500);
-  const [maxEnergy, setMaxEnergyState] = useState(1500);
-  const [bzPerHour, setBzPerHourState] = useState(0);
-  const [xp, setXp] = useState(0);
-  const [referralCount, setReferralCount] = useState(0);
+  // Initialize from localStorage with safe fallbacks
+  const [bz, setBz] = useState(() => safeGetItem("bunergy_bz", 5000));
+  const [bb, setBb] = useState(() => safeGetItem("bunergy_bb", 0.0));
+  const [energy, setEnergyState] = useState(() => safeGetItem("bunergy_energy", 1500));
+  const [maxEnergy, setMaxEnergyState] = useState(() => safeGetItem("bunergy_maxEnergy", 1500));
+  const [bzPerHour, setBzPerHourState] = useState(() => safeGetItem("bunergy_bzPerHour", 0));
+  const [xp, setXp] = useState(() => safeGetItem("bunergy_xp", 0));
+  const [referralCount, setReferralCount] = useState(() => safeGetItem("bunergy_referralCount", 0));
+
+  // Persist to localStorage on changes
+  useEffect(() => {
+    safeSetItem("bunergy_bz", bz);
+  }, [bz]);
+
+  useEffect(() => {
+    safeSetItem("bunergy_bb", bb);
+  }, [bb]);
+
+  useEffect(() => {
+    safeSetItem("bunergy_energy", energy);
+  }, [energy]);
+
+  useEffect(() => {
+    safeSetItem("bunergy_maxEnergy", maxEnergy);
+  }, [maxEnergy]);
+
+  useEffect(() => {
+    safeSetItem("bunergy_bzPerHour", bzPerHour);
+  }, [bzPerHour]);
+
+  useEffect(() => {
+    safeSetItem("bunergy_xp", xp);
+  }, [xp]);
+
+  useEffect(() => {
+    safeSetItem("bunergy_referralCount", referralCount);
+  }, [referralCount]);
 
   // Calculate tier based on XP
   const getTier = (xpValue: number): Tier => {
@@ -46,7 +97,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
   const tier = getTier(xp);
 
-  // Energy recovery: +0.3/sec
+  // Energy recovery: +0.3/sec (capped at maxEnergy)
   useEffect(() => {
     const interval = setInterval(() => {
       setEnergyState((prev) => {
@@ -58,44 +109,57 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [maxEnergy]);
 
+  // Anti-rollback: prevent negative values
   const addBZ = (amount: number) => {
-    setBz((prev) => prev + amount);
+    if (amount > 0) {
+      setBz((prev) => Math.max(0, prev + amount));
+    }
   };
 
   const subtractBZ = (amount: number): boolean => {
+    if (amount <= 0) return false;
     if (bz >= amount) {
-      setBz((prev) => prev - amount);
+      setBz((prev) => Math.max(0, prev - amount));
       return true;
     }
     return false;
   };
 
   const addBB = (amount: number) => {
-    setBb((prev) => prev + amount);
+    if (amount > 0) {
+      setBb((prev) => Math.max(0, prev + amount));
+    }
   };
 
   const subtractBB = (amount: number): boolean => {
+    if (amount <= 0) return false;
     if (bb >= amount) {
-      setBb((prev) => prev - amount);
+      setBb((prev) => Math.max(0, prev - amount));
       return true;
     }
     return false;
   };
 
   const addXP = (amount: number) => {
-    setXp((prev) => prev + amount);
+    if (amount > 0) {
+      setXp((prev) => Math.max(0, prev + amount));
+    }
   };
 
   const setEnergy = (value: number) => {
-    setEnergyState(value);
+    setEnergyState(Math.max(0, Math.min(value, maxEnergy)));
   };
 
   const setMaxEnergy = (value: number) => {
-    setMaxEnergyState(value);
+    if (value > 0) {
+      setMaxEnergyState(Math.max(1500, value));
+    }
   };
 
   const setBzPerHour = (value: number) => {
-    setBzPerHourState(value);
+    if (value >= 0) {
+      setBzPerHourState(Math.max(0, value));
+    }
   };
 
   const addReferral = () => {
