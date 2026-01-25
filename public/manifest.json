@@ -1,0 +1,27 @@
+{
+  "name": "Bunergy - BunBun Telegram Mini App",
+  "short_name": "Bunergy",
+  "description": "Build, tap, and earn in the Bunergy game. A Telegram Mini App experience.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#8b5cf6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/og-image.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["games", "entertainment"],
+  "scope": "/",
+  "lang": "en-US",
+  "dir": "ltr"
+}
