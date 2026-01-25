@@ -21,6 +21,26 @@ import {
   type ReferralStats
 } from "@/services/referralService";
 
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        initDataUnsafe?: {
+          start_parameter?: string;
+          user?: {
+            id: number;
+            first_name: string;
+            last_name?: string;
+            username?: string;
+            language_code?: string;
+          };
+        };
+        openTelegramLink?: (url: string) => void;
+      };
+    };
+  }
+}
+
 interface Task {
   id: string;
   title: string;
