@@ -1,8 +1,11 @@
 import { useGameState } from "@/contexts/GameStateContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Zap, Clock } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { recordReferralEarnings } from "@/services/referralService";
+import type React from "react";
 
 export function TapScreen() {
   const { 
@@ -15,6 +18,7 @@ export function TapScreen() {
     incrementTaps 
   } = useGameState();
 
+  const [isOnCooldown, setIsOnCooldown] = useState(false);
   const [lastTapTime, setLastTapTime] = useState(0);
   const [quickChargeUses, setQuickChargeUses] = useState(5);
   const [quickChargeCooldown, setQuickChargeCooldown] = useState(0);
@@ -102,31 +106,49 @@ export function TapScreen() {
   const tapReward = Math.ceil(baseTapReward * incomePerTapLevel * tierMultiplier);
   const energyCost = energyPerTapLevel;
 
-  const handleTap = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const now = Date.now();
-    if (now - lastTapTime < 110) return; // Anti-autoclicker
+  const handleTap = async (e: React.MouseEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) => {
+    if (energy < energyCost || isOnCooldown) return;
 
-    if (energy < energyCost) return;
+    // Get click position or center if not available
+    let clientX, clientY;
+    if ('touches' in e) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+    
+    // Randomize slightly if needed or just use click pos relative to button
+    const target = e.currentTarget as HTMLElement;
+    const rect = target.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
 
-    // Update global state
+    setIsOnCooldown(true);
+    setTimeout(() => setIsOnCooldown(false), 110);
+
     setEnergy(energy - energyCost);
     addBZ(tapReward);
-    incrementTaps(1, tapReward); // Track taps AND income for tasks/NFTs
-    setLastTapTime(now);
+    incrementTaps(1, tapReward);
 
-    // Visual feedback
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const id = Date.now() + Math.random();
-    
-    const tierBonus = Math.floor((tierMultiplier - 1) * 100);
-    const displayText = tierBonus > 0 ? `+${tapReward.toLocaleString()} (+${tierBonus}%)` : `+${tapReward.toLocaleString()}`;
-    
-    setFloatingNumbers((prev) => [...prev, { id, value: displayText, x, y }]);
-    setTimeout(() => {
-      setFloatingNumbers((prev) => prev.filter((n) => n.id !== id));
-    }, 1000);
+    // Track referral earnings (20% share)
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await recordReferralEarnings(user.id, "tap", tapReward);
+      }
+    } catch (err) {
+      console.error("Error tracking referral earnings:", err);
+    }
+
+    // Animation
+    setFloatingNumbers((prev) => [...prev, { 
+      id: Date.now(), 
+      value: `+${tapReward}`, 
+      x, 
+      y 
+    }]);
   };
 
   const handleQuickCharge = () => {

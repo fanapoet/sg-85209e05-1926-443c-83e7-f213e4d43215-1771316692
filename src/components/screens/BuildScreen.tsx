@@ -39,6 +39,9 @@ import {
   TrendingUp,
   Flame
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { recordReferralEarnings } from "@/services/referralService";
 
 type PartKey = string;
 
@@ -319,15 +322,35 @@ export function BuildScreen() {
     const accrued = getAccruedIncome();
     if (accrued.total > 0) {
       addBZ(accrued.total);
+      
       const newIdleState = { ...idleState, lastClaimTime: Date.now() };
       setIdleState(newIdleState);
       localStorage.setItem("idleState", JSON.stringify(newIdleState));
+      
       markIdleClaimed(); // Track for tasks
       
       if (accrued.surge > 0) {
         setPowerSurgeUsed(true);
         localStorage.setItem("powerSurgeUsed", JSON.stringify(true));
       }
+
+      // Track referral earnings (20% share)
+      const trackEarnings = async () => {
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await recordReferralEarnings(user.id, "idle", accrued.total);
+          }
+        } catch (err) {
+          console.error("Error tracking referral earnings:", err);
+        }
+      };
+      trackEarnings();
+
+      toast({
+        title: "Income Claimed!",
+        description: `You received ${accrued.total.toLocaleString()} BZ${accrued.surge > 0 ? ` (including ${accrued.surge.toLocaleString()} BZ PowerSurge bonus)` : ""}`,
+      });
     }
   };
 
