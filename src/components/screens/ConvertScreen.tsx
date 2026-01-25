@@ -16,6 +16,7 @@ interface Transaction {
   input: number;
   output: number;
   burned?: number;
+  bonus?: number;
 }
 
 const ANCHOR_RATE = 1000000; // 1,000,000 BZ = 1.000000 BB
@@ -50,35 +51,44 @@ export function ConvertScreen() {
   };
 
   const tierPercent = getTierPercent();
+  const tierMultiplier = 1 + (tierPercent / 100);
 
   const calculatePreview = () => {
     const amount = parseFloat(inputAmount) || 0;
     if (amount <= 0) return { output: 0, burned: 0, valid: false, error: "" };
 
     if (conversionType === "bz-to-bb") {
-      // BZ → BB: Simple conversion at anchor rate
-      const output = amount / ANCHOR_RATE;
-      return { output, burned: 0, valid: bz >= amount, error: bz < amount ? "Insufficient BZ" : "" };
+      // BZ → BB: Apply tier bonus to output
+      const baseOutput = amount / ANCHOR_RATE;
+      const output = baseOutput * tierMultiplier;
+      const bonus = baseOutput * (tierPercent / 100);
+      return { 
+        output, 
+        burned: 0, 
+        bonus,
+        valid: bz >= amount, 
+        error: bz < amount ? "Insufficient BZ" : "" 
+      };
     } else {
       // BB → BZ: Limited by tier%, with burn
       const maxConversion = bb * (tierPercent / 100);
       
       if (tierPercent === 0) {
-        return { output: 0, burned: 0, valid: false, error: "Bronze tier cannot convert BB to BZ" };
+        return { output: 0, burned: 0, bonus: 0, valid: false, error: "Bronze tier cannot convert BB to BZ" };
       }
       
       if (amount > maxConversion) {
-        return { output: 0, burned: 0, valid: false, error: `Max ${maxConversion.toFixed(6)} BB (${tierPercent}% of balance)` };
+        return { output: 0, burned: 0, bonus: 0, valid: false, error: `Max ${maxConversion.toFixed(6)} BB (${tierPercent}% of balance)` };
       }
       
       if (amount > bb) {
-        return { output: 0, burned: 0, valid: false, error: "Insufficient BB" };
+        return { output: 0, burned: 0, bonus: 0, valid: false, error: "Insufficient BB" };
       }
 
       const burned = amount / (tierPercent / 100 * 2);
       const output = amount * ANCHOR_RATE;
       
-      return { output, burned, valid: true, error: "" };
+      return { output, burned, bonus: 0, valid: true, error: "" };
     }
   };
 
@@ -231,6 +241,24 @@ export function ConvertScreen() {
                 }
               </span>
             </div>
+            
+            {conversionType === "bz-to-bb" && preview.bonus && preview.bonus > 0 && (
+              <div className="flex items-center justify-between text-sm border-t pt-2">
+                <span className="text-muted-foreground">Base conversion:</span>
+                <span className="font-medium">
+                  {formatBB(preview.output - preview.bonus)} BB
+                </span>
+              </div>
+            )}
+
+            {conversionType === "bz-to-bb" && preview.bonus && preview.bonus > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-green-600 dark:text-green-400">Tier bonus (+{tierPercent}%):</span>
+                <span className="font-bold text-green-600 dark:text-green-400">
+                  +{formatBB(preview.bonus)} BB
+                </span>
+              </div>
+            )}
             
             {conversionType === "bb-to-bz" && preview.burned > 0 && (
               <div className="flex items-center justify-between text-sm">

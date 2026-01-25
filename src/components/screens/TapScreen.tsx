@@ -99,7 +99,7 @@ export function TapScreen() {
 
   const tierMultiplier = getTierMultiplier();
   const baseTapReward = 10;
-  const tapReward = Math.floor(baseTapReward * incomePerTapLevel * tierMultiplier);
+  const tapReward = Math.ceil(baseTapReward * incomePerTapLevel * tierMultiplier);
   const energyCost = energyPerTapLevel;
 
   const handleTap = (e: React.MouseEvent<HTMLButtonElement>) => {

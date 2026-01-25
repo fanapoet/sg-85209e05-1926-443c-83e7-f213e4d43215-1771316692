@@ -249,49 +249,151 @@ export function TasksReferralsScreen() {
               <Users className="h-12 w-12 mx-auto text-blue-500" />
               <div>
                 <h3 className="text-xl font-bold">Invite Friends</h3>
-                <p className="text-muted-foreground">Earn 500 XP + 10% of their earnings!</p>
+                <p className="text-muted-foreground">Share your unique referral code!</p>
               </div>
               
-              <div className="p-4 bg-background/50 rounded-lg border border-blue-200 dark:border-blue-800">
-                <p className="text-sm font-medium mb-1">Your Referral Link</p>
-                <code className="text-xs bg-muted p-2 rounded block break-all">
-                  https://t.me/bunergy_bot/app?startapp=ref_{Math.random().toString(36).substring(7)}
-                </code>
+              <div className="space-y-3">
+                <div className="p-4 bg-background/50 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-sm font-medium mb-2">Your Referral Code</p>
+                  <code className="text-2xl font-bold bg-muted p-3 rounded block">
+                    REF{Math.random().toString(36).substring(2, 8).toUpperCase()}
+                  </code>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Share this code or use the link below
+                  </p>
+                </div>
+
+                <div className="p-3 bg-background/50 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <p className="text-xs font-medium mb-1">Direct Link</p>
+                  <code className="text-xs bg-muted p-2 rounded block break-all">
+                    https://t.me/bunergy_bot/app?startapp=ref_{Math.random().toString(36).substring(7)}
+                  </code>
+                </div>
               </div>
 
-              <Button className="w-full gap-2">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
+                  <p className="font-semibold text-green-700 dark:text-green-400">Friend Gets</p>
+                  <p className="text-xl font-bold text-green-600">+500 BZ</p>
+                  <p className="text-xs text-muted-foreground">Instant bonus</p>
+                </div>
+                <div className="p-3 bg-purple-50 dark:bg-purple-950 rounded-lg border border-purple-200 dark:border-purple-800">
+                  <p className="font-semibold text-purple-700 dark:text-purple-400">You Get</p>
+                  <p className="text-xl font-bold text-purple-600">+1,000 BZ</p>
+                  <p className="text-xs text-muted-foreground">+ 1,000 XP</p>
+                </div>
+              </div>
+
+              <div className="p-3 bg-orange-50 dark:bg-orange-950 rounded-lg border border-orange-200 dark:border-orange-800">
+                <p className="text-sm font-semibold text-orange-700 dark:text-orange-400 mb-1">
+                  💰 Lifetime Share: 20%
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Earn 20% of all BZ your referrals generate from tapping and idle income forever!
+                </p>
+              </div>
+
+              <Button className="w-full gap-2" size="lg">
                 <ArrowRight className="h-4 w-4" />
-                Share Link
+                Share Referral Link
               </Button>
             </div>
           </Card>
 
+          {/* Pending Income */}
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="font-semibold">Pending Referral Income</h3>
+                <p className="text-xs text-muted-foreground">20% share from your referrals</p>
+              </div>
+              <Badge variant="outline" className="text-lg">
+                {(referralCount * 150).toLocaleString()} BZ
+              </Badge>
+            </div>
+            <Button 
+              className="w-full" 
+              variant="default"
+              disabled={referralCount === 0}
+            >
+              Claim Pending Income
+            </Button>
+          </Card>
+
+          {/* Referral Milestones */}
+          <Card className="p-4">
+            <h3 className="font-semibold mb-3">Referral Milestones</h3>
+            <div className="space-y-3">
+              {[
+                { count: 5, reward: "5,000 XP", reached: referralCount >= 5 },
+                { count: 10, reward: "15,000 XP", reached: referralCount >= 10 },
+                { count: 25, reward: "50,000 XP", reached: referralCount >= 25 },
+                { count: 50, reward: "150,000 XP", reached: referralCount >= 50 }
+              ].map((milestone) => (
+                <div 
+                  key={milestone.count}
+                  className={`p-3 rounded-lg border-2 ${
+                    milestone.reached 
+                      ? "bg-green-50 dark:bg-green-950 border-green-500" 
+                      : "bg-muted border-muted-foreground/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {milestone.reached ? (
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                      ) : (
+                        <Circle className="h-5 w-5 text-muted-foreground" />
+                      )}
+                      <div>
+                        <p className="font-semibold">{milestone.count} Referrals</p>
+                        <p className="text-xs text-muted-foreground">Reward: {milestone.reward}</p>
+                      </div>
+                    </div>
+                    <Badge variant={milestone.reached ? "default" : "outline"}>
+                      {referralCount}/{milestone.count}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* Referral List */}
           <div className="space-y-4">
             <h3 className="font-semibold">Your Referrals ({referralCount})</h3>
             {referralCount === 0 ? (
               <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg">
+                <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
                 <p>No referrals yet.</p>
-                <p className="text-sm">Invite friends to boost your earnings!</p>
+                <p className="text-sm">Share your code to start earning!</p>
               </div>
             ) : (
               <div className="space-y-2">
-                {Array.from({ length: Math.min(referralCount, 5) }).map((_, i) => (
+                {Array.from({ length: Math.min(referralCount, 10) }).map((_, i) => (
                   <Card key={i} className="p-3 flex justify-between items-center">
                     <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                        <Users className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold">
+                        {String.fromCharCode(65 + (i % 26))}
                       </div>
                       <div>
-                        <p className="font-medium text-sm">User {Math.floor(Math.random() * 10000)}</p>
-                        <p className="text-xs text-muted-foreground">Joined today</p>
+                        <p className="font-medium text-sm">User {1000 + i}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Earned: {(Math.random() * 50000).toFixed(0)} BZ
+                        </p>
                       </div>
                     </div>
-                    <Badge variant="outline" className="text-green-600">+50 BZ</Badge>
+                    <div className="text-right">
+                      <Badge variant="outline" className="text-green-600">
+                        +{(Math.random() * 10000).toFixed(0)} BZ
+                      </Badge>
+                      <p className="text-xs text-muted-foreground mt-1">Your share</p>
+                    </div>
                   </Card>
                 ))}
-                {referralCount > 5 && (
+                {referralCount > 10 && (
                   <p className="text-center text-sm text-muted-foreground pt-2">
-                    And {referralCount - 5} others...
+                    And {referralCount - 10} more referrals...
                   </p>
                 )}
               </div>
