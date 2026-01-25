@@ -162,6 +162,10 @@ export function TasksReferralsScreen() {
     bb, 
     xp,
     referralCount,
+    totalTaps,
+    totalUpgrades,
+    totalConversions,
+    hasClaimedIdleToday,
     addBZ, 
     addBB, 
     addXP,
@@ -237,6 +241,60 @@ export function TasksReferralsScreen() {
     
     return getDefaultTasks();
   });
+
+  // CRITICAL FIX: Update task progress based on game state
+  useEffect(() => {
+    setTasks(prevTasks => prevTasks.map(task => {
+      // Daily tap: Track total taps
+      if (task.id === "daily_tap") {
+        return { ...task, progress: Math.min(totalTaps, task.target) };
+      }
+      
+      // Daily idle: Check if claimed today
+      if (task.id === "daily_idle") {
+        return { ...task, progress: hasClaimedIdleToday ? 1 : 0 };
+      }
+      
+      // Weekly upgrade: Track total upgrades
+      if (task.id === "weekly_upgrade") {
+        return { ...task, progress: Math.min(totalUpgrades, task.target) };
+      }
+      
+      // Weekly refer: Track referral count
+      if (task.id === "weekly_refer") {
+        return { ...task, progress: Math.min(referralCount, task.target) };
+      }
+      
+      // Weekly convert: Track total conversions
+      if (task.id === "weekly_convert") {
+        return { ...task, progress: Math.min(totalConversions, task.target) };
+      }
+      
+      // Progressive taps: Track total taps
+      if (task.id === "prog_taps") {
+        return { ...task, progress: Math.min(totalTaps, task.target) };
+      }
+      
+      // Progressive builds: Check Stage 3 completion (all 10 parts L5+)
+      if (task.id === "prog_builds") {
+        const buildParts = localStorage.getItem("buildParts");
+        if (buildParts) {
+          const parts = JSON.parse(buildParts);
+          const stage3Parts = Object.keys(parts).filter(k => k.startsWith("s3p"));
+          const stage3L5Count = stage3Parts.filter(k => parts[k].level >= 5).length;
+          return { ...task, progress: stage3L5Count >= 10 ? 1 : 0 };
+        }
+        return task;
+      }
+      
+      // Progressive network: Track referral count
+      if (task.id === "prog_network") {
+        return { ...task, progress: Math.min(referralCount, task.target) };
+      }
+      
+      return task;
+    }));
+  }, [totalTaps, totalUpgrades, totalConversions, hasClaimedIdleToday, referralCount]);
 
   // Calculate pending share total
   useEffect(() => {

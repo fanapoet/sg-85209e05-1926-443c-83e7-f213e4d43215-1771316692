@@ -51,7 +51,7 @@ const boosters: Booster[] = [
 ];
 
 export function BoostScreen() {
-  const { bz, bzPerHour, referralCount, subtractBZ, tier } = useGameState();
+  const { bz, bzPerHour, referralCount, subtractBZ, tier, setMaxEnergy, energy, maxEnergy } = useGameState();
   const [boosterLevels, setBoosterLevels] = useState<Record<string, number>>({
     incomePerTap: 1,
     energyPerTap: 1,
@@ -102,6 +102,12 @@ export function BoostScreen() {
     if (subtractBZ(cost)) {
       const newLevels = { ...boosterLevels, [booster.key]: currentLevel + 1 };
       saveBoosterLevels(newLevels);
+
+      // CRITICAL FIX: Apply Energy Capacity upgrade immediately to global state
+      if (booster.key === "energyCapacity") {
+        const newMaxEnergy = 1500 + (currentLevel + 1 - 1) * 100;
+        setMaxEnergy(newMaxEnergy);
+      }
     }
   };
 
@@ -138,7 +144,7 @@ export function BoostScreen() {
 
   return (
     <div className="p-6 space-y-4 max-w-2xl mx-auto pb-24">
-      {/* Info Block (Non-closable) */}
+      {/* Info Block (Non-closable) - FIXED: Now shows correct bzPerHour from Build */}
       <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
         <div className="flex items-start gap-3">
           <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
@@ -157,6 +163,10 @@ export function BoostScreen() {
             <div className="flex items-center justify-between">
               <span className="font-medium">Referrals Progress:</span>
               <Badge variant="secondary">{getReferralLadder()}</Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="font-medium">Current Energy:</span>
+              <span className="font-bold">{Math.floor(energy)} / {maxEnergy}</span>
             </div>
           </div>
         </div>
