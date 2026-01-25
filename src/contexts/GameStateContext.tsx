@@ -151,23 +151,45 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   }, [maxEnergy]);
 
   // Actions
-  const addBZ = (amount: number) => amount > 0 && setBz(p => p + amount);
+  const addBZ = (amount: number) => {
+    if (amount > 0) setBz(p => p + amount);
+  };
+  
   const subtractBZ = (amount: number) => {
     if (amount <= 0 || bz < amount) return false;
     setBz(p => p - amount);
     return true;
   };
-  const addBB = (amount: number) => amount > 0 && setBb(p => p + amount);
+  
+  const addBB = (amount: number) => {
+    if (amount > 0) setBb(p => p + amount);
+  };
+  
   const subtractBB = (amount: number) => {
     if (amount <= 0 || bb < amount) return false;
     setBb(p => p - amount);
     return true;
   };
-  const addXP = (amount: number) => amount > 0 && setXp(p => p + amount);
-  const setEnergy = (val: number) => setEnergyState(Math.max(0, Math.min(val, maxEnergy)));
-  const setMaxEnergy = (val: number) => setMaxEnergyState(Math.max(1500, val));
-  const setBzPerHour = (val: number) => setBzPerHourState(Math.max(0, val));
-  const addReferral = () => setReferralCount(p => p + 1);
+  
+  const addXP = (amount: number) => {
+    if (amount > 0) setXp(p => p + amount);
+  };
+  
+  const setEnergy = (val: number) => {
+    setEnergyState(Math.max(0, Math.min(val, maxEnergy)));
+  };
+  
+  const setMaxEnergy = (val: number) => {
+    setMaxEnergyState(Math.max(1500, val));
+  };
+  
+  const setBzPerHour = (val: number) => {
+    setBzPerHourState(Math.max(0, val));
+  };
+  
+  const addReferral = () => {
+    setReferralCount(p => p + 1);
+  };
 
   // Tracking Actions
   const incrementTaps = (count: number, income: number) => {
@@ -175,16 +197,48 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     setTodayTaps(p => p + count);
     setTotalTapIncome(p => p + income);
   };
-  const incrementUpgrades = () => setTotalUpgrades(p => p + 1);
-  const incrementConversions = (amount: number) => setTotalConversions(p => p + amount);
-  const markIdleClaimed = () => setHasClaimedIdleToday(true);
+  
+  const incrementUpgrades = () => {
+    setTotalUpgrades(p => p + 1);
+  };
+  
+  const incrementConversions = (amount: number) => {
+    setTotalConversions(p => p + amount);
+  };
+  
+  const markIdleClaimed = () => {
+    setHasClaimedIdleToday(true);
+  };
 
   return (
     <GameStateContext.Provider value={{
-      bz, bb, energy, maxEnergy, bzPerHour, tier, xp, referralCount,
-      totalTaps, todayTaps, totalTapIncome, totalUpgrades, totalConversions, hasClaimedIdleToday,
-      addBZ, subtractBZ, addBB, subtractBB, addXP, setEnergy, setMaxEnergy, setBzPerHour, addReferral,
-      incrementTaps, incrementUpgrades, incrementConversions, markIdleClaimed
+      bz, 
+      bb, 
+      energy, 
+      maxEnergy, 
+      bzPerHour, 
+      tier, 
+      xp, 
+      referralCount,
+      totalTaps, 
+      todayTaps, 
+      totalTapIncome, 
+      totalUpgrades, 
+      totalConversions, 
+      hasClaimedIdleToday,
+      addBZ, 
+      subtractBZ, 
+      addBB, 
+      subtractBB, 
+      addXP, 
+      setEnergy, 
+      setMaxEnergy, 
+      setBzPerHour, 
+      addReferral,
+      incrementTaps, 
+      incrementUpgrades, 
+      incrementConversions, 
+      markIdleClaimed
     }}>
       {children}
     </GameStateContext.Provider>
