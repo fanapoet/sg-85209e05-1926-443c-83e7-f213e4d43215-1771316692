@@ -16,92 +16,97 @@ type TabKey = "tap" | "boost" | "build" | "convert" | "xp" | "rewards" | "tasks"
 export default function Home() {
   const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>("tap");
-  const [debugInfo, setDebugInfo] = useState<string>("");
 
   useEffect(() => {
     // Clear corrupted tasks data on first load (one-time migration)
     const migrationKey = "bunergy_tasks_migration_v2";
     if (typeof window !== "undefined" && !localStorage.getItem(migrationKey)) {
       try {
-        // Clear potentially corrupted task data
         localStorage.removeItem("bunergy_tasks");
         localStorage.setItem(migrationKey, "done");
-        console.log("Tasks data cleared for fresh start");
+        console.log("✅ Tasks data migration complete");
       } catch (e) {
-        console.error("Migration error:", e);
+        console.error("❌ Migration error:", e);
       }
     }
 
-    // Enhanced Telegram detection with multiple checks
-    let detectionComplete = false;
+    // STRICT Telegram detection - only real Telegram Mini Apps pass
+    const maxAttempts = 6;
+    let currentAttempt = 0;
     
     const detectTelegram = () => {
-      if (detectionComplete) return;
-
-      // Check 1: Telegram WebApp object
+      currentAttempt++;
+      
       const tg = (window as any).Telegram?.WebApp;
       
-      // Check 2: Telegram platform
-      const isTgPlatform = (window as any).Telegram?.WebApp?.platform;
+      // CRITICAL: Must have ALL of these to be considered valid Telegram environment
+      const hasTelegramObject = typeof (window as any).Telegram !== "undefined";
+      const hasWebApp = tg && typeof tg === "object";
+      const hasInitData = tg && typeof tg.initData === "string" && tg.initData.length > 0;
+      const hasInitDataUnsafe = tg && typeof tg.initDataUnsafe === "object";
+      const hasVersion = tg && typeof tg.version === "string";
       
-      // Check 3: Init data (most reliable)
-      const hasInitData = tg && typeof tg.initData === "string";
-      
-      // Check 4: User agent hints
-      const userAgent = navigator.userAgent.toLowerCase();
-      const isTelegramUA = userAgent.includes("telegram");
+      // Debug logging
+      console.log(`🔍 Telegram Detection Attempt ${currentAttempt}/${maxAttempts}:`, {
+        hasTelegramObject,
+        hasWebApp,
+        hasInitData,
+        hasInitDataUnsafe,
+        hasVersion,
+        initDataLength: tg?.initData?.length || 0,
+        platform: tg?.platform || "none",
+        version: tg?.version || "none"
+      });
 
-      const debug = `TG Object: ${!!tg}, Platform: ${isTgPlatform || "none"}, InitData: ${hasInitData}, UA: ${isTelegramUA}`;
-      setDebugInfo(debug);
-      console.log("Telegram Detection:", debug);
+      // STRICT CHECK: Must have WebApp object AND (initData OR initDataUnsafe)
+      // This ensures it's a real Telegram Mini App, not just a browser with the script loaded
+      const isValidTelegram = hasWebApp && (hasInitData || hasInitDataUnsafe);
 
-      // Consider it Telegram if ANY strong indicator is present
-      const isTelegram = hasInitData || (tg && isTgPlatform) || isTelegramUA;
-
-      if (isTelegram) {
-        detectionComplete = true;
+      if (isValidTelegram) {
+        console.log("✅ VALID Telegram Mini App detected!");
         setIsInTelegram(true);
         
         // Initialize Telegram Mini App
         try {
-          if (tg) {
-            tg.ready();
-            tg.expand();
-            
-            // Apply Telegram theme
-            const applyTheme = () => {
-              const isDark = tg.colorScheme === "dark";
-              document.documentElement.classList.toggle("dark", isDark);
-            };
-            
-            applyTheme();
-            tg.onEvent("themeChanged", applyTheme);
-          }
+          tg.ready();
+          tg.expand();
+          
+          // Apply Telegram theme
+          const applyTheme = () => {
+            const isDark = tg.colorScheme === "dark";
+            document.documentElement.classList.toggle("dark", isDark);
+            console.log(`🎨 Theme applied: ${isDark ? "dark" : "light"}`);
+          };
+          
+          applyTheme();
+          tg.onEvent("themeChanged", applyTheme);
+          
+          console.log("✅ Telegram Mini App initialized successfully");
         } catch (error) {
-          console.error("Telegram initialization error:", error);
+          console.error("❌ Telegram initialization error:", error);
         }
         
         return true;
       }
-      
+
+      // If we've tried all attempts and still no valid Telegram, show blocker
+      if (currentAttempt >= maxAttempts) {
+        console.log("❌ NOT a Telegram Mini App - showing blocker");
+        setIsInTelegram(false);
+        return false;
+      }
+
       return false;
     };
 
     // Immediate check
     if (detectTelegram()) return;
     
-    // Retry with delays (SDK might load asynchronously)
-    const timers = [50, 150, 300, 600, 1000, 2000].map((delay, index) => 
+    // Progressive retry delays: 50ms, 150ms, 300ms, 600ms, 1000ms, 2000ms
+    const delays = [50, 150, 300, 600, 1000, 2000];
+    const timers = delays.map((delay) => 
       setTimeout(() => {
-        if (detectTelegram()) {
-          // Clear remaining timers
-          timers.slice(index + 1).forEach(clearTimeout);
-        } else if (delay === 2000) {
-          // Final attempt failed - not in Telegram
-          detectionComplete = true;
-          setIsInTelegram(false);
-          console.log("Final verdict: Not in Telegram environment");
-        }
+        detectTelegram();
       }, delay)
     );
     
@@ -110,29 +115,34 @@ export default function Home() {
     };
   }, []);
 
-  // Loading state
+  // Loading state - show while detecting
   if (isInTelegram === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-3">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto"></div>
-          <div className="text-muted-foreground text-sm">Detecting environment...</div>
-          {debugInfo && (
-            <div className="text-xs text-muted-foreground/60 max-w-xs mx-auto font-mono">
-              {debugInfo}
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
+        <div className="text-center space-y-4">
+          <div className="relative">
+            <div className="animate-spin h-12 w-12 border-4 border-purple-500 border-t-transparent rounded-full mx-auto"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="h-6 w-6 bg-purple-500 rounded-full animate-pulse"></div>
             </div>
-          )}
+          </div>
+          <div className="text-gray-700 dark:text-gray-300 font-medium">
+            Detecting environment...
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            Verifying Telegram Mini App
+          </div>
         </div>
       </div>
     );
   }
 
-  // Blocker for non-Telegram environments
+  // Blocker for non-Telegram environments (browsers, Softgen preview, etc.)
   if (!isInTelegram) {
     return <TelegramBlocker />;
   }
 
-  // Main app shell (only in Telegram)
+  // Main app shell (only in real Telegram Mini Apps)
   return (
     <>
       <SEO
