@@ -59,21 +59,24 @@ const dailyRewards: DailyReward[] = [
 ];
 
 export function RewardsNFTsScreen() {
-  const { 
-    bz, 
-    bb, 
-    xp, 
-    referralCount, 
-    tier, 
-    subtractBB, 
-    addBZ, 
+  const gameState = useGameState();
+  
+  // Safely destructure with fallbacks
+  const {
+    bz = 0,
+    bb = 0,
+    xp = 0,
+    referralCount = 0,
+    tier = "Bronze",
+    subtractBB,
+    addBZ,
     addBB,
     addXP,
-    totalUpgrades,
-    totalConversions,
-    totalTapIncome,
-    totalTaps
-  } = useGameState();
+    totalUpgrades = 0,
+    totalConversions = 0,
+    totalTapIncome = 0,
+    totalTaps = 0
+  } = gameState || {};
   
   const [dailyStreak, setDailyStreak] = useState(0);
   const [lastClaimDate, setLastClaimDate] = useState<string | null>(null);
@@ -82,89 +85,103 @@ export function RewardsNFTsScreen() {
 
   // Load saved state
   useEffect(() => {
-    const savedStreak = localStorage.getItem("dailyStreak");
-    const savedLastClaim = localStorage.getItem("lastClaimDate");
-    const savedNFTs = localStorage.getItem("ownedNFTs");
-    const savedChallenges = localStorage.getItem("weeklyChallenges");
+    try {
+      const savedStreak = localStorage.getItem("dailyStreak");
+      const savedLastClaim = localStorage.getItem("lastClaimDate");
+      const savedNFTs = localStorage.getItem("ownedNFTs");
+      const savedChallenges = localStorage.getItem("weeklyChallenges");
 
-    if (savedStreak) setDailyStreak(parseInt(savedStreak));
-    if (savedLastClaim) setLastClaimDate(savedLastClaim);
-    if (savedNFTs) setOwnedNFTs(JSON.parse(savedNFTs));
-    
-    if (savedChallenges) {
-      setWeeklyChallenges(JSON.parse(savedChallenges));
-    } else {
-      // Initialize default challenges
-      const defaultChallenges: WeeklyChallenge[] = [
-        {
-          key: "builder",
-          name: "Builder Challenge",
-          icon: Hammer,
-          description: "Upgrade 10 build parts this week",
-          target: 10,
-          progress: 0,
-          reward: { type: "BZ", amount: 10000 },
-          claimed: false
-        },
-        {
-          key: "recruiter",
-          name: "Recruiter Challenge",
-          icon: Users,
-          description: "Invite 3 new friends this week",
-          target: 3,
-          progress: 0,
-          reward: { type: "XP", amount: 2000 },
-          claimed: false
-        },
-        {
-          key: "converter",
-          name: "Converter Challenge",
-          icon: ArrowLeftRight,
-          description: "Convert 1,000,000 BZ to BB",
-          target: 1000000,
-          progress: 0,
-          reward: { type: "BB", amount: 0.005 },
-          claimed: false
-        }
-      ];
-      setWeeklyChallenges(defaultChallenges);
-      localStorage.setItem("weeklyChallenges", JSON.stringify(defaultChallenges));
+      if (savedStreak) setDailyStreak(parseInt(savedStreak));
+      if (savedLastClaim) setLastClaimDate(savedLastClaim);
+      if (savedNFTs) setOwnedNFTs(JSON.parse(savedNFTs));
+      
+      if (savedChallenges) {
+        setWeeklyChallenges(JSON.parse(savedChallenges));
+      } else {
+        // Initialize default challenges
+        const defaultChallenges: WeeklyChallenge[] = [
+          {
+            key: "builder",
+            name: "Builder Challenge",
+            icon: Hammer,
+            description: "Upgrade 10 build parts this week",
+            target: 10,
+            progress: 0,
+            reward: { type: "BZ", amount: 10000 },
+            claimed: false
+          },
+          {
+            key: "recruiter",
+            name: "Recruiter Challenge",
+            icon: Users,
+            description: "Invite 3 new friends this week",
+            target: 3,
+            progress: 0,
+            reward: { type: "XP", amount: 2000 },
+            claimed: false
+          },
+          {
+            key: "converter",
+            name: "Converter Challenge",
+            icon: ArrowLeftRight,
+            description: "Convert 1,000,000 BZ to BB",
+            target: 1000000,
+            progress: 0,
+            reward: { type: "BB", amount: 0.005 },
+            claimed: false
+          }
+        ];
+        setWeeklyChallenges(defaultChallenges);
+        localStorage.setItem("weeklyChallenges", JSON.stringify(defaultChallenges));
+      }
+    } catch (error) {
+      console.error("Error loading rewards data:", error);
     }
   }, []);
 
   // Update weekly challenges progress based on game state
   useEffect(() => {
-    setWeeklyChallenges(prevChallenges => 
-      prevChallenges.map(challenge => {
-        if (challenge.claimed) return challenge;
-        
-        if (challenge.key === "builder") {
-          return { ...challenge, progress: Math.min(totalUpgrades, challenge.target) };
-        }
-        if (challenge.key === "recruiter") {
-          return { ...challenge, progress: Math.min(referralCount, challenge.target) };
-        }
-        if (challenge.key === "converter") {
-          return { ...challenge, progress: Math.min(totalConversions, challenge.target) };
-        }
-        return challenge;
-      })
-    );
-  }, [totalUpgrades, referralCount, totalConversions]);
+    if (weeklyChallenges.length === 0) return;
+    
+    try {
+      setWeeklyChallenges(prevChallenges => 
+        prevChallenges.map(challenge => {
+          if (challenge.claimed) return challenge;
+          
+          if (challenge.key === "builder") {
+            return { ...challenge, progress: Math.min(totalUpgrades || 0, challenge.target) };
+          }
+          if (challenge.key === "recruiter") {
+            return { ...challenge, progress: Math.min(referralCount || 0, challenge.target) };
+          }
+          if (challenge.key === "converter") {
+            return { ...challenge, progress: Math.min(totalConversions || 0, challenge.target) };
+          }
+          return challenge;
+        })
+      );
+    } catch (error) {
+      console.error("Error updating challenge progress:", error);
+    }
+  }, [totalUpgrades, referralCount, totalConversions, weeklyChallenges.length]);
 
   // Save weekly challenges when they change
   useEffect(() => {
     if (weeklyChallenges.length > 0) {
-      localStorage.setItem("weeklyChallenges", JSON.stringify(weeklyChallenges));
+      try {
+        localStorage.setItem("weeklyChallenges", JSON.stringify(weeklyChallenges));
+      } catch (error) {
+        console.error("Error saving challenges:", error);
+      }
     }
   }, [weeklyChallenges]);
 
   // Check for Stage 2 completion (for Builder Pro NFT)
   const isStage2Complete = (): boolean => {
-    const buildParts = localStorage.getItem("buildParts");
-    if (!buildParts) return false;
-    
     try {
+      const buildParts = localStorage.getItem("buildParts");
+      if (!buildParts) return false;
+      
       const parts = JSON.parse(buildParts);
       const stage2Parts = Object.keys(parts).filter(k => k.startsWith("s2p"));
       const stage2L5Count = stage2Parts.filter(k => parts[k].level >= 5).length;
@@ -176,10 +193,10 @@ export function RewardsNFTsScreen() {
 
   // Check if all energy boosters are maxed
   const areBoostersMaxed = (): boolean => {
-    const boosters = localStorage.getItem("boosters");
-    if (!boosters) return false;
-    
     try {
+      const boosters = localStorage.getItem("boosters");
+      if (!boosters) return false;
+      
       const data = JSON.parse(boosters);
       return (
         data.energyCapacity >= 10 &&
@@ -190,7 +207,7 @@ export function RewardsNFTsScreen() {
     }
   };
 
-  // NFTs with requirements (now using totalTaps from context)
+  // NFTs with requirements
   const nfts: NFT[] = [
     {
       key: "early_adopter",
@@ -209,7 +226,7 @@ export function RewardsNFTsScreen() {
       description: "Master of connections and community.",
       price: 2,
       requirement: "20 referrals",
-      requirementMet: referralCount >= 20,
+      requirementMet: (referralCount || 0) >= 20,
       owned: ownedNFTs.includes("social_king")
     },
     {
@@ -229,7 +246,7 @@ export function RewardsNFTsScreen() {
       description: "Legendary tapping power unleashed.",
       price: 4,
       requirement: "Earn 10M BZ from tapping",
-      requirementMet: totalTapIncome >= 10000000,
+      requirementMet: (totalTapIncome || 0) >= 10000000,
       owned: ownedNFTs.includes("tap_legend")
     },
     {
@@ -249,7 +266,7 @@ export function RewardsNFTsScreen() {
       description: "The ultimate tapping achievement.",
       price: 5,
       requirement: "5M taps total",
-      requirementMet: totalTaps >= 5000000,
+      requirementMet: (totalTaps || 0) >= 5000000,
       owned: ownedNFTs.includes("golden_bunny")
     },
     {
@@ -259,76 +276,94 @@ export function RewardsNFTsScreen() {
       description: "Reached the pinnacle of experience.",
       price: 7,
       requirement: "500k+ XP",
-      requirementMet: xp >= 500000,
+      requirementMet: (xp || 0) >= 500000,
       owned: ownedNFTs.includes("diamond_crystal")
     }
   ];
 
   const handleDailyClaim = () => {
-    const today = new Date().toDateString();
-    
-    if (lastClaimDate === today) return;
+    try {
+      const today = new Date().toDateString();
+      
+      if (lastClaimDate === today) return;
 
-    const nextDay = (dailyStreak % 7) + 1;
-    const reward = dailyRewards[nextDay - 1];
+      const nextDay = (dailyStreak % 7) + 1;
+      const reward = dailyRewards[nextDay - 1];
 
-    if (reward.type === "BZ") {
-      addBZ(reward.amount);
-    } else if (reward.type === "BB") {
-      addBB(reward.amount);
-    } else if (reward.type === "XP") {
-      addXP(reward.amount);
+      if (reward.type === "BZ" && addBZ) {
+        addBZ(reward.amount);
+      } else if (reward.type === "BB" && addBB) {
+        addBB(reward.amount);
+      } else if (reward.type === "XP" && addXP) {
+        addXP(reward.amount);
+      }
+
+      const newStreak = nextDay;
+      setDailyStreak(newStreak);
+      setLastClaimDate(today);
+      localStorage.setItem("dailyStreak", newStreak.toString());
+      localStorage.setItem("lastClaimDate", today);
+    } catch (error) {
+      console.error("Error claiming daily reward:", error);
     }
-
-    const newStreak = nextDay;
-    setDailyStreak(newStreak);
-    setLastClaimDate(today);
-    localStorage.setItem("dailyStreak", newStreak.toString());
-    localStorage.setItem("lastClaimDate", today);
   };
 
   const handleClaimChallenge = (challengeKey: string) => {
-    setWeeklyChallenges(prevChallenges => 
-      prevChallenges.map(challenge => {
-        if (challenge.key === challengeKey && challenge.progress >= challenge.target && !challenge.claimed) {
-          // Award the reward
-          if (challenge.reward.type === "BZ") {
-            addBZ(challenge.reward.amount);
-          } else if (challenge.reward.type === "BB") {
-            addBB(challenge.reward.amount);
-          } else if (challenge.reward.type === "XP") {
-            addXP(challenge.reward.amount);
+    try {
+      setWeeklyChallenges(prevChallenges => 
+        prevChallenges.map(challenge => {
+          if (challenge.key === challengeKey && challenge.progress >= challenge.target && !challenge.claimed) {
+            // Award the reward
+            if (challenge.reward.type === "BZ" && addBZ) {
+              addBZ(challenge.reward.amount);
+            } else if (challenge.reward.type === "BB" && addBB) {
+              addBB(challenge.reward.amount);
+            } else if (challenge.reward.type === "XP" && addXP) {
+              addXP(challenge.reward.amount);
+            }
+            
+            return { ...challenge, claimed: true };
           }
-          
-          return { ...challenge, claimed: true };
-        }
-        return challenge;
-      })
-    );
+          return challenge;
+        })
+      );
+    } catch (error) {
+      console.error("Error claiming challenge:", error);
+    }
   };
 
   const handlePurchaseNFT = (nft: NFT) => {
-    if (nft.owned || !nft.requirementMet) return;
-    
-    if (nft.price === 0) {
-      // Free claim
-      const updated = [...ownedNFTs, nft.key];
-      setOwnedNFTs(updated);
-      localStorage.setItem("ownedNFTs", JSON.stringify(updated));
-      return;
-    }
+    try {
+      if (nft.owned || !nft.requirementMet) return;
+      
+      if (nft.price === 0) {
+        // Free claim
+        const updated = [...ownedNFTs, nft.key];
+        setOwnedNFTs(updated);
+        localStorage.setItem("ownedNFTs", JSON.stringify(updated));
+        return;
+      }
 
-    if (bb >= nft.price && subtractBB(nft.price)) {
-      const updated = [...ownedNFTs, nft.key];
-      setOwnedNFTs(updated);
-      localStorage.setItem("ownedNFTs", JSON.stringify(updated));
+      if (bb >= nft.price && subtractBB && subtractBB(nft.price)) {
+        const updated = [...ownedNFTs, nft.key];
+        setOwnedNFTs(updated);
+        localStorage.setItem("ownedNFTs", JSON.stringify(updated));
+      }
+    } catch (error) {
+      console.error("Error purchasing NFT:", error);
     }
   };
 
   const canClaimDaily = lastClaimDate !== new Date().toDateString();
   const currentDayReward = dailyRewards[dailyStreak % 7];
 
-  const formatBB = (value: number): string => value.toFixed(6);
+  const formatBB = (value: number): string => {
+    try {
+      return value.toFixed(6);
+    } catch {
+      return "0.000000";
+    }
+  };
 
   return (
     <div className="p-6 space-y-4 max-w-2xl mx-auto pb-24">
