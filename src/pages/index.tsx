@@ -14,7 +14,9 @@ import { TelegramBlocker } from "@/components/TelegramBlocker";
 type TabKey = "tap" | "boost" | "build" | "convert" | "xp" | "rewards" | "tasks";
 
 export default function Home() {
-  const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
+  // DEFAULT TO FALSE (blocker) - only set to true when Telegram is confirmed
+  const [isInTelegram, setIsInTelegram] = useState<boolean>(false);
+  const [isChecking, setIsChecking] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<TabKey>("tap");
 
   useEffect(() => {
@@ -30,41 +32,40 @@ export default function Home() {
       }
     }
 
-    // STRICT Telegram detection - only real Telegram Mini Apps pass
-    const maxAttempts = 6;
-    let currentAttempt = 0;
-    
-    const detectTelegram = () => {
-      currentAttempt++;
-      
+    let detectionComplete = false;
+
+    // STRICT Telegram detection function
+    const detectTelegram = (): boolean => {
+      if (detectionComplete) return false;
+
       const tg = (window as any).Telegram?.WebApp;
       
-      // CRITICAL: Must have ALL of these to be considered valid Telegram environment
+      // STRICT CHECKS - ALL must pass
       const hasTelegramObject = typeof (window as any).Telegram !== "undefined";
       const hasWebApp = tg && typeof tg === "object";
       const hasInitData = tg && typeof tg.initData === "string" && tg.initData.length > 0;
       const hasInitDataUnsafe = tg && typeof tg.initDataUnsafe === "object";
       const hasVersion = tg && typeof tg.version === "string";
       
-      // Debug logging
-      console.log(`🔍 Telegram Detection Attempt ${currentAttempt}/${maxAttempts}:`, {
+      console.log("🔍 Telegram Detection Check:", {
         hasTelegramObject,
         hasWebApp,
         hasInitData,
+        initDataLength: tg?.initData?.length || 0,
         hasInitDataUnsafe,
         hasVersion,
-        initDataLength: tg?.initData?.length || 0,
         platform: tg?.platform || "none",
         version: tg?.version || "none"
       });
 
-      // STRICT CHECK: Must have WebApp object AND (initData OR initDataUnsafe)
-      // This ensures it's a real Telegram Mini App, not just a browser with the script loaded
-      const isValidTelegram = hasWebApp && (hasInitData || hasInitDataUnsafe);
+      // CRITICAL: Must have initData OR initDataUnsafe to be valid Telegram
+      const isValidTelegram = hasWebApp && (hasInitData || (hasInitDataUnsafe && Object.keys(tg.initDataUnsafe).length > 0));
 
       if (isValidTelegram) {
         console.log("✅ VALID Telegram Mini App detected!");
+        detectionComplete = true;
         setIsInTelegram(true);
+        setIsChecking(false);
         
         // Initialize Telegram Mini App
         try {
@@ -89,34 +90,40 @@ export default function Home() {
         return true;
       }
 
-      // If we've tried all attempts and still no valid Telegram, show blocker
-      if (currentAttempt >= maxAttempts) {
-        console.log("❌ NOT a Telegram Mini App - showing blocker");
-        setIsInTelegram(false);
-        return false;
-      }
-
       return false;
     };
 
-    // Immediate check
+    // Try immediate detection
     if (detectTelegram()) return;
-    
-    // Progressive retry delays: 50ms, 150ms, 300ms, 600ms, 1000ms, 2000ms
-    const delays = [50, 150, 300, 600, 1000, 2000];
-    const timers = delays.map((delay) => 
+
+    // Progressive detection with increasing delays
+    const delays = [100, 300, 600, 1000, 2000];
+    const timers = delays.map((delay, index) => 
       setTimeout(() => {
-        detectTelegram();
+        if (!detectionComplete) {
+          console.log(`🔍 Detection attempt ${index + 2}/${delays.length + 1}...`);
+          detectTelegram();
+        }
       }, delay)
     );
+
+    // Final timeout: if still not detected after all attempts, show blocker
+    const finalTimeout = setTimeout(() => {
+      if (!detectionComplete) {
+        console.log("❌ NOT a Telegram Mini App - showing blocker");
+        setIsInTelegram(false);
+        setIsChecking(false);
+      }
+    }, 2500);
     
     return () => {
       timers.forEach(clearTimeout);
+      clearTimeout(finalTimeout);
     };
   }, []);
 
-  // Loading state - show while detecting
-  if (isInTelegram === null) {
+  // Loading state while checking
+  if (isChecking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
         <div className="text-center space-y-4">
@@ -137,12 +144,12 @@ export default function Home() {
     );
   }
 
-  // Blocker for non-Telegram environments (browsers, Softgen preview, etc.)
+  // DEFAULT: Show blocker (unless isInTelegram is true)
   if (!isInTelegram) {
     return <TelegramBlocker />;
   }
 
-  // Main app shell (only in real Telegram Mini Apps)
+  // ONLY show game when Telegram is confirmed
   return (
     <>
       <SEO
