@@ -142,6 +142,21 @@ export function BoostScreen() {
     return "7/7";
   };
 
+  const getBoosterLevel = (key: string): number => {
+    try {
+      if (typeof window === "undefined") return 1;
+      const saved = localStorage.getItem("boosters");
+      if (!saved) return 1;
+      const data = JSON.parse(saved);
+      return data[key] || 1;
+    } catch {
+      return 1;
+    }
+  };
+
+  const capacityLevel = getBoosterLevel("energyCapacity");
+  const actualMaxEnergy = 1500 + (capacityLevel - 1) * 100;
+
   return (
     <div className="p-6 space-y-4 max-w-2xl mx-auto pb-24">
       {/* Info Block (Non-closable) - FIXED: Now shows correct bzPerHour from Build */}
@@ -166,7 +181,7 @@ export function BoostScreen() {
             </div>
             <div className="flex items-center justify-between">
               <span className="font-medium">Current Energy:</span>
-              <span className="font-bold">{Math.floor(energy)} / {maxEnergy}</span>
+              <span className="font-bold">{Math.floor(energy)} / {actualMaxEnergy}</span>
             </div>
           </div>
         </div>
