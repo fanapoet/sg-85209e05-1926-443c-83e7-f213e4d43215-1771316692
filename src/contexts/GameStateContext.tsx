@@ -12,6 +12,12 @@ interface GameState {
   xp: number;
   referralCount: number;
   
+  // Stats for tasks
+  totalTaps: number;
+  totalUpgrades: number;
+  totalConversions: number;
+  hasClaimedIdleToday: boolean;
+  
   // Methods
   addBZ: (amount: number) => void;
   subtractBZ: (amount: number) => boolean;
@@ -22,6 +28,12 @@ interface GameState {
   setMaxEnergy: (value: number) => void;
   setBzPerHour: (value: number) => void;
   addReferral: () => void;
+  
+  // Task tracking methods
+  incrementTaps: (count: number) => void;
+  incrementUpgrades: () => void;
+  incrementConversions: (amount: number) => void;
+  markIdleClaimed: () => void;
 }
 
 const GameStateContext = createContext<GameState | null>(null);
@@ -57,6 +69,12 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [xp, setXp] = useState(() => safeGetItem("bunergy_xp", 0));
   const [referralCount, setReferralCount] = useState(() => safeGetItem("bunergy_referralCount", 0));
 
+  // Task tracking stats
+  const [totalTaps, setTotalTaps] = useState(() => safeGetItem("bunergy_totalTaps", 0));
+  const [totalUpgrades, setTotalUpgrades] = useState(() => safeGetItem("bunergy_totalUpgrades", 0));
+  const [totalConversions, setTotalConversions] = useState(() => safeGetItem("bunergy_totalConversions", 0));
+  const [hasClaimedIdleToday, setHasClaimedIdleToday] = useState(() => safeGetItem("bunergy_hasClaimedIdleToday", false));
+
   // Persist to localStorage on changes
   useEffect(() => {
     safeSetItem("bunergy_bz", bz);
@@ -86,6 +104,22 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     safeSetItem("bunergy_referralCount", referralCount);
   }, [referralCount]);
 
+  useEffect(() => {
+    safeSetItem("bunergy_totalTaps", totalTaps);
+  }, [totalTaps]);
+
+  useEffect(() => {
+    safeSetItem("bunergy_totalUpgrades", totalUpgrades);
+  }, [totalUpgrades]);
+
+  useEffect(() => {
+    safeSetItem("bunergy_totalConversions", totalConversions);
+  }, [totalConversions]);
+
+  useEffect(() => {
+    safeSetItem("bunergy_hasClaimedIdleToday", hasClaimedIdleToday);
+  }, [hasClaimedIdleToday]);
+
   // Calculate tier based on XP
   const getTier = (xpValue: number): Tier => {
     if (xpValue >= 500001) return "Diamond";
@@ -97,11 +131,26 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
   const tier = getTier(xp);
 
-  // Energy recovery: +0.3/sec (capped at maxEnergy)
+  // Get booster levels from localStorage for energy recovery
+  const getBoosterLevel = (key: string): number => {
+    try {
+      const saved = localStorage.getItem("boosters");
+      if (!saved) return 1;
+      const data = JSON.parse(saved);
+      return data[key] || 1;
+    } catch {
+      return 1;
+    }
+  };
+
+  // Energy recovery: base 0.3/sec + (recoveryRate level - 1) × 0.05/sec
   useEffect(() => {
     const interval = setInterval(() => {
+      const recoveryRateLevel = getBoosterLevel("recoveryRate");
+      const recoveryPerSecond = 0.3 + (recoveryRateLevel - 1) * 0.05;
+      
       setEnergyState((prev) => {
-        const newEnergy = prev + 0.3;
+        const newEnergy = prev + recoveryPerSecond;
         return newEnergy >= maxEnergy ? maxEnergy : newEnergy;
       });
     }, 1000);
@@ -166,6 +215,23 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     setReferralCount((prev) => prev + 1);
   };
 
+  // Task tracking methods
+  const incrementTaps = (count: number) => {
+    setTotalTaps((prev) => prev + count);
+  };
+
+  const incrementUpgrades = () => {
+    setTotalUpgrades((prev) => prev + 1);
+  };
+
+  const incrementConversions = (amount: number) => {
+    setTotalConversions((prev) => prev + amount);
+  };
+
+  const markIdleClaimed = () => {
+    setHasClaimedIdleToday(true);
+  };
+
   return (
     <GameStateContext.Provider
       value={{
@@ -177,6 +243,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         tier,
         xp,
         referralCount,
+        totalTaps,
+        totalUpgrades,
+        totalConversions,
+        hasClaimedIdleToday,
         addBZ,
         subtractBZ,
         addBB,
@@ -186,6 +256,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         setMaxEnergy,
         setBzPerHour,
         addReferral,
+        incrementTaps,
+        incrementUpgrades,
+        incrementConversions,
+        markIdleClaimed,
       }}
     >
       {children}

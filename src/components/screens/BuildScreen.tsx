@@ -135,7 +135,7 @@ const allParts: Part[] = [
 ];
 
 export function BuildScreen() {
-  const { bz, subtractBZ, addBZ, referralCount, tier } = useGameState();
+  const { bz, subtractBZ, addBZ, referralCount, tier, setBzPerHour, incrementUpgrades, markIdleClaimed } = useGameState();
   const [partStates, setPartStates] = useState<Record<PartKey, PartState>>({});
   const [idleState, setIdleState] = useState<IdleState>({
     lastClaimTime: Date.now(),
@@ -206,6 +206,12 @@ export function BuildScreen() {
       localStorage.setItem("buildParts", JSON.stringify(newStates));
     }
   }, [currentTime, partStates, idleState]);
+
+  // Update global bzPerHour whenever partStates change
+  useEffect(() => {
+    const totalYield = getTotalHourlyYield();
+    setBzPerHour(totalYield);
+  }, [partStates, setBzPerHour]);
 
   const savePartStates = (states: Record<PartKey, PartState>) => {
     setPartStates(states);
@@ -303,6 +309,7 @@ export function BuildScreen() {
     if (accrued.total > 0) {
       addBZ(accrued.total);
       saveIdleState({ ...idleState, lastClaimTime: Date.now() });
+      markIdleClaimed(); // Track for tasks
       
       if (accrued.surge > 0) {
         setPowerSurgeUsed(true);
@@ -327,6 +334,7 @@ export function BuildScreen() {
     const upgradeTime = getUpgradeTime(state.level);
 
     if (subtractBZ(cost)) {
+      incrementUpgrades(); // Track for tasks
       const now = Date.now();
       const newStates = {
         ...partStates,

@@ -5,12 +5,14 @@ import { Card } from "@/components/ui/card";
 import { Zap, Clock } from "lucide-react";
 
 export function TapScreen() {
-  const { bz, energy, maxEnergy, addBZ, setEnergy, tier, bzPerHour } = useGameState();
+  const { bz, energy, maxEnergy, addBZ, setEnergy, tier, bzPerHour, incrementTaps } = useGameState();
   const [lastTapTime, setLastTapTime] = useState(0);
   const [quickChargeUses, setQuickChargeUses] = useState(5);
   const [quickChargeCooldown, setQuickChargeCooldown] = useState(0);
   const [quickChargeResetTime, setQuickChargeResetTime] = useState(Date.now() + 86400000);
   const [floatingNumbers, setFloatingNumbers] = useState<Array<{ id: number; value: string; x: number; y: number }>>([]);
+  const [displayMaxEnergy, setDisplayMaxEnergy] = useState(maxEnergy);
+  const [recoveryRate, setRecoveryRate] = useState(0.3);
 
   // Load persisted QuickCharge state
   useEffect(() => {
@@ -56,6 +58,28 @@ export function TapScreen() {
     return data[key] || 1;
   };
 
+  // Update display values when boosters change
+  useEffect(() => {
+    const checkBoosters = () => {
+      const energyCapacityLevel = getBoosterLevel("energyCapacity");
+      const recoveryRateLevel = getBoosterLevel("recoveryRate");
+      
+      // Energy Capacity: base 1500 + (level - 1) × 100
+      const newMaxEnergy = 1500 + (energyCapacityLevel - 1) * 100;
+      setDisplayMaxEnergy(newMaxEnergy);
+      
+      // Recovery Rate: base 0.3 + (level - 1) × 0.05
+      const newRecoveryRate = 0.3 + (recoveryRateLevel - 1) * 0.05;
+      setRecoveryRate(newRecoveryRate);
+    };
+
+    checkBoosters();
+    
+    // Check every second in case boosters were upgraded
+    const interval = setInterval(checkBoosters, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const incomePerTapLevel = getBoosterLevel("incomePerTap");
   const energyPerTapLevel = getBoosterLevel("energyPerTap");
 
@@ -82,6 +106,7 @@ export function TapScreen() {
 
     setEnergy(energy - energyCost);
     addBZ(tapReward);
+    incrementTaps(1); // Track for tasks
     setLastTapTime(now);
 
     // Floating number animation
@@ -100,9 +125,9 @@ export function TapScreen() {
   };
 
   const handleQuickCharge = () => {
-    if (quickChargeUses <= 0 || quickChargeCooldown > 0 || energy >= maxEnergy * 0.5) return;
+    if (quickChargeUses <= 0 || quickChargeCooldown > 0 || energy >= displayMaxEnergy * 0.5) return;
 
-    setEnergy(maxEnergy);
+    setEnergy(displayMaxEnergy);
     setQuickChargeUses((prev) => prev - 1);
     const cooldownEnd = Date.now() + 3600000; // 1h
     setQuickChargeCooldown(3600000);
@@ -120,7 +145,7 @@ export function TapScreen() {
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  const canQuickCharge = quickChargeUses > 0 && quickChargeCooldown === 0 && energy < maxEnergy * 0.5;
+  const canQuickCharge = quickChargeUses > 0 && quickChargeCooldown === 0 && energy < displayMaxEnergy * 0.5;
 
   return (
     <div className="p-6 space-y-6 max-w-2xl mx-auto">
@@ -132,17 +157,17 @@ export function TapScreen() {
             <span className="font-semibold">Energy</span>
           </div>
           <span className="text-lg font-bold">
-            {Math.floor(energy)} / {maxEnergy}
+            {Math.floor(energy)} / {displayMaxEnergy}
           </span>
         </div>
         <div className="w-full bg-muted rounded-full h-3">
           <div
             className="bg-yellow-500 h-3 rounded-full transition-all duration-300"
-            style={{ width: `${(energy / maxEnergy) * 100}%` }}
+            style={{ width: `${(energy / displayMaxEnergy) * 100}%` }}
           />
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Recovery: +0.3/sec
+          Recovery: +{recoveryRate.toFixed(2)}/sec
         </p>
       </Card>
 
@@ -204,7 +229,7 @@ export function TapScreen() {
               <Clock className="mr-2 h-4 w-4" />
               Cooldown: {formatCooldown(quickChargeCooldown)}
             </>
-          ) : energy >= maxEnergy * 0.5 ? (
+          ) : energy >= displayMaxEnergy * 0.5 ? (
             "Available when energy < 50%"
           ) : quickChargeUses <= 0 ? (
             "No uses remaining"
