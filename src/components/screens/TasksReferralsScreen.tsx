@@ -8,7 +8,6 @@ import { Progress } from "@/components/ui/progress";
 import { CheckCircle2, Trophy, Star, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { authenticateWithTelegram } from "@/services/authService";
 import {
   getOrCreateProfile,
   getReferralStats,

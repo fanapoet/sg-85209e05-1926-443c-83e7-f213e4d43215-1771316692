@@ -17,34 +17,127 @@ export type Database = {
     Tables: {
       profiles: {
         Row: {
+          active_build_end_time: string | null
+          active_build_part_id: string | null
           avatar_url: string | null
+          bb_balance: number | null
+          booster_energy_capacity: number | null
+          booster_energy_per_tap: number | null
+          booster_income_per_tap: number | null
+          booster_recovery_rate: number | null
+          bz_balance: number | null
           created_at: string | null
+          current_energy: number | null
+          daily_reward_last_claim: string | null
+          daily_reward_streak: number | null
+          display_name: string | null
           email: string | null
+          energy_recovery_rate: number | null
           full_name: string | null
           id: string
+          last_claim_timestamp: string | null
+          last_energy_update: string | null
+          max_energy: number | null
+          nfts_owned: Json | null
+          quickcharge_cooldown_until: string | null
+          quickcharge_last_reset: string | null
+          quickcharge_uses_remaining: number | null
           referral_code: string | null
+          referral_milestone_10_claimed: boolean | null
+          referral_milestone_25_claimed: boolean | null
+          referral_milestone_5_claimed: boolean | null
+          referral_milestone_50_claimed: boolean | null
+          referred_by_code: string | null
+          telegram_first_name: string | null
           telegram_id: number | null
+          telegram_last_name: string | null
+          telegram_username: string | null
+          tier: string | null
+          total_referrals: number | null
           updated_at: string | null
+          xp: number | null
         }
         Insert: {
+          active_build_end_time?: string | null
+          active_build_part_id?: string | null
           avatar_url?: string | null
+          bb_balance?: number | null
+          booster_energy_capacity?: number | null
+          booster_energy_per_tap?: number | null
+          booster_income_per_tap?: number | null
+          booster_recovery_rate?: number | null
+          bz_balance?: number | null
           created_at?: string | null
+          current_energy?: number | null
+          daily_reward_last_claim?: string | null
+          daily_reward_streak?: number | null
+          display_name?: string | null
           email?: string | null
+          energy_recovery_rate?: number | null
           full_name?: string | null
           id: string
+          last_claim_timestamp?: string | null
+          last_energy_update?: string | null
+          max_energy?: number | null
+          nfts_owned?: Json | null
+          quickcharge_cooldown_until?: string | null
+          quickcharge_last_reset?: string | null
+          quickcharge_uses_remaining?: number | null
           referral_code?: string | null
+          referral_milestone_10_claimed?: boolean | null
+          referral_milestone_25_claimed?: boolean | null
+          referral_milestone_5_claimed?: boolean | null
+          referral_milestone_50_claimed?: boolean | null
+          referred_by_code?: string | null
+          telegram_first_name?: string | null
           telegram_id?: number | null
+          telegram_last_name?: string | null
+          telegram_username?: string | null
+          tier?: string | null
+          total_referrals?: number | null
           updated_at?: string | null
+          xp?: number | null
         }
         Update: {
+          active_build_end_time?: string | null
+          active_build_part_id?: string | null
           avatar_url?: string | null
+          bb_balance?: number | null
+          booster_energy_capacity?: number | null
+          booster_energy_per_tap?: number | null
+          booster_income_per_tap?: number | null
+          booster_recovery_rate?: number | null
+          bz_balance?: number | null
           created_at?: string | null
+          current_energy?: number | null
+          daily_reward_last_claim?: string | null
+          daily_reward_streak?: number | null
+          display_name?: string | null
           email?: string | null
+          energy_recovery_rate?: number | null
           full_name?: string | null
           id?: string
+          last_claim_timestamp?: string | null
+          last_energy_update?: string | null
+          max_energy?: number | null
+          nfts_owned?: Json | null
+          quickcharge_cooldown_until?: string | null
+          quickcharge_last_reset?: string | null
+          quickcharge_uses_remaining?: number | null
           referral_code?: string | null
+          referral_milestone_10_claimed?: boolean | null
+          referral_milestone_25_claimed?: boolean | null
+          referral_milestone_5_claimed?: boolean | null
+          referral_milestone_50_claimed?: boolean | null
+          referred_by_code?: string | null
+          telegram_first_name?: string | null
           telegram_id?: number | null
+          telegram_last_name?: string | null
+          telegram_username?: string | null
+          tier?: string | null
+          total_referrals?: number | null
           updated_at?: string | null
+          xp?: number | null
         }
         Relationships: []
       }
