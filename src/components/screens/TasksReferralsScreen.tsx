@@ -64,74 +64,56 @@ export function TasksReferralsScreen() {
 
   // Initialize user and referral code
   useEffect(() => {
-    const initReferralSystem = async () => {
-      console.log("🚀 Initializing Referral System...");
+    const loadReferralData = async () => {
+      console.log("📊 Loading referral data...");
       setIsLoading(true);
       setErrorMessage("");
 
       try {
-        // 1. Authenticate with Telegram
-        console.log("🔐 Authenticating...");
-        const user = await authenticateWithTelegram();
+        // Get current authenticated user
+        const { data: { user } } = await supabase.auth.getUser();
         
         if (!user) {
-          throw new Error("Authentication failed. Please try reopening the app.");
+          throw new Error("Not authenticated. Please restart the app.");
         }
         
         console.log("✅ User authenticated:", user.id);
         setUserId(user.id);
 
-        // 2. Get Profile & Referral Code
+        // Get Profile & Referral Code
         console.log("🔍 Fetching profile...");
         const profile = await getOrCreateProfile(user.id);
         
         if (!profile.referralCode) {
-          throw new Error("Failed to generate referral code.");
+          throw new Error("Failed to load referral code.");
         }
         
         console.log("✅ Profile loaded:", profile);
         setReferralCode(profile.referralCode);
         setReferralLink(`https://t.me/bunergy_bot/app?startapp=${profile.referralCode.toLowerCase()}`);
 
-        // 3. Get Referral Stats
+        // Get Referral Stats
         console.log("🔍 Fetching stats...");
         const stats = await getReferralStats(user.id);
         setReferralStats(stats);
         console.log("✅ Stats loaded:", stats);
         
-        // 4. Get Milestones
+        // Get Milestones
         const milestones = await getClaimedMilestones(user.id);
         setClaimedMilestones(milestones);
         console.log("✅ Milestones loaded:", milestones);
 
-        // 5. Check for incoming referral (if opened via link)
-        await handleIncomingReferral(user.id);
-
-        console.log("✨ Referral System Initialized Successfully!");
+        console.log("✨ Referral Data Loaded Successfully!");
       } catch (err: any) {
-        console.error("❌ Initialization failed:", err);
-        
-        // User-friendly error messages
-        let message = "Failed to load referrals. ";
-        
-        if (err.message === "NOT_IN_TELEGRAM") {
-          message = "This app only works inside Telegram.";
-        } else if (err.message === "NO_TELEGRAM_USER") {
-          message = "Could not get your Telegram identity. Please reopen the app.";
-        } else if (err.message?.includes("AUTH_FAILED")) {
-          message = "Authentication failed. Please try again.";
-        } else {
-          message += err.message || "Unknown error occurred.";
-        }
-        
-        setErrorMessage(message);
+        console.error("❌ Failed to load referral data:", err);
+        setErrorMessage(err.message || "Failed to load referrals. Please try again.");
       } finally {
         setIsLoading(false);
       }
     };
 
-    initReferralSystem();
-  }, [referralCount]);
+    loadReferralData();
+  }, []);
 
   // Handle incoming referral from URL start_param
   const handleIncomingReferral = async (currentUserId: string) => {
