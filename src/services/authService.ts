@@ -1,25 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
 
-declare global {
-  interface Window {
-    Telegram?: {
-      WebApp?: {
-        initData?: string;
-        initDataUnsafe?: {
-          user?: {
-            id: number;
-            first_name: string;
-            last_name?: string;
-            username?: string;
-            language_code?: string;
-          };
-          start_parameter?: string;
-        };
-      };
-    };
-  }
-}
-
 /**
  * Get Telegram user data from WebApp
  */
@@ -39,7 +19,7 @@ export function isInTelegram(): boolean {
 }
 
 /**
- * Auto-authenticate or create user based on Telegram identity
+ * Authenticate using Telegram ID (Anonymous Auth + Metadata)
  * Uses anonymous authentication with Telegram metadata
  * This is the main entry point for Telegram Mini App authentication
  */
