@@ -600,7 +600,7 @@ export function BuildScreen() {
                 return (
                   <Card 
                     key={part.key} 
-                    className={`p-3 ${isActive ? "border-blue-500 border-2" : ""} ${!partUnlocked || !unlocked ? "opacity-60" : ""}`}
+                    className={`p-3 ${isActive ? "border-blue-500 border-2" : ""} ${(!partUnlocked || !unlocked) ? "opacity-60" : ""}`}
                   >
                     {justUpgraded?.key === part.key && (
                       <div className="mb-2 p-2 bg-green-500 text-white rounded-lg text-center font-bold animate-pulse">

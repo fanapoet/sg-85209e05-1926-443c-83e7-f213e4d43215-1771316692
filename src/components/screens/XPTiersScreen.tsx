@@ -35,8 +35,7 @@ export function XPTiersScreen() {
   const [devices, setDevices] = useState<any[]>([]);
   const [qrInput, setQrInput] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
-  const [showCamera, setShowCamera] = useState(false);
-  const [cameraError, setCameraError] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const currentTierInfo = tiers.find((t) => t.name === tier) || tiers[0];
   const currentTierIndex = tiers.findIndex((t) => t.name === tier);
@@ -101,7 +100,7 @@ export function XPTiersScreen() {
   const handleConnectDevice = async () => {
     if (!qrInput.trim()) {
       toast({
-        title: "Invalid Input",
+        title: "❌ Invalid Input",
         description: "Please enter a valid QR code",
         variant: "destructive"
       });
@@ -113,10 +112,11 @@ export function XPTiersScreen() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         toast({
-          title: "Authentication Required",
+          title: "❌ Authentication Required",
           description: "Please log in to connect devices",
           variant: "destructive"
         });
+        setIsConnecting(false);
         return;
       }
 
@@ -129,7 +129,8 @@ export function XPTiersScreen() {
         });
         if (result.xp) addXP(result.xp);
         setQrInput("");
-        loadDevices();
+        setDialogOpen(false);
+        await loadDevices();
       } else {
         toast({
           title: "❌ Connection Failed",
@@ -139,7 +140,7 @@ export function XPTiersScreen() {
       }
     } catch (error) {
       toast({
-        title: "Error",
+        title: "❌ Error",
         description: "An unexpected error occurred. Please try again.",
         variant: "destructive"
       });
@@ -151,20 +152,39 @@ export function XPTiersScreen() {
 
   const startCameraScanner = async () => {
     try {
-      setCameraError("");
-      setShowCamera(true);
-      
-      // Note: Full QR scanning requires a library like html5-qrcode
-      // For now, we'll show camera access message
-      toast({
-        title: "Camera Scanner",
-        description: "QR scanning requires camera permission. Please use manual input for now.",
+      // Check if browser supports getUserMedia
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        toast({
+          title: "❌ Camera Not Supported",
+          description: "Your browser doesn't support camera access. Please use manual input.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Request camera permission
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: "environment" } // Use back camera on mobile
       });
+
+      // Stop the stream immediately (we just needed permission check)
+      stream.getTracks().forEach(track => track.stop());
+
+      toast({
+        title: "📷 Camera Ready",
+        description: "QR scanning requires a scanning library. Please use manual input for now.",
+      });
+
+      // TODO: Implement full QR scanner with html5-qrcode or jsQR library
+      // For now, we show that camera is available and user should use manual input
       
-      // TODO: Implement full QR scanner with html5-qrcode library
     } catch (error) {
-      setCameraError("Camera access denied or not available");
-      setShowCamera(false);
+      console.error("Camera error:", error);
+      toast({
+        title: "❌ Camera Access Denied",
+        description: "Please allow camera access or use manual input instead.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -253,10 +273,10 @@ export function XPTiersScreen() {
       </Card>
 
       {/* Hardware Connection Section */}
-      <Card className="p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20 mb-6">
+      <Card className="p-4 bg-gradient-to-br from-orange-500/10 to-yellow-500/10 border-orange-500/20 mb-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center">
-            <Smartphone className="h-5 w-5 text-blue-500" />
+          <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center">
+            <Smartphone className="h-5 w-5 text-orange-600" />
           </div>
           <div>
             <h3 className="font-semibold text-lg">Hardware Connection</h3>
@@ -273,30 +293,41 @@ export function XPTiersScreen() {
                   <Zap className="h-4 w-4 text-yellow-500" />
                   <span className="text-sm">{device.product_type}</span>
                 </div>
-                <Badge variant="secondary" className="text-xs">Active</Badge>
+                <Badge variant="secondary" className="text-xs">+{device.total_xp_earned} XP</Badge>
               </div>
             ))}
           </div>
         ) : (
           <div className="text-center p-4 border border-dashed rounded-lg mb-4 bg-background/30">
             <p className="text-sm text-muted-foreground">No devices connected yet</p>
+            <p className="text-xs text-muted-foreground mt-1">Connect your first device to earn bonus XP!</p>
           </div>
         )}
 
-        <Dialog>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full" variant="outline">
+            <Button className="w-full bg-orange-600 hover:bg-orange-700" size="lg">
               <QrCode className="mr-2 h-4 w-4" />
               Connect New Device
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle>Connect Hardware Device</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
+              <div className="bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg p-3">
+                <p className="text-sm font-medium text-orange-900 dark:text-orange-100 mb-1">
+                  📦 Available Devices:
+                </p>
+                <div className="text-xs text-orange-800 dark:text-orange-200 space-y-1">
+                  <div>• GameCore Stand (GC) → +5,000 XP</div>
+                  <div>• BIP-X Power Bank (BX) → +10,000 XP</div>
+                </div>
+              </div>
+              
               <p className="text-sm text-muted-foreground">
-                Scan the QR code on your Bunergy device (GameCore or BIP-X) or enter the code manually.
+                Scan the QR code on your Bunergy device or enter the code manually below.
               </p>
               
               {/* Camera Scanner Button */}
@@ -308,10 +339,6 @@ export function XPTiersScreen() {
                 <QrCode className="mr-2 h-4 w-4" />
                 Scan QR Code with Camera
               </Button>
-
-              {cameraError && (
-                <p className="text-sm text-red-600">{cameraError}</p>
-              )}
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -328,25 +355,40 @@ export function XPTiersScreen() {
                 <Input 
                   placeholder="BUNERGY_GC01_..." 
                   value={qrInput}
-                  onChange={(e) => setQrInput(e.target.value)}
+                  onChange={(e) => setQrInput(e.target.value.toUpperCase())}
                   disabled={isConnecting}
+                  className="font-mono text-sm"
                 />
                 <Button 
-                  className="w-full" 
+                  className="w-full bg-orange-600 hover:bg-orange-700" 
                   onClick={handleConnectDevice}
                   disabled={isConnecting || !qrInput.trim()}
+                  size="lg"
                 >
-                  {isConnecting ? "Verifying..." : "Connect Device"}
+                  {isConnecting ? (
+                    <>
+                      <span className="animate-spin mr-2">⏳</span>
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="mr-2 h-4 w-4" />
+                      Connect Device
+                    </>
+                  )}
                 </Button>
               </div>
 
               <div className="text-xs text-muted-foreground bg-muted p-3 rounded">
-                <p className="font-semibold mb-1">Expected Format:</p>
-                <p className="font-mono text-[10px] break-all">
+                <p className="font-semibold mb-1">✅ Expected Format:</p>
+                <p className="font-mono text-[10px] break-all bg-background px-2 py-1 rounded">
                   BUNERGY_[PRODUCT]_[SERIAL]_[HASH]
                 </p>
                 <p className="mt-2 text-[10px]">
-                  Example: BUNERGY_GC01_A7B3C9D2E5F1_8f3a9b2c
+                  <span className="font-semibold">Example:</span>
+                </p>
+                <p className="font-mono text-[10px] break-all bg-background px-2 py-1 rounded mt-1">
+                  BUNERGY_GC01_A7B3C9D2E5F1_8f3a9b2c
                 </p>
               </div>
             </div>

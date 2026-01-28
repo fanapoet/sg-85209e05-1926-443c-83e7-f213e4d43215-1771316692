@@ -11,10 +11,10 @@ export async function verifyAndClaimDevice(qrCode: string, userId: string): Prom
     // 1. Parse QR Code
     const parts = qrCode.split("_");
     if (parts.length !== 4 || parts[0] !== "BUNERGY") {
-      return { success: false, message: "Invalid QR code format" };
+      return { success: false, message: "Invalid QR code format. Expected: BUNERGY_PRODUCT_SERIAL_HASH" };
     }
 
-    const [prefix, productCode, serial, providedHash] = parts;
+    const [, productCode, serial, providedHash] = parts;
 
     // 2. Verify Hash locally first (SHA-256)
     const dataString = `${productCode}${serial}${SECRET_SALT}`;
@@ -24,24 +24,23 @@ export async function verifyAndClaimDevice(qrCode: string, userId: string): Prom
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const calculatedHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("").substring(0, 8);
 
-    if (providedHash !== calculatedHash) {
+    if (providedHash.toLowerCase() !== calculatedHash.toLowerCase()) {
       console.error("Hash mismatch:", { provided: providedHash, calculated: calculatedHash });
-      return { success: false, message: "Security check failed: Invalid QR code" };
+      return { success: false, message: "Security verification failed. Invalid QR code." };
     }
 
-    // 3. Identify Product
+    // 3. Identify Product and Reward
     let productName = "Unknown Device";
     let rewardXP = 0;
     
     if (productCode.startsWith("GC")) {
       productName = "GameCore Stand";
-      rewardXP = 500; // Daily connection reward base? Or one time? Whitepaper says "Daily device connection 500 XP". 
-      // But claim is usually one-time ownership. Let's give a big "New Device Bonus" of 5000 XP + daily connection rights.
-      // The prompt says "never added by any users before ... to give users XP rewards".
-      // Let's assume this is the "Claim" action giving a big bonus (e.g. 5000 XP)
+      rewardXP = 5000;
     } else if (productCode.startsWith("BX")) {
       productName = "BIP-X Power Bank";
-      rewardXP = 1000;
+      rewardXP = 10000;
+    } else {
+      return { success: false, message: `Unknown product code: ${productCode}` };
     }
 
     // 4. Check Claim Status in DB
@@ -49,10 +48,15 @@ export async function verifyAndClaimDevice(qrCode: string, userId: string): Prom
       .from("hardware_devices")
       .select("*")
       .eq("unique_device_id", serial)
-      .single();
+      .maybeSingle();
+
+    if (checkError) {
+      console.error("Database check error:", checkError);
+      return { success: false, message: "Database error. Please try again." };
+    }
 
     if (existingDevice) {
-      return { success: false, message: "This device has already been claimed!" };
+      return { success: false, message: "This device has already been claimed by another user!" };
     }
 
     // 5. Claim Device
@@ -73,14 +77,14 @@ export async function verifyAndClaimDevice(qrCode: string, userId: string): Prom
 
     return { 
       success: true, 
-      message: `Successfully connected ${productName}!`, 
+      message: `Successfully connected ${productName}`, 
       xp: rewardXP,
       product: productName
     };
 
   } catch (error) {
     console.error("Verification error:", error);
-    return { success: false, message: "An unexpected error occurred" };
+    return { success: false, message: "An unexpected error occurred. Please try again." };
   }
 }
 
@@ -93,6 +97,9 @@ export async function getUserDevices(userId: string) {
     .select("*")
     .eq("user_id", userId);
 
-  if (error) return [];
-  return data;
+  if (error) {
+    console.error("Get devices error:", error);
+    return [];
+  }
+  return data || [];
 }
