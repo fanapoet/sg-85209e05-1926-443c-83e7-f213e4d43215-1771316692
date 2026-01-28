@@ -367,6 +367,13 @@ export function BuildScreen() {
       else if (newLevel <= 10) xpReward = 100;
       else xpReward = 200;
 
+      // Show toast IMMEDIATELY at top before any state updates
+      toast({
+        title: "🎉 Upgrade Successful!",
+        description: `${part.name} upgraded to L${newLevel} • +${getPartYield(part, newLevel).toFixed(1)} BZ/h • +${xpReward} XP Earned!`,
+        duration: 4000,
+      });
+
       addXP(xpReward);
       incrementUpgrades(); // Track for tasks
       const now = Date.now();
@@ -389,15 +396,6 @@ export function BuildScreen() {
         setIdleState(newIdleState);
         localStorage.setItem("idleState", JSON.stringify(newIdleState));
       }
-
-      // Show toast AFTER all state updates
-      setTimeout(() => {
-        toast({
-          title: "🎉 Upgrade Successful!",
-          description: `${part.name} upgraded to L${newLevel} • +${getPartYield(part, newLevel).toFixed(1)} BZ/h • +${xpReward} XP Earned!`,
-          duration: 4000,
-        });
-      }, 100);
     }
   };
 

@@ -1,20 +1,27 @@
 import { useGameState } from "@/contexts/GameStateContext";
 import { Badge } from "@/components/ui/badge";
 import { Users, Zap, TrendingUp, User } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { useEffect } from "react";
+
+const PRESET_AVATARS = [
+  "🐰", "🔥", "⚡", "💎", "🚀", "🎮", "🏆", "⭐",
+  "🌟", "💰", "🎯", "🔋", "⚙️", "🛠️", "🎨", "🌈"
+];
 
 export function CompactDashboard() {
   const { bz, bb, energy, tier, referralCount, xp, bzPerHour } = useGameState();
   const [profileOpen, setProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [selectedAvatar, setSelectedAvatar] = useState<string>("");
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
   useEffect(() => {
     loadUserProfile();
+    loadSelectedAvatar();
   }, []);
 
   const loadUserProfile = async () => {
@@ -26,6 +33,23 @@ export function CompactDashboard() {
     } catch (error) {
       console.error("Error loading user profile:", error);
     }
+  };
+
+  const loadSelectedAvatar = () => {
+    try {
+      const saved = localStorage.getItem("userAvatar");
+      if (saved) {
+        setSelectedAvatar(saved);
+      }
+    } catch (error) {
+      console.error("Error loading avatar:", error);
+    }
+  };
+
+  const handleAvatarSelect = (avatar: string) => {
+    setSelectedAvatar(avatar);
+    localStorage.setItem("userAvatar", avatar);
+    setShowAvatarPicker(false);
   };
 
   const getBoosterLevel = (key: string): number => {
@@ -89,6 +113,13 @@ export function CompactDashboard() {
     return "U";
   };
 
+  const getAvatarDisplay = () => {
+    if (selectedAvatar) {
+      return selectedAvatar;
+    }
+    return getUserInitials();
+  };
+
   return (
     <>
       <div className="bg-card border-b border-border shadow-sm">
@@ -112,14 +143,9 @@ export function CompactDashboard() {
               </Badge>
               <button 
                 onClick={() => setProfileOpen(true)}
-                className="h-8 w-8 rounded-full overflow-hidden border-2 border-primary/20 hover:border-primary/40 transition-colors"
+                className="h-8 w-8 rounded-full overflow-hidden border-2 border-primary/20 hover:border-primary/40 transition-colors flex items-center justify-center bg-primary/10 text-primary font-bold text-lg"
               >
-                <Avatar className="h-full w-full">
-                  <AvatarImage src={userProfile?.user_metadata?.avatar_url} />
-                  <AvatarFallback className="text-xs bg-primary/10 text-primary font-bold">
-                    {getUserInitials()}
-                  </AvatarFallback>
-                </Avatar>
+                {getAvatarDisplay()}
               </button>
             </div>
           </div>
@@ -160,12 +186,35 @@ export function CompactDashboard() {
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="flex flex-col items-center gap-3">
-              <Avatar className="h-20 w-20 border-4 border-primary/20">
-                <AvatarImage src={userProfile?.user_metadata?.avatar_url} />
-                <AvatarFallback className="text-2xl bg-primary/10 text-primary font-bold">
-                  {getUserInitials()}
-                </AvatarFallback>
-              </Avatar>
+              <button
+                onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+                className="h-20 w-20 rounded-full border-4 border-primary/20 hover:border-primary/40 transition-colors flex items-center justify-center bg-primary/10 text-primary font-bold text-4xl cursor-pointer"
+              >
+                {getAvatarDisplay()}
+              </button>
+              <button
+                onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+                className="text-xs text-primary hover:underline"
+              >
+                {showAvatarPicker ? "Close Picker" : "Change Avatar"}
+              </button>
+
+              {showAvatarPicker && (
+                <div className="grid grid-cols-8 gap-2 p-3 bg-muted rounded-lg w-full">
+                  {PRESET_AVATARS.map((avatar) => (
+                    <button
+                      key={avatar}
+                      onClick={() => handleAvatarSelect(avatar)}
+                      className={`h-10 w-10 rounded-full flex items-center justify-center text-2xl hover:bg-primary/20 transition-colors ${
+                        selectedAvatar === avatar ? "bg-primary/30 ring-2 ring-primary" : "bg-background"
+                      }`}
+                    >
+                      {avatar}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="text-center">
                 <h3 className="font-semibold text-lg">
                   {userProfile?.user_metadata?.full_name || "Anonymous User"}

@@ -36,6 +36,7 @@ export function XPTiersScreen() {
   const [qrInput, setQrInput] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [buttonMessage, setButtonMessage] = useState("");
 
   const currentTierInfo = tiers.find((t) => t.name === tier) || tiers[0];
   const currentTierIndex = tiers.findIndex((t) => t.name === tier);
@@ -100,29 +101,22 @@ export function XPTiersScreen() {
   const handleConnectDevice = async () => {
     if (!qrInput.trim()) {
       console.log("❌ Empty input detected");
-      toast({
-        title: "Invalid Input",
-        description: "Please enter a valid QR code",
-        variant: "destructive",
-        duration: 4000,
-      });
+      setButtonMessage("❌ Enter a code first");
+      setTimeout(() => setButtonMessage(""), 3000);
       return;
     }
     
     console.log("🔍 Starting connection with code:", qrInput.trim());
     setIsConnecting(true);
+    setButtonMessage("");
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
         console.log("❌ No user found");
-        toast({
-          title: "Authentication Required",
-          description: "Please log in to connect devices",
-          variant: "destructive",
-          duration: 4000,
-        });
+        setButtonMessage("❌ Not authenticated");
+        setTimeout(() => setButtonMessage(""), 3000);
         setIsConnecting(false);
         return;
       }
@@ -136,46 +130,27 @@ export function XPTiersScreen() {
       if (result.success) {
         console.log("✅ SUCCESS - Device connected!");
         
-        // Show success toast
-        setTimeout(() => {
-          toast({
-            title: "✅ Device Connected!",
-            description: `${result.product} • +${result.xp?.toLocaleString()} XP added!`,
-            duration: 5000,
-          });
-        }, 100);
+        setButtonMessage(`✅ Connected! +${result.xp?.toLocaleString()} XP`);
         
         if (result.xp) {
           addXP(result.xp);
         }
-        setQrInput("");
-        setDialogOpen(false);
-        await loadDevices();
+        
+        setTimeout(() => {
+          setQrInput("");
+          setButtonMessage("");
+          setDialogOpen(false);
+          loadDevices();
+        }, 3000);
       } else {
         console.log("❌ FAILED - Connection error:", result.message);
-        
-        // Show error toast
-        setTimeout(() => {
-          toast({
-            title: "❌ Connection Failed",
-            description: result.message || "Unknown error occurred",
-            variant: "destructive",
-            duration: 5000,
-          });
-        }, 100);
+        setButtonMessage(`❌ ${result.message || "Failed"}`);
+        setTimeout(() => setButtonMessage(""), 3000);
       }
     } catch (error) {
       console.error("💥 Exception during connection:", error);
-      
-      // Show exception toast
-      setTimeout(() => {
-        toast({
-          title: "❌ Error",
-          description: error instanceof Error ? error.message : "An unexpected error occurred",
-          variant: "destructive",
-          duration: 5000,
-        });
-      }, 100);
+      setButtonMessage(`❌ Error: ${error instanceof Error ? error.message : "Unknown"}`);
+      setTimeout(() => setButtonMessage(""), 3000);
     } finally {
       console.log("🏁 Connection attempt finished");
       setIsConnecting(false);
@@ -390,7 +365,9 @@ export function XPTiersScreen() {
                   disabled={isConnecting || !qrInput.trim()}
                   size="lg"
                 >
-                  {isConnecting ? (
+                  {buttonMessage ? (
+                    buttonMessage
+                  ) : isConnecting ? (
                     <>
                       <span className="animate-spin mr-2">⏳</span>
                       Verifying...
