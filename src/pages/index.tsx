@@ -17,7 +17,7 @@ type TabKey = "tap" | "boost" | "build" | "convert" | "xp" | "rewards" | "tasks"
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabKey>("tap");
   const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
-  const [showWelcome, setShowWelcome] = useState<boolean>(true);
+  const [showWelcome, setShowWelcome] = useState<boolean>(false);
 
   useEffect(() => {
     // Check if running in Telegram
@@ -29,10 +29,16 @@ export default function Home() {
         // Expand to full height
         window.Telegram?.WebApp?.expand();
         
-        // Check if user has completed welcome (using localStorage)
-        const hasCompletedWelcome = localStorage.getItem("bunergy_welcome_completed");
-        if (hasCompletedWelcome === "true") {
-          setShowWelcome(false);
+        // Check if should show welcome screen
+        const hideWelcome = localStorage.getItem("bunergy_hide_welcome");
+        const lastShown = localStorage.getItem("bunergy_welcome_last_shown");
+        const today = new Date().toDateString();
+        
+        // Show welcome if:
+        // 1. User hasn't checked "don't show again"
+        // 2. AND (first time OR not shown today)
+        if (hideWelcome !== "true" && lastShown !== today) {
+          setShowWelcome(true);
         }
       }
     };
@@ -41,7 +47,6 @@ export default function Home() {
   }, []);
 
   const handleWelcomeComplete = () => {
-    localStorage.setItem("bunergy_welcome_completed", "true");
     setShowWelcome(false);
   };
 
