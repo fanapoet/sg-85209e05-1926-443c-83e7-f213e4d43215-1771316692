@@ -108,9 +108,12 @@ export function XPTiersScreen() {
     }
     
     setIsConnecting(true);
+    console.log("🔍 Starting device connection with code:", qrInput.trim());
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        console.error("❌ No user found");
         toast({
           title: "❌ Authentication Required",
           description: "Please log in to connect devices",
@@ -120,18 +123,28 @@ export function XPTiersScreen() {
         return;
       }
 
+      console.log("✅ User authenticated:", user.id);
+      console.log("📞 Calling verifyAndClaimDevice...");
+      
       const result = await verifyAndClaimDevice(qrInput.trim(), user.id);
       
+      console.log("📦 Verification result:", result);
+      
       if (result.success) {
+        console.log("✅ Device connected successfully!");
         toast({
           title: "✅ Device Connected Successfully!",
           description: `${result.message} • +${result.xp} XP added to your balance!`,
         });
-        if (result.xp) addXP(result.xp);
+        if (result.xp) {
+          console.log("💰 Adding XP:", result.xp);
+          addXP(result.xp);
+        }
         setQrInput("");
         setDialogOpen(false);
         await loadDevices();
       } else {
+        console.error("❌ Connection failed:", result.message);
         toast({
           title: "❌ Connection Failed",
           description: result.message,
@@ -139,13 +152,14 @@ export function XPTiersScreen() {
         });
       }
     } catch (error) {
+      console.error("💥 Unexpected error:", error);
       toast({
         title: "❌ Error",
-        description: "An unexpected error occurred. Please try again.",
+        description: error instanceof Error ? error.message : "An unexpected error occurred. Please try again.",
         variant: "destructive"
       });
-      console.error("Hardware connection error:", error);
     } finally {
+      console.log("🏁 Connection attempt finished");
       setIsConnecting(false);
     }
   };
