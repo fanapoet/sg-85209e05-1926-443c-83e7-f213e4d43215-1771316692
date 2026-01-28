@@ -15,6 +15,138 @@ export type Database = {
   }
   public: {
     Tables: {
+      build_parts: {
+        Row: {
+          base_cost: number
+          base_yield: number
+          created_at: string | null
+          icon: string
+          id: string
+          max_level: number
+          name: string
+          part_number: number
+          stage: number
+        }
+        Insert: {
+          base_cost: number
+          base_yield: number
+          created_at?: string | null
+          icon: string
+          id: string
+          max_level?: number
+          name: string
+          part_number: number
+          stage: number
+        }
+        Update: {
+          base_cost?: number
+          base_yield?: number
+          created_at?: string | null
+          icon?: string
+          id?: string
+          max_level?: number
+          name?: string
+          part_number?: number
+          stage?: number
+        }
+        Relationships: []
+      }
+      conversion_history: {
+        Row: {
+          amount_in: number
+          amount_out: number
+          burned_amount: number | null
+          conversion_type: string
+          created_at: string | null
+          exchange_rate: number
+          id: string
+          tier_at_conversion: string
+          tier_bonus_percent: number
+          user_id: string
+        }
+        Insert: {
+          amount_in: number
+          amount_out: number
+          burned_amount?: number | null
+          conversion_type: string
+          created_at?: string | null
+          exchange_rate: number
+          id?: string
+          tier_at_conversion: string
+          tier_bonus_percent: number
+          user_id: string
+        }
+        Update: {
+          amount_in?: number
+          amount_out?: number
+          burned_amount?: number | null
+          conversion_type?: string
+          created_at?: string | null
+          exchange_rate?: number
+          id?: string
+          tier_at_conversion?: string
+          tier_bonus_percent?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      daily_rewards: {
+        Row: {
+          bb_reward: number | null
+          bz_reward: number | null
+          day: number
+          description: string
+          xp_reward: number | null
+        }
+        Insert: {
+          bb_reward?: number | null
+          bz_reward?: number | null
+          day: number
+          description: string
+          xp_reward?: number | null
+        }
+        Update: {
+          bb_reward?: number | null
+          bz_reward?: number | null
+          day?: number
+          description?: string
+          xp_reward?: number | null
+        }
+        Relationships: []
+      }
+      nfts: {
+        Row: {
+          created_at: string | null
+          description: string
+          id: string
+          image_url: string | null
+          name: string
+          price_bb: number
+          requirement_type: string | null
+          requirement_value: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          id: string
+          image_url?: string | null
+          name: string
+          price_bb: number
+          requirement_type?: string | null
+          requirement_value?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          id?: string
+          image_url?: string | null
+          name?: string
+          price_bb?: number
+          requirement_type?: string | null
+          requirement_value?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           active_build_end_time: string | null
@@ -230,6 +362,207 @@ export type Database = {
           referral_code?: string
         }
         Relationships: []
+      }
+      tasks: {
+        Row: {
+          created_at: string | null
+          description: string
+          id: string
+          is_active: boolean | null
+          reward_amount: number
+          reward_type: string
+          target_value: number
+          task_type: string
+          title: string
+          tracking_field: string
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          id: string
+          is_active?: boolean | null
+          reward_amount: number
+          reward_type: string
+          target_value: number
+          task_type: string
+          title: string
+          tracking_field: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          id?: string
+          is_active?: boolean | null
+          reward_amount?: number
+          reward_type?: string
+          target_value?: number
+          task_type?: string
+          title?: string
+          tracking_field?: string
+        }
+        Relationships: []
+      }
+      user_build_parts: {
+        Row: {
+          build_ends_at: string | null
+          build_started_at: string | null
+          created_at: string | null
+          current_level: number
+          id: string
+          is_building: boolean | null
+          last_upgraded_at: string | null
+          part_id: string
+          total_yield_contributed: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          build_ends_at?: string | null
+          build_started_at?: string | null
+          created_at?: string | null
+          current_level?: number
+          id?: string
+          is_building?: boolean | null
+          last_upgraded_at?: string | null
+          part_id: string
+          total_yield_contributed?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          build_ends_at?: string | null
+          build_started_at?: string | null
+          created_at?: string | null
+          current_level?: number
+          id?: string
+          is_building?: boolean | null
+          last_upgraded_at?: string | null
+          part_id?: string
+          total_yield_contributed?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_build_parts_part_id_fkey"
+            columns: ["part_id"]
+            isOneToOne: false
+            referencedRelation: "build_parts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_daily_claims: {
+        Row: {
+          bb_claimed: number | null
+          bz_claimed: number | null
+          claimed_at: string | null
+          day: number
+          id: string
+          user_id: string
+          xp_claimed: number | null
+        }
+        Insert: {
+          bb_claimed?: number | null
+          bz_claimed?: number | null
+          claimed_at?: string | null
+          day: number
+          id?: string
+          user_id: string
+          xp_claimed?: number | null
+        }
+        Update: {
+          bb_claimed?: number | null
+          bz_claimed?: number | null
+          claimed_at?: string | null
+          day?: number
+          id?: string
+          user_id?: string
+          xp_claimed?: number | null
+        }
+        Relationships: []
+      }
+      user_nfts: {
+        Row: {
+          id: string
+          nft_id: string
+          price_paid_bb: number
+          purchased_at: string | null
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          nft_id: string
+          price_paid_bb: number
+          purchased_at?: string | null
+          user_id: string
+        }
+        Update: {
+          id?: string
+          nft_id?: string
+          price_paid_bb?: number
+          purchased_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_nfts_nft_id_fkey"
+            columns: ["nft_id"]
+            isOneToOne: false
+            referencedRelation: "nfts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_task_progress: {
+        Row: {
+          claimed: boolean | null
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string | null
+          current_progress: number | null
+          id: string
+          is_completed: boolean | null
+          reset_at: string | null
+          task_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          claimed?: boolean | null
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          current_progress?: number | null
+          id?: string
+          is_completed?: boolean | null
+          reset_at?: string | null
+          task_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          claimed?: boolean | null
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string | null
+          current_progress?: number | null
+          id?: string
+          is_completed?: boolean | null
+          reset_at?: string | null
+          task_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_task_progress_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

@@ -146,7 +146,6 @@ export function BuildScreen() {
     activeBuildKey: null
   });
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [powerSurgeUsed, setPowerSurgeUsed] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load persisted state ONCE on mount
@@ -154,7 +153,6 @@ export function BuildScreen() {
     try {
       const savedParts = localStorage.getItem("buildParts");
       const savedIdle = localStorage.getItem("idleState");
-      const savedPowerSurge = localStorage.getItem("powerSurgeUsed");
 
       if (savedParts) {
         const loaded = JSON.parse(savedParts);
@@ -175,10 +173,6 @@ export function BuildScreen() {
         const defaultIdle = { lastClaimTime: Date.now(), activeBuildKey: null };
         setIdleState(defaultIdle);
         localStorage.setItem("idleState", JSON.stringify(defaultIdle));
-      }
-
-      if (savedPowerSurge) {
-        setPowerSurgeUsed(JSON.parse(savedPowerSurge));
       }
 
       setIsLoaded(true);
@@ -289,7 +283,7 @@ export function BuildScreen() {
     return 1.0;
   };
 
-  // Accrued idle income
+  // Accrued idle income - FIXED: PowerSurge now ALWAYS triggers based on time
   const getAccruedIncome = (): { base: number; surge: number; total: number; hours: number } => {
     const now = Date.now();
     const elapsed = now - idleState.lastClaimTime;
@@ -299,15 +293,14 @@ export function BuildScreen() {
     const tierMultiplier = getTierMultiplier();
     const baseIncome = hourlyYield * hours * tierMultiplier;
 
+    // PowerSurge: ALWAYS applies based on time since last claim
     let surgeBonus = 0;
-    if (!powerSurgeUsed) {
-      if (hours >= 1 && hours < 2) {
-        surgeBonus = baseIncome * 0.25;
-      } else if (hours >= 2 && hours < 3) {
-        surgeBonus = baseIncome * 0.10;
-      } else if (hours >= 3 && hours <= 4) {
-        surgeBonus = baseIncome * 0.05;
-      }
+    if (hours >= 1 && hours < 2) {
+      surgeBonus = baseIncome * 0.25; // 25% bonus
+    } else if (hours >= 2 && hours < 3) {
+      surgeBonus = baseIncome * 0.10; // 10% bonus
+    } else if (hours >= 3 && hours <= 4) {
+      surgeBonus = baseIncome * 0.05; // 5% bonus
     }
 
     return {
@@ -329,11 +322,6 @@ export function BuildScreen() {
       localStorage.setItem("idleState", JSON.stringify(newIdleState));
       
       markIdleClaimed(); // Track for tasks
-      
-      if (accrued.surge > 0) {
-        setPowerSurgeUsed(true);
-        localStorage.setItem("powerSurgeUsed", JSON.stringify(true));
-      }
 
       // Track referral earnings (20% share)
       const trackEarnings = async () => {
@@ -507,24 +495,16 @@ export function BuildScreen() {
             </p>
           </div>
 
-          {!powerSurgeUsed && (
-            <div className="text-xs bg-orange-100 dark:bg-orange-900 p-2 rounded">
-              <div className="flex items-center gap-1 font-semibold mb-1">
-                <Flame className="h-3 w-3 text-orange-500" />
-                <span>PowerSurge Bonus Available:</span>
-              </div>
-              <div className="space-y-0.5 text-muted-foreground">
-                <div>1-2h: +25% • 2-3h: +10% • 3-4h: +5%</div>
-                <div className="text-[10px]">Claim within optimal windows for maximum bonus!</div>
-              </div>
+          <div className="text-xs bg-orange-100 dark:bg-orange-900 p-2 rounded">
+            <div className="flex items-center gap-1 font-semibold mb-1">
+              <Flame className="h-3 w-3 text-orange-500" />
+              <span>PowerSurge Bonus (Active Every Claim):</span>
             </div>
-          )}
-
-          {powerSurgeUsed && (
-            <div className="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded text-muted-foreground">
-              PowerSurge bonus already claimed today. Reset at midnight.
+            <div className="space-y-0.5 text-muted-foreground">
+              <div>1-2h: +25% • 2-3h: +10% • 3-4h: +5%</div>
+              <div className="text-[10px]">Claim within optimal windows for maximum bonus!</div>
             </div>
-          )}
+          </div>
 
           <Button
             onClick={handleClaim}

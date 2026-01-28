@@ -22,19 +22,43 @@ export function TapScreen() {
   const [lastTapTime, setLastTapTime] = useState(0);
   const [quickChargeUses, setQuickChargeUses] = useState(5);
   const [quickChargeCooldown, setQuickChargeCooldown] = useState(0);
-  const [quickChargeResetTime, setQuickChargeResetTime] = useState(Date.now() + 86400000);
   const [floatingNumbers, setFloatingNumbers] = useState<Array<{ id: number; value: string; x: number; y: number }>>([]);
   const [displayMaxEnergy, setDisplayMaxEnergy] = useState(maxEnergy);
   const [recoveryRate, setRecoveryRate] = useState(0.3);
 
-  // Load persisted QuickCharge state
+  // Load persisted QuickCharge state and check for 24h reset
   useEffect(() => {
     const saved = localStorage.getItem("quickCharge");
+    const now = Date.now();
+    
     if (saved) {
       const data = JSON.parse(saved);
-      setQuickChargeUses(data.uses);
-      setQuickChargeCooldown(Math.max(0, data.cooldownEnd - Date.now()));
-      setQuickChargeResetTime(data.resetTime);
+      
+      // Check if 24 hours have passed since last reset
+      const timeSinceReset = now - (data.lastResetTime || 0);
+      const TWENTY_FOUR_HOURS = 86400000; // 24h in milliseconds
+      
+      if (timeSinceReset >= TWENTY_FOUR_HOURS) {
+        // Reset uses after 24h
+        setQuickChargeUses(5);
+        setQuickChargeCooldown(0);
+        localStorage.setItem("quickCharge", JSON.stringify({
+          uses: 5,
+          cooldownEnd: 0,
+          lastResetTime: now
+        }));
+      } else {
+        // Load existing state
+        setQuickChargeUses(data.uses || 5);
+        setQuickChargeCooldown(Math.max(0, (data.cooldownEnd || 0) - now));
+      }
+    } else {
+      // First time - initialize
+      localStorage.setItem("quickCharge", JSON.stringify({
+        uses: 5,
+        cooldownEnd: 0,
+        lastResetTime: now
+      }));
     }
   }, []);
 
@@ -47,21 +71,30 @@ export function TapScreen() {
     return () => clearInterval(interval);
   }, [quickChargeCooldown]);
 
-  // Rolling 24h reset
+  // Check for 24h reset every minute
   useEffect(() => {
     const interval = setInterval(() => {
-      if (Date.now() >= quickChargeResetTime) {
+      const saved = localStorage.getItem("quickCharge");
+      if (!saved) return;
+      
+      const data = JSON.parse(saved);
+      const now = Date.now();
+      const timeSinceReset = now - (data.lastResetTime || 0);
+      const TWENTY_FOUR_HOURS = 86400000;
+      
+      if (timeSinceReset >= TWENTY_FOUR_HOURS) {
         setQuickChargeUses(5);
-        setQuickChargeResetTime(Date.now() + 86400000);
+        setQuickChargeCooldown(0);
         localStorage.setItem("quickCharge", JSON.stringify({
           uses: 5,
           cooldownEnd: 0,
-          resetTime: Date.now() + 86400000
+          lastResetTime: now
         }));
       }
-    }, 60000);
+    }, 60000); // Check every minute
+    
     return () => clearInterval(interval);
-  }, [quickChargeResetTime]);
+  }, []);
 
   // Get booster levels from localStorage
   const getBoosterLevel = (key: string): number => {
@@ -156,13 +189,17 @@ export function TapScreen() {
 
     setEnergy(displayMaxEnergy);
     setQuickChargeUses((prev) => prev - 1);
-    const cooldownEnd = Date.now() + 3600000;
+    const cooldownEnd = Date.now() + 3600000; // 1 hour
     setQuickChargeCooldown(3600000);
 
+    // Save state with lastResetTime preserved
+    const saved = localStorage.getItem("quickCharge");
+    const lastResetTime = saved ? JSON.parse(saved).lastResetTime : Date.now();
+    
     localStorage.setItem("quickCharge", JSON.stringify({
       uses: quickChargeUses - 1,
       cooldownEnd,
-      resetTime: quickChargeResetTime
+      lastResetTime
     }));
   };
 
@@ -223,6 +260,9 @@ export function TapScreen() {
               left: num.x,
               top: num.y,
               animation: "float 1s ease-out forwards"
+            }}
+            onAnimationEnd={() => {
+              setFloatingNumbers((prev) => prev.filter((n) => n.id !== num.id));
             }}
           >
             {num.value}
