@@ -37,7 +37,9 @@ import {
   Lock,
   Clock,
   TrendingUp,
-  Flame
+  Flame,
+  Sparkles,
+  CheckCircle2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -65,6 +67,11 @@ interface PartState {
 interface IdleState {
   lastClaimTime: number;
   activeBuildKey: string | null;
+}
+
+interface CompletionCelebration {
+  partKey: string;
+  show: boolean;
 }
 
 const stages = [
@@ -148,6 +155,8 @@ export function BuildScreen() {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [isLoaded, setIsLoaded] = useState(false);
   const [upgradeButtonMessage, setUpgradeButtonMessage] = useState<Record<PartKey, string>>({});
+  const [completionCelebrations, setCompletionCelebrations] = useState<Record<PartKey, boolean>>({});
+  const [claimAnimating, setClaimAnimating] = useState(false);
 
   // Load persisted state ONCE on mount
   useEffect(() => {
@@ -187,7 +196,7 @@ export function BuildScreen() {
       setPartStates(initial);
       setIsLoaded(true);
     }
-  }, []); // Run ONLY once on mount
+  }, []);
 
   // Clock tick
   useEffect(() => {
@@ -197,13 +206,14 @@ export function BuildScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-complete builds
+  // Auto-complete builds with celebration
   useEffect(() => {
     if (!isLoaded) return;
 
     const now = Date.now();
     let updated = false;
     const newStates = { ...partStates };
+    const newCelebrations = { ...completionCelebrations };
 
     Object.keys(newStates).forEach(key => {
       const state = newStates[key];
@@ -213,6 +223,16 @@ export function BuildScreen() {
         state.upgradeStartTime = 0;
         state.upgradeEndTime = 0;
         updated = true;
+
+        // Show completion celebration
+        newCelebrations[key] = true;
+        setTimeout(() => {
+          setCompletionCelebrations(prev => {
+            const updated = { ...prev };
+            delete updated[key];
+            return updated;
+          });
+        }, 3000);
 
         if (idleState.activeBuildKey === key) {
           const newIdleState = { ...idleState, activeBuildKey: null };
@@ -224,9 +244,10 @@ export function BuildScreen() {
 
     if (updated) {
       setPartStates(newStates);
+      setCompletionCelebrations(newCelebrations);
       localStorage.setItem("buildParts", JSON.stringify(newStates));
     }
-  }, [currentTime, isLoaded]); // Remove partStates and idleState from dependencies
+  }, [currentTime, isLoaded]);
 
   // Update global bzPerHour whenever partStates change
   useEffect(() => {
@@ -284,7 +305,7 @@ export function BuildScreen() {
     return 1.0;
   };
 
-  // Accrued idle income - FIXED: PowerSurge now ALWAYS triggers based on time
+  // Accrued idle income
   const getAccruedIncome = (): { base: number; surge: number; total: number; hours: number } => {
     const now = Date.now();
     const elapsed = now - idleState.lastClaimTime;
@@ -312,10 +333,12 @@ export function BuildScreen() {
     };
   };
 
-  // Claim idle income
+  // Claim idle income with animation
   const handleClaim = () => {
     const accrued = getAccruedIncome();
     if (accrued.total > 0) {
+      setClaimAnimating(true);
+      
       addBZ(accrued.total);
       
       const newIdleState = { ...idleState, lastClaimTime: Date.now() };
@@ -341,6 +364,8 @@ export function BuildScreen() {
         title: "Income Claimed!",
         description: `You received ${accrued.total.toLocaleString()} BZ${accrued.surge > 0 ? ` (including ${accrued.surge.toLocaleString()} BZ PowerSurge bonus)` : ""}`,
       });
+
+      setTimeout(() => setClaimAnimating(false), 1000);
     }
   };
 
@@ -479,7 +504,7 @@ export function BuildScreen() {
   return (
     <div className="p-6 space-y-4 max-w-2xl mx-auto pb-24">
       {/* Idle Income Claim */}
-      <Card className="p-4 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-950 dark:to-orange-950 border-yellow-200 dark:border-yellow-800">
+      <Card className={`p-4 bg-gradient-to-br from-yellow-50 to-orange-50 dark:from-yellow-950 dark:to-orange-950 border-yellow-200 dark:border-yellow-800 transition-all duration-300 ${claimAnimating ? 'scale-105 shadow-xl' : ''}`}>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -537,10 +562,13 @@ export function BuildScreen() {
           <Button
             onClick={handleClaim}
             disabled={accrued.total === 0}
-            className="w-full"
+            className="w-full relative overflow-hidden"
             size="lg"
           >
-            Claim {accrued.total.toLocaleString()} BZ
+            {claimAnimating && (
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+            )}
+            <span className="relative z-10">Claim {accrued.total.toLocaleString()} BZ</span>
           </Button>
         </div>
       </Card>
@@ -586,6 +614,7 @@ export function BuildScreen() {
                 const timeRemaining = state.upgrading ? Math.max(0, state.upgradeEndTime - currentTime) : 0;
                 const canUpgrade = canUpgradePart(part);
                 const isActive = idleState.activeBuildKey === part.key;
+                const isCelebrating = completionCelebrations[part.key];
 
                 let statusText = "";
                 let statusColor = "";
@@ -609,11 +638,34 @@ export function BuildScreen() {
                 return (
                   <Card 
                     key={part.key} 
-                    className={`p-3 ${isActive ? "border-blue-500 border-2" : ""} ${(!partUnlocked || !unlocked) ? "opacity-60" : ""}`}
+                    className={`p-3 relative transition-all duration-300 ${
+                      isActive ? "border-blue-500 border-2" : ""
+                    } ${
+                      (!partUnlocked || !unlocked) ? "opacity-60" : ""
+                    } ${
+                      isCelebrating ? "scale-105 shadow-xl border-green-500 border-2" : ""
+                    }`}
                   >
+                    {isCelebrating && (
+                      <div className="absolute -top-2 -right-2 z-10">
+                        <div className="flex items-center gap-1 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold animate-bounce">
+                          <Sparkles className="h-3 w-3" />
+                          <span>Complete!</span>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg ${unlocked && partUnlocked ? "bg-primary/10" : "bg-muted"}`}>
-                        <Icon className={`h-5 w-5 ${unlocked && partUnlocked ? "text-primary" : "text-muted-foreground"}`} />
+                      <div className={`p-2 rounded-lg transition-all duration-300 ${
+                        unlocked && partUnlocked ? "bg-primary/10" : "bg-muted"
+                      } ${
+                        isCelebrating ? "bg-green-500/20 animate-pulse" : ""
+                      }`}>
+                        <Icon className={`h-5 w-5 ${
+                          unlocked && partUnlocked ? "text-primary" : "text-muted-foreground"
+                        } ${
+                          isCelebrating ? "text-green-500" : ""
+                        }`} />
                       </div>
 
                       <div className="flex-1 space-y-2">
@@ -628,7 +680,7 @@ export function BuildScreen() {
                               {yieldDelta > 0 && state.level < 20 && ` → +${yieldDelta.toFixed(1)} BZ/h`}
                             </p>
                           </div>
-                          <Badge variant="outline">L{state.level}</Badge>
+                          <Badge variant="outline">{state.level === 20 ? "MAX" : `L${state.level}`}</Badge>
                         </div>
 
                         {upgradeTime > 0 && state.level < 20 && !state.upgrading && (
@@ -643,7 +695,16 @@ export function BuildScreen() {
                         </div>
 
                         {state.upgrading && timeRemaining > 0 && (
-                          <Progress value={((upgradeTime - timeRemaining) / upgradeTime) * 100} className="h-2" />
+                          <div className="space-y-1">
+                            <Progress 
+                              value={((upgradeTime - timeRemaining) / upgradeTime) * 100} 
+                              className="h-2"
+                            />
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>{Math.floor(((upgradeTime - timeRemaining) / upgradeTime) * 100)}%</span>
+                              <span>{formatTime(timeRemaining)} left</span>
+                            </div>
+                          </div>
                         )}
 
                         <Button
@@ -666,7 +727,10 @@ export function BuildScreen() {
                               Stage Locked
                             </>
                           ) : state.level >= 20 ? (
-                            "Max Level Reached"
+                            <>
+                              <CheckCircle2 className="mr-2 h-4 w-4" />
+                              Max Level Reached
+                            </>
                           ) : state.upgrading ? (
                             "Building..."
                           ) : idleState.activeBuildKey && idleState.activeBuildKey !== part.key ? (
@@ -686,6 +750,17 @@ export function BuildScreen() {
           </div>
         );
       })}
+
+      <style jsx>{`
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        
+        .animate-shimmer {
+          animation: shimmer 1s infinite;
+        }
+      `}</style>
     </div>
   );
 }

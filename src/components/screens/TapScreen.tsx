@@ -37,7 +37,8 @@ export function TapScreen() {
     addBZ, 
     setEnergy, 
     tier, 
-    incrementTaps 
+    incrementTaps,
+    totalTaps
   } = useGameState();
 
   const [isOnCooldown, setIsOnCooldown] = useState(false);
@@ -49,7 +50,6 @@ export function TapScreen() {
   const [particles, setParticles] = useState<Particle[]>([]);
   const [displayMaxEnergy, setDisplayMaxEnergy] = useState(maxEnergy);
   const [recoveryRate, setRecoveryRate] = useState(0.3);
-  const [lifetimeTaps, setLifetimeTaps] = useState(0);
   const [bunnyScale, setBunnyScale] = useState(1);
   const [bunnyGlow, setBunnyGlow] = useState(false);
 
@@ -217,10 +217,6 @@ export function TapScreen() {
     setEnergy(energy - energyCost);
     addBZ(tapReward);
     
-    const newLifetimeTaps = lifetimeTaps + 1;
-    setLifetimeTaps(newLifetimeTaps);
-    localStorage.setItem("lifetimeTaps", newLifetimeTaps.toString());
-    
     incrementTaps(1, tapReward);
 
     // Bunny animation
@@ -235,7 +231,7 @@ export function TapScreen() {
     setRipples((prev) => [...prev, { id: Date.now(), x, y }]);
 
     // Milestone particles (every 100th tap)
-    if (newLifetimeTaps % 100 === 0) {
+    if ((totalTaps + 1) % 100 === 0) {
       createParticles(x, y);
     }
 
@@ -252,7 +248,7 @@ export function TapScreen() {
     // Floating numbers
     setFloatingNumbers((prev) => [...prev, { 
       id: Date.now(), 
-      value: newLifetimeTaps % 100 === 0 ? `🎉 +${tapReward} MILESTONE!` : `+${tapReward}`, 
+      value: (totalTaps + 1) % 100 === 0 ? `🎉 +${tapReward} MILESTONE!` : `+${tapReward}`, 
       x, 
       y 
     }]);
@@ -295,12 +291,12 @@ export function TapScreen() {
             <span className="font-semibold text-sm">Lifetime Taps</span>
           </div>
           <span className="text-2xl font-bold text-orange-500">
-            {lifetimeTaps.toLocaleString()}
+            {totalTaps.toLocaleString()}
           </span>
         </div>
-        {lifetimeTaps > 0 && (
+        {totalTaps > 0 && (
           <p className="text-xs text-muted-foreground mt-2">
-            Next milestone: {(Math.ceil(lifetimeTaps / 100) * 100).toLocaleString()} taps 🎉
+            Next milestone: {(Math.ceil(totalTaps / 100) * 100).toLocaleString()} taps 🎉
           </p>
         )}
       </Card>
