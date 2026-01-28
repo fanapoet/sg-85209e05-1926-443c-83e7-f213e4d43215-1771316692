@@ -1,12 +1,10 @@
 import { useGameState } from "@/contexts/GameStateContext";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Users, Zap, TrendingUp } from "lucide-react";
 
 export function CompactDashboard() {
   const { bz, bb, energy, tier, referralCount, xp, bzPerHour } = useGameState();
 
-  // Get booster levels to calculate actual max energy
   const getBoosterLevel = (key: string): number => {
     try {
       if (typeof window === "undefined") return 1;
@@ -57,15 +55,13 @@ export function CompactDashboard() {
   };
 
   const tierBonus = getTierBonus(tier);
-  const energyPercent = (energy / actualMaxEnergy) * 100;
 
   return (
     <div className="bg-card border-b border-border shadow-sm">
       <div className="p-3 space-y-2">
-        {/* Row 1: Balances + Stats */}
-        <div className="flex items-center justify-between gap-2">
-          {/* Left: BZ, BB */}
-          <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
+        {/* Row 1: BZ and BB */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <div className="text-xs">
               <span className="font-bold text-sm text-foreground font-mono">{formatBZ(bz)}</span>
               <span className="text-muted-foreground ml-1 text-[10px] font-semibold">BZ</span>
@@ -75,9 +71,11 @@ export function CompactDashboard() {
               <span className="text-muted-foreground ml-1 text-[10px] font-semibold">BB</span>
             </div>
           </div>
-          
-          {/* Right: XP, Tier, Referrals, Idle Rate, Tier Bonus */}
-          <div className="flex items-center gap-2 flex-wrap justify-end">
+        </div>
+        
+        {/* Row 2: All other stats */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 text-[10px]">
               <span className="text-muted-foreground font-semibold">XP:</span>
               <span className="font-mono font-bold text-foreground text-xs">{Math.floor(xp).toLocaleString()}</span>
@@ -89,6 +87,13 @@ export function CompactDashboard() {
               <Users className="h-3 w-3" />
               <span className="font-mono font-semibold">{referralCount}</span>
             </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <Zap className="h-3 w-3 text-yellow-500" />
+              <span className="font-mono font-semibold">{Math.floor(energy)}/{actualMaxEnergy}</span>
+            </div>
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <TrendingUp className="h-3 w-3" />
               <span className="font-mono font-semibold">{formatRate(bzPerHour)}</span>
@@ -98,23 +103,6 @@ export function CompactDashboard() {
               +{tierBonus}%
             </div>
           </div>
-        </div>
-        
-        {/* Row 2: Energy Bar Only */}
-        <div className="space-y-1">
-          <div className="flex items-center justify-between text-[10px]">
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <Zap className="h-3 w-3 text-yellow-500" />
-              <span className="font-semibold">Energy</span>
-            </div>
-            <span className="font-mono font-bold text-foreground text-xs">
-              {Math.floor(energy)} / {actualMaxEnergy}
-            </span>
-          </div>
-          <Progress 
-            value={energyPercent} 
-            className="h-2 bg-secondary"
-          />
         </div>
       </div>
     </div>

@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface TierInfo {
   name: string;
@@ -37,11 +36,6 @@ export function XPTiersScreen() {
   const [qrInput, setQrInput] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [resultDialog, setResultDialog] = useState<{ open: boolean; success: boolean; message: string }>({
-    open: false,
-    success: false,
-    message: ""
-  });
 
   const currentTierInfo = tiers.find((t) => t.name === tier) || tiers[0];
   const currentTierIndex = tiers.findIndex((t) => t.name === tier);
@@ -104,110 +98,91 @@ export function XPTiersScreen() {
   };
 
   const handleConnectDevice = async () => {
-    console.log("🔍 handleConnectDevice called with input:", qrInput);
-    
     if (!qrInput.trim()) {
-      setResultDialog({
-        open: true,
-        success: false,
-        message: "❌ Invalid Input\n\nPlease enter a valid QR code"
+      toast({
+        title: "Invalid Input",
+        description: "Please enter a valid QR code",
+        variant: "destructive",
       });
       return;
     }
     
     setIsConnecting(true);
-    console.log("🔍 Starting device connection with code:", qrInput.trim());
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      console.log("👤 User check:", user ? `Found: ${user.id}` : "Not found");
       
       if (!user) {
-        console.error("❌ No user found");
-        setResultDialog({
-          open: true,
-          success: false,
-          message: "❌ Authentication Required\n\nPlease log in to connect devices"
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to connect devices",
+          variant: "destructive",
         });
         setIsConnecting(false);
         return;
       }
 
-      console.log("✅ User authenticated:", user.id);
-      console.log("📞 Calling verifyAndClaimDevice...");
-      
       const result = await verifyAndClaimDevice(qrInput.trim(), user.id);
       
-      console.log("📦 Verification result:", result);
-      
       if (result.success) {
-        console.log("✅ Device connected successfully!");
-        setResultDialog({
-          open: true,
-          success: true,
-          message: `✅ Device Connected Successfully!\n\n${result.product}\n+${result.xp?.toLocaleString()} XP added to your balance!`
+        toast({
+          title: "✅ Device Connected!",
+          description: `${result.product} • +${result.xp?.toLocaleString()} XP added!`,
+          duration: 5000,
         });
         
         if (result.xp) {
-          console.log("💰 Adding XP:", result.xp);
           addXP(result.xp);
         }
         setQrInput("");
         setDialogOpen(false);
         await loadDevices();
       } else {
-        console.error("❌ Connection failed:", result.message);
-        setResultDialog({
-          open: true,
-          success: false,
-          message: `❌ Connection Failed\n\n${result.message}`
+        toast({
+          title: "Connection Failed",
+          description: result.message,
+          variant: "destructive",
+          duration: 5000,
         });
       }
     } catch (error) {
-      console.error("💥 Unexpected error:", error);
-      setResultDialog({
-        open: true,
-        success: false,
-        message: `❌ Unexpected Error\n\n${error instanceof Error ? error.message : "An unexpected error occurred. Please try again."}`
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        variant: "destructive",
+        duration: 5000,
       });
     } finally {
-      console.log("🏁 Connection attempt finished");
       setIsConnecting(false);
     }
   };
 
   const startCameraScanner = async () => {
     try {
-      // Check if browser supports getUserMedia
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         toast({
-          title: "❌ Camera Not Supported",
+          title: "Camera Not Supported",
           description: "Your browser doesn't support camera access. Please use manual input.",
           variant: "destructive"
         });
         return;
       }
 
-      // Request camera permission
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "environment" } // Use back camera on mobile
+        video: { facingMode: "environment" }
       });
 
-      // Stop the stream immediately (we just needed permission check)
       stream.getTracks().forEach(track => track.stop());
 
       toast({
-        title: "📷 Camera Ready",
+        title: "Camera Ready",
         description: "QR scanning requires a scanning library. Please use manual input for now.",
       });
-
-      // TODO: Implement full QR scanner with html5-qrcode or jsQR library
-      // For now, we show that camera is available and user should use manual input
       
     } catch (error) {
       console.error("Camera error:", error);
       toast({
-        title: "❌ Camera Access Denied",
+        title: "Camera Access Denied",
         description: "Please allow camera access or use manual input instead.",
         variant: "destructive"
       });
@@ -356,7 +331,6 @@ export function XPTiersScreen() {
                 Scan the QR code on your Bunergy device or enter the code manually below.
               </p>
               
-              {/* Camera Scanner Button */}
               <Button 
                 variant="outline" 
                 className="w-full"
@@ -500,29 +474,6 @@ export function XPTiersScreen() {
           })}
         </div>
       </Card>
-
-      {/* Result Alert Dialog */}
-      <AlertDialog open={resultDialog.open} onOpenChange={(open) => {
-        if (!open) {
-          setResultDialog({ open: false, success: false, message: "" });
-        }
-      }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className={resultDialog.success ? "text-green-600" : "text-red-600"}>
-              {resultDialog.success ? "Success!" : "Error"}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="whitespace-pre-line text-base">
-              {resultDialog.message}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <Button onClick={() => {
-            setResultDialog({ open: false, success: false, message: "" });
-          }}>
-            Close
-          </Button>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
