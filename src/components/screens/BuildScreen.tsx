@@ -147,6 +147,7 @@ export function BuildScreen() {
   });
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [isLoaded, setIsLoaded] = useState(false);
+  const [upgradeButtonMessage, setUpgradeButtonMessage] = useState<Record<PartKey, string>>({});
 
   // Load persisted state ONCE on mount
   useEffect(() => {
@@ -367,12 +368,20 @@ export function BuildScreen() {
       else if (newLevel <= 10) xpReward = 100;
       else xpReward = 200;
 
-      // Show toast IMMEDIATELY at top before any state updates
-      toast({
-        title: "🎉 Upgrade Successful!",
-        description: `${part.name} upgraded to L${newLevel} • +${getPartYield(part, newLevel).toFixed(1)} BZ/h • +${xpReward} XP Earned!`,
-        duration: 4000,
+      // Show XP reward on button
+      setUpgradeButtonMessage({
+        ...upgradeButtonMessage,
+        [part.key]: `✅ +${xpReward} XP Earned!`
       });
+
+      // Clear message after 3 seconds
+      setTimeout(() => {
+        setUpgradeButtonMessage(prev => {
+          const updated = { ...prev };
+          delete updated[part.key];
+          return updated;
+        });
+      }, 3000);
 
       addXP(xpReward);
       incrementUpgrades(); // Track for tasks
@@ -644,7 +653,9 @@ export function BuildScreen() {
                           size="sm"
                           variant={canUpgrade && state.level < 20 ? "default" : "secondary"}
                         >
-                          {!partUnlocked ? (
+                          {upgradeButtonMessage[part.key] ? (
+                            upgradeButtonMessage[part.key]
+                          ) : !partUnlocked ? (
                             <>
                               <Lock className="mr-2 h-4 w-4" />
                               Locked
