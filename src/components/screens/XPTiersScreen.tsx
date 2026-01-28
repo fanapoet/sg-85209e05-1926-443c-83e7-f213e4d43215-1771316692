@@ -107,12 +107,14 @@ export function XPTiersScreen() {
       return;
     }
     
+    console.log("🔍 Starting connection with code:", qrInput.trim());
     setIsConnecting(true);
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
+        console.log("❌ No user found");
         toast({
           title: "Authentication Required",
           description: "Please log in to connect devices",
@@ -122,9 +124,12 @@ export function XPTiersScreen() {
         return;
       }
 
+      console.log("✅ User authenticated:", user.id);
       const result = await verifyAndClaimDevice(qrInput.trim(), user.id);
+      console.log("📦 Verification result:", result);
       
       if (result.success) {
+        console.log("✅ SUCCESS - Device connected!");
         toast({
           title: "✅ Device Connected!",
           description: `${result.product} • +${result.xp?.toLocaleString()} XP added!`,
@@ -138,14 +143,16 @@ export function XPTiersScreen() {
         setDialogOpen(false);
         await loadDevices();
       } else {
+        console.log("❌ FAILED - Connection error:", result.message);
         toast({
-          title: "Connection Failed",
+          title: "❌ Connection Failed",
           description: result.message,
           variant: "destructive",
           duration: 5000,
         });
       }
     } catch (error) {
+      console.error("💥 Exception during connection:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "An unexpected error occurred",
@@ -153,6 +160,7 @@ export function XPTiersScreen() {
         duration: 5000,
       });
     } finally {
+      console.log("🏁 Connection attempt finished");
       setIsConnecting(false);
     }
   };
