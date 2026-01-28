@@ -147,7 +147,6 @@ export function BuildScreen() {
   });
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [isLoaded, setIsLoaded] = useState(false);
-  const [justUpgraded, setJustUpgraded] = useState<{ key: string; xp: number } | null>(null);
 
   // Load persisted state ONCE on mount
   useEffect(() => {
@@ -391,13 +390,9 @@ export function BuildScreen() {
         localStorage.setItem("idleState", JSON.stringify(newIdleState));
       }
 
-      // Show inline XP notification
-      setJustUpgraded({ key: part.key, xp: xpReward });
-      setTimeout(() => setJustUpgraded(null), 3000);
-
       toast({
-        title: "Upgrade Successful!",
-        description: `+${getPartYield(part, newLevel).toFixed(1)} BZ/h Income | +${xpReward} XP Earned!`,
+        title: "🎉 Upgrade Successful!",
+        description: `${part.name} upgraded to L${newLevel} • +${getPartYield(part, newLevel).toFixed(1)} BZ/h • +${xpReward} XP Earned!`,
       });
     }
   };
@@ -602,11 +597,6 @@ export function BuildScreen() {
                     key={part.key} 
                     className={`p-3 ${isActive ? "border-blue-500 border-2" : ""} ${(!partUnlocked || !unlocked) ? "opacity-60" : ""}`}
                   >
-                    {justUpgraded?.key === part.key && (
-                      <div className="mb-2 p-2 bg-green-500 text-white rounded-lg text-center font-bold animate-pulse">
-                        🎉 +{justUpgraded.xp} XP Earned!
-                      </div>
-                    )}
                     <div className="flex items-start gap-3">
                       <div className={`p-2 rounded-lg ${unlocked && partUnlocked ? "bg-primary/10" : "bg-muted"}`}>
                         <Icon className={`h-5 w-5 ${unlocked && partUnlocked ? "text-primary" : "text-muted-foreground"}`} />

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 interface TierInfo {
   name: string;
@@ -36,6 +37,11 @@ export function XPTiersScreen() {
   const [qrInput, setQrInput] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [resultDialog, setResultDialog] = useState<{ open: boolean; success: boolean; message: string }>({
+    open: false,
+    success: false,
+    message: ""
+  });
 
   const currentTierInfo = tiers.find((t) => t.name === tier) || tiers[0];
   const currentTierIndex = tiers.findIndex((t) => t.name === tier);
@@ -98,11 +104,13 @@ export function XPTiersScreen() {
   };
 
   const handleConnectDevice = async () => {
+    console.log("🔍 handleConnectDevice called with input:", qrInput);
+    
     if (!qrInput.trim()) {
-      toast({
-        title: "❌ Invalid Input",
-        description: "Please enter a valid QR code",
-        variant: "destructive"
+      setResultDialog({
+        open: true,
+        success: false,
+        message: "❌ Invalid Input\n\nPlease enter a valid QR code"
       });
       return;
     }
@@ -112,12 +120,14 @@ export function XPTiersScreen() {
     
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      console.log("👤 User check:", user ? `Found: ${user.id}` : "Not found");
+      
       if (!user) {
         console.error("❌ No user found");
-        toast({
-          title: "❌ Authentication Required",
-          description: "Please log in to connect devices",
-          variant: "destructive"
+        setResultDialog({
+          open: true,
+          success: false,
+          message: "❌ Authentication Required\n\nPlease log in to connect devices"
         });
         setIsConnecting(false);
         return;
@@ -132,10 +142,12 @@ export function XPTiersScreen() {
       
       if (result.success) {
         console.log("✅ Device connected successfully!");
-        toast({
-          title: "✅ Device Connected Successfully!",
-          description: `${result.message} • +${result.xp} XP added to your balance!`,
+        setResultDialog({
+          open: true,
+          success: true,
+          message: `✅ Device Connected Successfully!\n\n${result.product}\n+${result.xp?.toLocaleString()} XP added to your balance!`
         });
+        
         if (result.xp) {
           console.log("💰 Adding XP:", result.xp);
           addXP(result.xp);
@@ -145,18 +157,18 @@ export function XPTiersScreen() {
         await loadDevices();
       } else {
         console.error("❌ Connection failed:", result.message);
-        toast({
-          title: "❌ Connection Failed",
-          description: result.message,
-          variant: "destructive"
+        setResultDialog({
+          open: true,
+          success: false,
+          message: `❌ Connection Failed\n\n${result.message}`
         });
       }
     } catch (error) {
       console.error("💥 Unexpected error:", error);
-      toast({
-        title: "❌ Error",
-        description: error instanceof Error ? error.message : "An unexpected error occurred. Please try again.",
-        variant: "destructive"
+      setResultDialog({
+        open: true,
+        success: false,
+        message: `❌ Unexpected Error\n\n${error instanceof Error ? error.message : "An unexpected error occurred. Please try again."}`
       });
     } finally {
       console.log("🏁 Connection attempt finished");
@@ -488,6 +500,23 @@ export function XPTiersScreen() {
           })}
         </div>
       </Card>
+
+      {/* Result Alert Dialog */}
+      <AlertDialog open={resultDialog.open} onOpenChange={(open) => setResultDialog({ ...resultDialog, open })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className={resultDialog.success ? "text-green-600" : "text-red-600"}>
+              {resultDialog.success ? "Success!" : "Error"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="whitespace-pre-line text-base">
+              {resultDialog.message}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Button onClick={() => setResultDialog({ ...resultDialog, open: false })}>
+            Close
+          </Button>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
