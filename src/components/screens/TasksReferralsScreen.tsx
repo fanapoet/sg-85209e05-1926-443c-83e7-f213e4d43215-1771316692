@@ -463,7 +463,7 @@ export function TasksReferralsScreen() {
                     <p className="text-xs text-muted-foreground">Pending BZ</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-2xl font-bold text-orange-600">{referralStats?.total_claimed_earnings || 0}</p>
+                    <p className="text-2xl font-bold text-orange-600">{referralStats?.total_claimed || 0}</p>
                     <p className="text-xs text-muted-foreground">Total Claimed</p>
                   </div>
                 </div>

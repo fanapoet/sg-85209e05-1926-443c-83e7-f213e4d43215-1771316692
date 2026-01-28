@@ -13,11 +13,10 @@ interface WelcomeScreenProps {
 
 export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
   const { 
-    BZ, 
-    BB, 
-    XP, 
-    currentTier, 
-    nextTier,
+    bz, 
+    bb, 
+    xp, 
+    tier,
     referralCount,
     totalTaps,
     todayTaps,
@@ -35,15 +34,15 @@ export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
       { name: "Diamond", min: 500001, max: Infinity, bonus: 40 },
     ];
 
-    const current = tiers.find(t => XP >= t.min && XP <= t.max) || tiers[0];
+    const current = tiers.find(t => xp >= t.min && xp <= t.max) || tiers[0];
     const next = tiers[tiers.indexOf(current) + 1] || null;
 
     if (!next) {
       return { current, next: null, progress: 100, remaining: 0 };
     }
 
-    const progress = ((XP - current.min) / (next.min - current.min)) * 100;
-    const remaining = next.min - XP;
+    const progress = ((xp - current.min) / (next.min - current.min)) * 100;
+    const remaining = next.min - xp;
 
     return { current, next, progress, remaining };
   };
@@ -141,10 +140,10 @@ export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
           <Card className="p-3 bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/20">
             <p className="text-xs text-muted-foreground mb-1">Your Balance</p>
             <p className="text-xl font-bold text-green-600">
-              {BZ.toLocaleString()} <span className="text-sm">BZ</span>
+              {bz.toLocaleString()} <span className="text-sm">BZ</span>
             </p>
             <p className="text-xs text-muted-foreground">
-              {BB.toFixed(6)} BB
+              {bb.toFixed(6)} BB
             </p>
           </Card>
 
@@ -161,7 +160,7 @@ export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
           <Card className="p-3 bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20">
             <p className="text-xs text-muted-foreground mb-1">Your XP</p>
             <p className="text-xl font-bold text-blue-600">
-              {XP.toLocaleString()}
+              {xp.toLocaleString()}
             </p>
             <Badge variant="outline" className="text-xs mt-1">
               {tierInfo.current.name}
@@ -199,7 +198,7 @@ export function WelcomeScreen({ onComplete }: WelcomeScreenProps) {
               </div>
               <Progress value={tierInfo.progress} className="h-2" />
               <div className="flex justify-between text-xs text-muted-foreground">
-                <span>{XP.toLocaleString()} XP</span>
+                <span>{xp.toLocaleString()} XP</span>
                 <span className="font-semibold text-yellow-600">
                   {tierInfo.remaining.toLocaleString()} XP to go
                 </span>

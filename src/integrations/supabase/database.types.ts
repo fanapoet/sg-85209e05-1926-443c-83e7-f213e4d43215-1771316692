@@ -1,4 +1,4 @@
- 
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 export type Json =
   | string
   | number
@@ -113,6 +113,101 @@ export type Database = {
           xp_reward?: number | null
         }
         Relationships: []
+      }
+      hardware_devices: {
+        Row: {
+          claimed_at: string | null
+          created_at: string | null
+          id: string
+          last_connection: string | null
+          product_type: string
+          qr_hash: string
+          total_sessions: number | null
+          total_xp_earned: number | null
+          unique_device_id: string
+          user_id: string | null
+        }
+        Insert: {
+          claimed_at?: string | null
+          created_at?: string | null
+          id?: string
+          last_connection?: string | null
+          product_type: string
+          qr_hash: string
+          total_sessions?: number | null
+          total_xp_earned?: number | null
+          unique_device_id: string
+          user_id?: string | null
+        }
+        Update: {
+          claimed_at?: string | null
+          created_at?: string | null
+          id?: string
+          last_connection?: string | null
+          product_type?: string
+          qr_hash?: string
+          total_sessions?: number | null
+          total_xp_earned?: number | null
+          unique_device_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hardware_devices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hardware_sessions: {
+        Row: {
+          created_at: string | null
+          device_id: string | null
+          id: string
+          session_end: string | null
+          session_start: string | null
+          session_type: string
+          user_id: string | null
+          xp_earned: number
+        }
+        Insert: {
+          created_at?: string | null
+          device_id?: string | null
+          id?: string
+          session_end?: string | null
+          session_start?: string | null
+          session_type: string
+          user_id?: string | null
+          xp_earned: number
+        }
+        Update: {
+          created_at?: string | null
+          device_id?: string | null
+          id?: string
+          session_end?: string | null
+          session_start?: string | null
+          session_type?: string
+          user_id?: string | null
+          xp_earned?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hardware_sessions_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "hardware_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hardware_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       nfts: {
         Row: {
