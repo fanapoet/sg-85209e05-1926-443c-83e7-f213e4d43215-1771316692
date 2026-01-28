@@ -35,6 +35,8 @@ export function XPTiersScreen() {
   const [devices, setDevices] = useState<any[]>([]);
   const [qrInput, setQrInput] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraError, setCameraError] = useState("");
 
   const currentTierInfo = tiers.find((t) => t.name === tier) || tiers[0];
   const currentTierIndex = tiers.findIndex((t) => t.name === tier);
@@ -97,32 +99,72 @@ export function XPTiersScreen() {
   };
 
   const handleConnectDevice = async () => {
-    if (!qrInput.trim()) return;
+    if (!qrInput.trim()) {
+      toast({
+        title: "Invalid Input",
+        description: "Please enter a valid QR code",
+        variant: "destructive"
+      });
+      return;
+    }
     
     setIsConnecting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to connect devices",
+          variant: "destructive"
+        });
+        return;
+      }
 
       const result = await verifyAndClaimDevice(qrInput.trim(), user.id);
       
       if (result.success) {
         toast({
-          title: "Device Connected!",
-          description: `${result.message} (+${result.xp} XP)`,
+          title: "✅ Device Connected Successfully!",
+          description: `${result.message} • +${result.xp} XP added to your balance!`,
         });
         if (result.xp) addXP(result.xp);
         setQrInput("");
         loadDevices();
       } else {
         toast({
-          title: "Connection Failed",
+          title: "❌ Connection Failed",
           description: result.message,
           variant: "destructive"
         });
       }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive"
+      });
+      console.error("Hardware connection error:", error);
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  const startCameraScanner = async () => {
+    try {
+      setCameraError("");
+      setShowCamera(true);
+      
+      // Note: Full QR scanning requires a library like html5-qrcode
+      // For now, we'll show camera access message
+      toast({
+        title: "Camera Scanner",
+        description: "QR scanning requires camera permission. Please use manual input for now.",
+      });
+      
+      // TODO: Implement full QR scanner with html5-qrcode library
+    } catch (error) {
+      setCameraError("Camera access denied or not available");
+      setShowCamera(false);
     }
   };
 
@@ -250,30 +292,61 @@ export function XPTiersScreen() {
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Scan Device QR Code</DialogTitle>
+              <DialogTitle>Connect Hardware Device</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <p className="text-sm text-muted-foreground">
-                Locate the QR code on your Bunergy device (GameCore or BIP-X).
-                For simulation, enter the code string below.
+                Scan the QR code on your Bunergy device (GameCore or BIP-X) or enter the code manually.
               </p>
+              
+              {/* Camera Scanner Button */}
+              <Button 
+                variant="outline" 
+                className="w-full"
+                onClick={startCameraScanner}
+              >
+                <QrCode className="mr-2 h-4 w-4" />
+                Scan QR Code with Camera
+              </Button>
+
+              {cameraError && (
+                <p className="text-sm text-red-600">{cameraError}</p>
+              )}
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or enter manually
+                  </span>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Input 
                   placeholder="BUNERGY_GC01_..." 
                   value={qrInput}
                   onChange={(e) => setQrInput(e.target.value)}
+                  disabled={isConnecting}
                 />
                 <Button 
                   className="w-full" 
                   onClick={handleConnectDevice}
-                  disabled={isConnecting}
+                  disabled={isConnecting || !qrInput.trim()}
                 >
                   {isConnecting ? "Verifying..." : "Connect Device"}
                 </Button>
               </div>
-              <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
+
+              <div className="text-xs text-muted-foreground bg-muted p-3 rounded">
+                <p className="font-semibold mb-1">Expected Format:</p>
                 <p className="font-mono text-[10px] break-all">
-                  Format: BUNERGY_PRODUCT_SERIAL_HASH
+                  BUNERGY_[PRODUCT]_[SERIAL]_[HASH]
+                </p>
+                <p className="mt-2 text-[10px]">
+                  Example: BUNERGY_GC01_A7B3C9D2E5F1_8f3a9b2c
                 </p>
               </div>
             </div>

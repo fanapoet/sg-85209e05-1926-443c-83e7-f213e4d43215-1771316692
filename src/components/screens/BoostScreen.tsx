@@ -77,10 +77,10 @@ export function BoostScreen() {
 
   const getReferralGate = (booster: Booster, currentLevel: number): number | null => {
     if (booster.key === "incomePerTap") return null;
-    if (currentLevel < 2) return null;
-    if (currentLevel === 2) return 3;
-    if (currentLevel === 3 || currentLevel === 4) return 5;
-    return 7;
+    if (currentLevel < 3) return null; // L1-L2 are free
+    if (currentLevel === 3) return 3;  // L3 requires 3 referrals
+    if (currentLevel === 4 || currentLevel === 5) return 5; // L4-L5 require 5
+    return 7; // L6+ require 7
   };
 
   const canUpgrade = (booster: Booster, currentLevel: number): boolean => {
