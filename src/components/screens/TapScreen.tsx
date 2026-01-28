@@ -53,14 +53,6 @@ export function TapScreen() {
   const [bunnyScale, setBunnyScale] = useState(1);
   const [bunnyGlow, setBunnyGlow] = useState(false);
 
-  // Load lifetime taps
-  useEffect(() => {
-    const saved = localStorage.getItem("lifetimeTaps");
-    if (saved) {
-      setLifetimeTaps(parseInt(saved, 10));
-    }
-  }, []);
-
   // Load persisted QuickCharge state and check for 24h reset
   useEffect(() => {
     const saved = localStorage.getItem("quickCharge");
