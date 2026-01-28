@@ -2,10 +2,32 @@ import { useGameState } from "@/contexts/GameStateContext";
 import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Zap, Clock } from "lucide-react";
+import { Zap, Clock, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { recordReferralEarnings } from "@/services/referralService";
 import type React from "react";
+
+interface FloatingNumber {
+  id: number;
+  value: string;
+  x: number;
+  y: number;
+}
+
+interface Ripple {
+  id: number;
+  x: number;
+  y: number;
+}
+
+interface Particle {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  color: string;
+}
 
 export function TapScreen() {
   const { 
@@ -22,9 +44,22 @@ export function TapScreen() {
   const [lastTapTime, setLastTapTime] = useState(0);
   const [quickChargeUses, setQuickChargeUses] = useState(5);
   const [quickChargeCooldown, setQuickChargeCooldown] = useState(0);
-  const [floatingNumbers, setFloatingNumbers] = useState<Array<{ id: number; value: string; x: number; y: number }>>([]);
+  const [floatingNumbers, setFloatingNumbers] = useState<FloatingNumber[]>([]);
+  const [ripples, setRipples] = useState<Ripple[]>([]);
+  const [particles, setParticles] = useState<Particle[]>([]);
   const [displayMaxEnergy, setDisplayMaxEnergy] = useState(maxEnergy);
   const [recoveryRate, setRecoveryRate] = useState(0.3);
+  const [lifetimeTaps, setLifetimeTaps] = useState(0);
+  const [bunnyScale, setBunnyScale] = useState(1);
+  const [bunnyGlow, setBunnyGlow] = useState(false);
+
+  // Load lifetime taps
+  useEffect(() => {
+    const saved = localStorage.getItem("lifetimeTaps");
+    if (saved) {
+      setLifetimeTaps(parseInt(saved, 10));
+    }
+  }, []);
 
   // Load persisted QuickCharge state and check for 24h reset
   useEffect(() => {
@@ -34,12 +69,10 @@ export function TapScreen() {
     if (saved) {
       const data = JSON.parse(saved);
       
-      // Check if 24 hours have passed since last reset
       const timeSinceReset = now - (data.lastResetTime || 0);
-      const TWENTY_FOUR_HOURS = 86400000; // 24h in milliseconds
+      const TWENTY_FOUR_HOURS = 86400000;
       
       if (timeSinceReset >= TWENTY_FOUR_HOURS) {
-        // Reset uses after 24h
         setQuickChargeUses(5);
         setQuickChargeCooldown(0);
         localStorage.setItem("quickCharge", JSON.stringify({
@@ -48,12 +81,10 @@ export function TapScreen() {
           lastResetTime: now
         }));
       } else {
-        // Load existing state
         setQuickChargeUses(data.uses || 5);
         setQuickChargeCooldown(Math.max(0, (data.cooldownEnd || 0) - now));
       }
     } else {
-      // First time - initialize
       localStorage.setItem("quickCharge", JSON.stringify({
         uses: 5,
         cooldownEnd: 0,
@@ -91,7 +122,7 @@ export function TapScreen() {
           lastResetTime: now
         }));
       }
-    }, 60000); // Check every minute
+    }, 60000);
     
     return () => clearInterval(interval);
   }, []);
@@ -139,10 +170,33 @@ export function TapScreen() {
   const tapReward = Math.ceil(baseTapReward * incomePerTapLevel * tierMultiplier);
   const energyCost = energyPerTapLevel;
 
+  const createParticles = (x: number, y: number) => {
+    const newParticles: Particle[] = [];
+    const colors = ["#fbbf24", "#f59e0b", "#f97316", "#ef4444", "#ec4899"];
+    
+    for (let i = 0; i < 12; i++) {
+      const angle = (Math.PI * 2 * i) / 12;
+      const speed = 2 + Math.random() * 2;
+      newParticles.push({
+        id: Date.now() + i,
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        color: colors[Math.floor(Math.random() * colors.length)]
+      });
+    }
+    
+    setParticles((prev) => [...prev, ...newParticles]);
+    
+    setTimeout(() => {
+      setParticles((prev) => prev.filter((p) => !newParticles.find((np) => np.id === p.id)));
+    }, 1000);
+  };
+
   const handleTap = async (e: React.MouseEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) => {
     if (energy < energyCost || isOnCooldown) return;
 
-    // Get click position or center if not available
     let clientX, clientY;
     if ('touches' in e) {
       clientX = e.touches[0].clientX;
@@ -152,7 +206,6 @@ export function TapScreen() {
       clientY = (e as React.MouseEvent).clientY;
     }
     
-    // Randomize slightly if needed or just use click pos relative to button
     const target = e.currentTarget as HTMLElement;
     const rect = target.getBoundingClientRect();
     const x = clientX - rect.left;
@@ -163,9 +216,30 @@ export function TapScreen() {
 
     setEnergy(energy - energyCost);
     addBZ(tapReward);
+    
+    const newLifetimeTaps = lifetimeTaps + 1;
+    setLifetimeTaps(newLifetimeTaps);
+    localStorage.setItem("lifetimeTaps", newLifetimeTaps.toString());
+    
     incrementTaps(1, tapReward);
 
-    // Track referral earnings (20% share)
+    // Bunny animation
+    setBunnyScale(1.2);
+    setBunnyGlow(true);
+    setTimeout(() => {
+      setBunnyScale(1);
+      setBunnyGlow(false);
+    }, 150);
+
+    // Ripple effect
+    setRipples((prev) => [...prev, { id: Date.now(), x, y }]);
+
+    // Milestone particles (every 100th tap)
+    if (newLifetimeTaps % 100 === 0) {
+      createParticles(x, y);
+    }
+
+    // Track referral earnings
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -175,10 +249,10 @@ export function TapScreen() {
       console.error("Error tracking referral earnings:", err);
     }
 
-    // Animation
+    // Floating numbers
     setFloatingNumbers((prev) => [...prev, { 
       id: Date.now(), 
-      value: `+${tapReward}`, 
+      value: newLifetimeTaps % 100 === 0 ? `🎉 +${tapReward} MILESTONE!` : `+${tapReward}`, 
       x, 
       y 
     }]);
@@ -189,10 +263,9 @@ export function TapScreen() {
 
     setEnergy(displayMaxEnergy);
     setQuickChargeUses((prev) => prev - 1);
-    const cooldownEnd = Date.now() + 3600000; // 1 hour
+    const cooldownEnd = Date.now() + 3600000;
     setQuickChargeCooldown(3600000);
 
-    // Save state with lastResetTime preserved
     const saved = localStorage.getItem("quickCharge");
     const lastResetTime = saved ? JSON.parse(saved).lastResetTime : Date.now();
     
@@ -210,40 +283,78 @@ export function TapScreen() {
   };
 
   const canQuickCharge = quickChargeUses > 0 && quickChargeCooldown === 0 && energy < displayMaxEnergy * 0.5;
+  const isEnergyFull = energy >= displayMaxEnergy * 0.95;
 
   return (
     <div className="p-6 space-y-6 max-w-2xl mx-auto">
+      {/* Lifetime Taps Counter */}
+      <Card className="p-4 bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border-orange-500/20">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-orange-500" />
+            <span className="font-semibold text-sm">Lifetime Taps</span>
+          </div>
+          <span className="text-2xl font-bold text-orange-500">
+            {lifetimeTaps.toLocaleString()}
+          </span>
+        </div>
+        {lifetimeTaps > 0 && (
+          <p className="text-xs text-muted-foreground mt-2">
+            Next milestone: {(Math.ceil(lifetimeTaps / 100) * 100).toLocaleString()} taps 🎉
+          </p>
+        )}
+      </Card>
+
       {/* Energy Bar */}
       <Card className="p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-yellow-500" />
+            <Zap className={`h-5 w-5 text-yellow-500 ${isEnergyFull ? 'animate-pulse' : ''}`} />
             <span className="font-semibold">Energy</span>
           </div>
           <span className="text-lg font-bold">
             {Math.floor(energy)} / {displayMaxEnergy}
           </span>
         </div>
-        <div className="w-full bg-muted rounded-full h-3">
+        <div className="w-full bg-muted rounded-full h-3 relative overflow-hidden">
           <div
-            className="bg-yellow-500 h-3 rounded-full transition-all duration-300"
+            className={`h-3 rounded-full transition-all duration-300 ${
+              isEnergyFull 
+                ? 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 animate-pulse shadow-lg shadow-yellow-500/50' 
+                : 'bg-yellow-500'
+            }`}
             style={{ width: `${(energy / displayMaxEnergy) * 100}%` }}
           />
+          {isEnergyFull && (
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+          )}
         </div>
         <p className="text-xs text-muted-foreground mt-2">
           Recovery: +{recoveryRate.toFixed(2)}/sec
+          {isEnergyFull && <span className="text-green-500 font-semibold ml-2">⚡ FULL ENERGY!</span>}
         </p>
       </Card>
 
-      {/* Main Tap Button */}
+      {/* Main Tap Button with Bunny */}
       <div className="relative flex items-center justify-center py-8">
         <button
           onClick={handleTap}
           disabled={energy < energyCost}
-          className="relative w-48 h-48 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 shadow-2xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed select-none touch-manipulation"
-          style={{ WebkitTapHighlightColor: "transparent" }}
+          className="relative w-48 h-48 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 shadow-2xl active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed select-none touch-manipulation overflow-hidden"
+          style={{ 
+            WebkitTapHighlightColor: "transparent",
+            transform: `scale(${bunnyScale})`,
+            boxShadow: bunnyGlow ? '0 0 40px rgba(251, 191, 36, 0.8)' : undefined
+          }}
         >
+          {/* Animated background pulse */}
           <div className="absolute inset-0 rounded-full bg-white/20 animate-ping" />
+          
+          {/* Bunny Character */}
+          <div className="relative z-10 text-6xl mb-2 transition-transform duration-150">
+            🐰
+          </div>
+          
           <div className="relative z-10 text-white font-bold text-2xl">TAP</div>
           <div className="relative z-10 text-white text-sm mt-1">
             {tapReward > 0 && `+${tapReward.toLocaleString()}`}
@@ -251,15 +362,48 @@ export function TapScreen() {
           </div>
         </button>
 
+        {/* Ripple Effects */}
+        {ripples.map((ripple) => (
+          <div
+            key={ripple.id}
+            className="absolute pointer-events-none"
+            style={{
+              left: ripple.x,
+              top: ripple.y,
+            }}
+            onAnimationEnd={() => {
+              setRipples((prev) => prev.filter((r) => r.id !== ripple.id));
+            }}
+          >
+            <div className="absolute w-0 h-0 rounded-full border-4 border-yellow-400/60 animate-ripple" />
+          </div>
+        ))}
+
+        {/* Particle Effects */}
+        {particles.map((particle) => (
+          <div
+            key={particle.id}
+            className="absolute pointer-events-none w-2 h-2 rounded-full animate-particle"
+            style={{
+              left: particle.x,
+              top: particle.y,
+              backgroundColor: particle.color,
+              '--particle-vx': `${particle.vx * 30}px`,
+              '--particle-vy': `${particle.vy * 30}px`,
+            } as React.CSSProperties}
+          />
+        ))}
+
         {/* Floating Numbers */}
         {floatingNumbers.map((num) => (
           <div
             key={num.id}
-            className="absolute pointer-events-none text-2xl font-bold text-yellow-500 animate-float"
+            className={`absolute pointer-events-none font-bold animate-float ${
+              num.value.includes('MILESTONE') ? 'text-3xl text-orange-500' : 'text-2xl text-yellow-500'
+            }`}
             style={{
               left: num.x,
               top: num.y,
-              animation: "float 1s ease-out forwards"
             }}
             onAnimationEnd={() => {
               setFloatingNumbers((prev) => prev.filter((n) => n.id !== num.id));
@@ -302,6 +446,33 @@ export function TapScreen() {
         @keyframes float {
           0% { opacity: 1; transform: translateY(0); }
           100% { opacity: 0; transform: translateY(-80px); }
+        }
+        
+        @keyframes ripple {
+          0% { width: 0; height: 0; opacity: 1; }
+          100% { width: 200px; height: 200px; opacity: 0; margin-left: -100px; margin-top: -100px; }
+        }
+        
+        @keyframes particle {
+          0% { opacity: 1; transform: translate(0, 0) scale(1); }
+          100% { opacity: 0; transform: translate(var(--particle-vx), var(--particle-vy)) scale(0); }
+        }
+        
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+        
+        .animate-ripple {
+          animation: ripple 0.6s ease-out;
+        }
+        
+        .animate-particle {
+          animation: particle 1s ease-out forwards;
+        }
+        
+        .animate-shimmer {
+          animation: shimmer 2s infinite;
         }
       `}</style>
     </div>
