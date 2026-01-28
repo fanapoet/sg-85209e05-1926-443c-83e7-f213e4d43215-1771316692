@@ -490,15 +490,18 @@ export function BuildScreen() {
               <span>Base Income:</span>
               <span className="font-bold">{accrued.base.toLocaleString()} BZ</span>
             </div>
-            {accrued.surge > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-1">
-                  <Flame className="h-4 w-4 text-orange-500" />
-                  <span>PowerSurge Bonus:</span>
-                </div>
-                <span className="font-bold text-orange-600">+{accrued.surge.toLocaleString()} BZ</span>
+            
+            {/* ALWAYS SHOW PowerSurge row - fixed height */}
+            <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-1">
+                <Flame className="h-4 w-4 text-orange-500" />
+                <span>PowerSurge Bonus:</span>
               </div>
-            )}
+              <span className={`font-bold ${accrued.surge > 0 ? "text-orange-600" : "text-muted-foreground"}`}>
+                {accrued.surge > 0 ? `+${accrued.surge.toLocaleString()}` : "+0"} BZ
+              </span>
+            </div>
+            
             <div className="flex items-center justify-between text-base border-t pt-2">
               <span className="font-semibold">Total Available:</span>
               <span className="font-bold text-lg">{accrued.total.toLocaleString()} BZ</span>
@@ -509,14 +512,14 @@ export function BuildScreen() {
             </p>
           </div>
 
-          <div className="text-xs bg-orange-100 dark:bg-orange-900 p-2 rounded">
+          {/* Fixed height info box */}
+          <div className="text-xs bg-orange-100 dark:bg-orange-900 p-2 rounded h-[60px] flex flex-col justify-center">
             <div className="flex items-center gap-1 font-semibold mb-1">
               <Flame className="h-3 w-3 text-orange-500" />
               <span>PowerSurge Bonus (Active Every Claim):</span>
             </div>
-            <div className="space-y-0.5 text-muted-foreground">
-              <div>1-2h: +25% • 2-3h: +10% • 3-4h: +5%</div>
-              <div className="text-[10px]">Claim within optimal windows for maximum bonus!</div>
+            <div className="text-muted-foreground text-[10px]">
+              1-2h: +25% • 2-3h: +10% • 3-4h: +5% • Claim within optimal windows!
             </div>
           </div>
 

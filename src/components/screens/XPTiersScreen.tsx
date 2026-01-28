@@ -502,7 +502,11 @@ export function XPTiersScreen() {
       </Card>
 
       {/* Result Alert Dialog */}
-      <AlertDialog open={resultDialog.open} onOpenChange={(open) => setResultDialog({ ...resultDialog, open })}>
+      <AlertDialog open={resultDialog.open} onOpenChange={(open) => {
+        if (!open) {
+          setResultDialog({ open: false, success: false, message: "" });
+        }
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className={resultDialog.success ? "text-green-600" : "text-red-600"}>
@@ -512,7 +516,9 @@ export function XPTiersScreen() {
               {resultDialog.message}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <Button onClick={() => setResultDialog({ ...resultDialog, open: false })}>
+          <Button onClick={() => {
+            setResultDialog({ open: false, success: false, message: "" });
+          }}>
             Close
           </Button>
         </AlertDialogContent>

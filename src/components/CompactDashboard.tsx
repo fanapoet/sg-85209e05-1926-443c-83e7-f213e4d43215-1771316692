@@ -62,62 +62,59 @@ export function CompactDashboard() {
   return (
     <div className="bg-card border-b border-border shadow-sm">
       <div className="p-3 space-y-2">
-        {/* First Row: BZ, BB, XP Tier, Referrals */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-3">
-            <div className="text-sm">
-              <span className="font-bold text-base text-foreground font-mono">{formatBZ(bz)}</span>
-              <span className="text-muted-foreground ml-1 text-xs font-semibold">BZ</span>
+        {/* Row 1: Balances + Stats */}
+        <div className="flex items-center justify-between gap-2">
+          {/* Left: BZ, BB */}
+          <div className="flex items-center gap-3 min-w-0 flex-shrink-0">
+            <div className="text-xs">
+              <span className="font-bold text-sm text-foreground font-mono">{formatBZ(bz)}</span>
+              <span className="text-muted-foreground ml-1 text-[10px] font-semibold">BZ</span>
             </div>
-            <div className="text-sm">
-              <span className="font-bold text-base text-foreground font-mono">{formatBB(bb)}</span>
-              <span className="text-muted-foreground ml-1 text-xs font-semibold">BB</span>
+            <div className="text-xs">
+              <span className="font-bold text-sm text-foreground font-mono">{formatBB(bb)}</span>
+              <span className="text-muted-foreground ml-1 text-[10px] font-semibold">BB</span>
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 text-xs">
+          {/* Right: XP, Tier, Referrals, Idle Rate, Tier Bonus */}
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            <div className="flex items-center gap-1 text-[10px]">
               <span className="text-muted-foreground font-semibold">XP:</span>
-              <span className="font-mono font-bold text-foreground">{Math.floor(xp).toLocaleString()}</span>
+              <span className="font-mono font-bold text-foreground text-xs">{Math.floor(xp).toLocaleString()}</span>
             </div>
-            <Badge variant="secondary" className={`text-xs font-bold px-2 py-0.5 ${getTierColor(tier)}`}>
+            <Badge variant="secondary" className={`text-[10px] font-bold px-1.5 py-0 ${getTierColor(tier)}`}>
               {tier}
             </Badge>
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
               <Users className="h-3 w-3" />
               <span className="font-mono font-semibold">{referralCount}</span>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+              <TrendingUp className="h-3 w-3" />
+              <span className="font-mono font-semibold">{formatRate(bzPerHour)}</span>
+              <span className="text-[9px]">BZ/h</span>
+            </div>
+            <div className="text-green-600 dark:text-green-400 font-bold text-[10px]">
+              +{tierBonus}%
             </div>
           </div>
         </div>
         
-        {/* Second Row: Energy Bar, Idle Power, Tier Bonus */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 space-y-1">
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <Zap className="h-3 w-3 text-yellow-500" />
-                <span className="font-semibold">Energy</span>
-              </div>
-              <span className="font-mono font-bold text-foreground">
-                {Math.floor(energy)} / {actualMaxEnergy}
-              </span>
-            </div>
-            <Progress 
-              value={energyPercent} 
-              className="h-2 bg-secondary"
-            />
-          </div>
-          
-          <div className="flex items-center gap-3 text-xs">
+        {/* Row 2: Energy Bar Only */}
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-[10px]">
             <div className="flex items-center gap-1 text-muted-foreground">
-              <TrendingUp className="h-3 w-3" />
-              <span className="font-mono font-semibold">{formatRate(bzPerHour)}</span>
-              <span className="text-xs">BZ/h</span>
+              <Zap className="h-3 w-3 text-yellow-500" />
+              <span className="font-semibold">Energy</span>
             </div>
-            <div className="text-green-600 dark:text-green-400 font-bold">
-              +{tierBonus}%
-            </div>
+            <span className="font-mono font-bold text-foreground text-xs">
+              {Math.floor(energy)} / {actualMaxEnergy}
+            </span>
           </div>
+          <Progress 
+            value={energyPercent} 
+            className="h-2 bg-secondary"
+          />
         </div>
       </div>
     </div>
