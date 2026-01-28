@@ -138,7 +138,7 @@ const allParts: Part[] = [
 ];
 
 export function BuildScreen() {
-  const { bz, subtractBZ, addBZ, referralCount, tier, setBzPerHour, incrementUpgrades, markIdleClaimed } = useGameState();
+  const { bz, subtractBZ, addBZ, referralCount, tier, setBzPerHour, incrementUpgrades, addXP, markIdleClaimed, hasClaimedIdleToday } = useGameState();
   const { toast } = useToast();
   const [partStates, setPartStates] = useState<Record<PartKey, PartState>>({});
   const [idleState, setIdleState] = useState<IdleState>({
@@ -359,6 +359,15 @@ export function BuildScreen() {
     const upgradeTime = getUpgradeTime(state.level);
 
     if (subtractBZ(cost)) {
+      // Calculate XP Reward based on new level
+      const newLevel = state.level + 1;
+      let xpReward = 0;
+      
+      if (newLevel <= 5) xpReward = 50;
+      else if (newLevel <= 10) xpReward = 100;
+      else xpReward = 200;
+
+      addXP(xpReward);
       incrementUpgrades(); // Track for tasks
       const now = Date.now();
       const newStates = {
@@ -380,6 +389,11 @@ export function BuildScreen() {
         setIdleState(newIdleState);
         localStorage.setItem("idleState", JSON.stringify(newIdleState));
       }
+
+      toast({
+        title: "Upgrade Successful!",
+        description: `+${getPartYield(part, newLevel).toFixed(1)} BZ/h Income | +${xpReward} XP Earned!`,
+      });
     }
   };
 

@@ -12,85 +12,72 @@
 
 @layer base {
   :root {
-    --radius: 0.75rem;
-    --background: 240 10% 98%;
-    --foreground: 240 10% 10%;
+    /* Bunergy Brand Colors - Orange, Yellow, Brown spectrum */
+    --background: 0 0% 100%;
+    --foreground: 30 40% 10%;
+
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 10%;
+    --card-foreground: 30 40% 10%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 10%;
-    --primary: 280 65% 55%;
+    --popover-foreground: 30 40% 10%;
+
+    /* Primary: Bunergy Orange */
+    --primary: 28 100% 50%; /* #FF8C00 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 10% 10%;
-    --muted: 240 5% 96%;
-    --muted-foreground: 240 4% 46%;
-    --accent: 45 95% 60%;
-    --accent-foreground: 240 10% 10%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 280 65% 55%;
-    --chart-1: 280 65% 55%;
-    --chart-2: 45 95% 60%;
-    --chart-3: 200 80% 50%;
-    --chart-4: 160 60% 50%;
-    --chart-5: 340 75% 55%;
-    --sidebar: 240 5% 96%;
-    --sidebar-foreground: 240 10% 10%;
-    --sidebar-primary: 280 65% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 5% 92%;
-    --sidebar-accent-foreground: 240 10% 10%;
-    --sidebar-border: 240 6% 90%;
-    --sidebar-ring: 280 65% 55%;
-    
-    /* Custom brand colors */
-    --bunergy-purple: 280 65% 55%;
-    --bunergy-gold: 45 95% 60%;
-    --bunergy-blue: 200 80% 50%;
+
+    /* Secondary: Bunergy Brown */
+    --secondary: 25 55% 35%; /* #8B4513 */
+    --secondary-foreground: 0 0% 100%;
+
+    /* Accent: Bunergy Yellow */
+    --accent: 45 100% 50%; /* #FFD700 */
+    --accent-foreground: 30 40% 10%;
+
+    --muted: 30 20% 95%;
+    --muted-foreground: 30 20% 40%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 30 20% 90%;
+    --input: 30 20% 90%;
+    --ring: 28 100% 50%;
+
+    --radius: 0.5rem;
   }
 
   .dark {
-    --radius: 0.75rem;
-    --background: 240 10% 8%;
-    --foreground: 240 5% 96%;
-    --card: 240 8% 12%;
-    --card-foreground: 240 5% 96%;
-    --popover: 240 8% 10%;
-    --popover-foreground: 240 5% 96%;
-    --primary: 280 65% 60%;
+    --background: 30 25% 8%;
+    --foreground: 45 100% 95%;
+
+    --card: 30 20% 12%;
+    --card-foreground: 45 100% 95%;
+
+    --popover: 30 20% 12%;
+    --popover-foreground: 45 100% 95%;
+
+    /* Primary: Bunergy Orange (darker) */
+    --primary: 28 100% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 5% 16%;
-    --secondary-foreground: 240 5% 96%;
-    --muted: 240 5% 16%;
-    --muted-foreground: 240 4% 60%;
-    --accent: 45 95% 65%;
-    --accent-foreground: 240 10% 10%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 240 6% 20%;
-    --input: 240 6% 20%;
-    --ring: 280 65% 60%;
-    --chart-1: 280 65% 60%;
-    --chart-2: 45 95% 65%;
-    --chart-3: 200 80% 55%;
-    --chart-4: 160 60% 55%;
-    --chart-5: 340 75% 60%;
-    --sidebar: 240 8% 12%;
-    --sidebar-foreground: 240 5% 96%;
-    --sidebar-primary: 280 65% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 5% 16%;
-    --sidebar-accent-foreground: 240 5% 96%;
-    --sidebar-border: 240 6% 20%;
-    --sidebar-ring: 280 65% 60%;
-    
-    /* Custom brand colors */
-    --bunergy-purple: 280 65% 60%;
-    --bunergy-gold: 45 95% 65%;
-    --bunergy-blue: 200 80% 55%;
+
+    /* Secondary: Bunergy Brown (darker) */
+    --secondary: 25 45% 25%;
+    --secondary-foreground: 0 0% 100%;
+
+    /* Accent: Bunergy Yellow (softer) */
+    --accent: 45 90% 55%;
+    --accent-foreground: 30 25% 8%;
+
+    --muted: 30 20% 18%;
+    --muted-foreground: 30 20% 60%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 30 20% 18%;
+    --input: 30 20% 18%;
+    --ring: 28 100% 45%;
   }
 }
 

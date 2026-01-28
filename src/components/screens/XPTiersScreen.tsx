@@ -3,6 +3,14 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Trophy, TrendingUp, Users, CheckSquare, Hammer, Gift, Zap } from "lucide-react";
+import { useState, useEffect } from "react";
+import { verifyAndClaimDevice, getUserDevices } from "@/services/hardwareService";
+import { supabase } from "@/integrations/supabase/client";
+import { QrCode, Smartphone } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 interface TierInfo {
   name: string;
@@ -22,7 +30,11 @@ const tiers: TierInfo[] = [
 ];
 
 export function XPTiersScreen() {
-  const { xp, tier } = useGameState();
+  const { xp, tier, addXP } = useGameState();
+  const { toast } = useToast();
+  const [devices, setDevices] = useState<any[]>([]);
+  const [qrInput, setQrInput] = useState("");
+  const [isConnecting, setIsConnecting] = useState(false);
 
   const currentTierInfo = tiers.find((t) => t.name === tier) || tiers[0];
   const currentTierIndex = tiers.findIndex((t) => t.name === tier);
@@ -71,6 +83,48 @@ export function XPTiersScreen() {
       ]
     }
   ];
+
+  useEffect(() => {
+    loadDevices();
+  }, []);
+
+  const loadDevices = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const userDevices = await getUserDevices(user.id);
+      setDevices(userDevices);
+    }
+  };
+
+  const handleConnectDevice = async () => {
+    if (!qrInput.trim()) return;
+    
+    setIsConnecting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const result = await verifyAndClaimDevice(qrInput.trim(), user.id);
+      
+      if (result.success) {
+        toast({
+          title: "Device Connected!",
+          description: `${result.message} (+${result.xp} XP)`,
+        });
+        if (result.xp) addXP(result.xp);
+        setQrInput("");
+        loadDevices();
+      } else {
+        toast({
+          title: "Connection Failed",
+          description: result.message,
+          variant: "destructive"
+        });
+      }
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   return (
     <div className="p-6 space-y-4 max-w-2xl mx-auto pb-24">
@@ -154,6 +208,77 @@ export function XPTiersScreen() {
             </div>
           </div>
         </div>
+      </Card>
+
+      {/* Hardware Connection Section */}
+      <Card className="p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-blue-500/20 mb-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="h-10 w-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+            <Smartphone className="h-5 w-5 text-blue-500" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-lg">Hardware Connection</h3>
+            <p className="text-xs text-muted-foreground">Connect real devices to boost XP</p>
+          </div>
+        </div>
+
+        {devices.length > 0 ? (
+          <div className="space-y-2 mb-4">
+            <p className="text-sm font-medium">Connected Devices:</p>
+            {devices.map((device, i) => (
+              <div key={i} className="flex items-center justify-between p-2 bg-background/50 rounded border">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-yellow-500" />
+                  <span className="text-sm">{device.product_type}</span>
+                </div>
+                <Badge variant="secondary" className="text-xs">Active</Badge>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center p-4 border border-dashed rounded-lg mb-4 bg-background/30">
+            <p className="text-sm text-muted-foreground">No devices connected yet</p>
+          </div>
+        )}
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button className="w-full" variant="outline">
+              <QrCode className="mr-2 h-4 w-4" />
+              Connect New Device
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Scan Device QR Code</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Locate the QR code on your Bunergy device (GameCore or BIP-X).
+                For simulation, enter the code string below.
+              </p>
+              <div className="space-y-2">
+                <Input 
+                  placeholder="BUNERGY_GC01_..." 
+                  value={qrInput}
+                  onChange={(e) => setQrInput(e.target.value)}
+                />
+                <Button 
+                  className="w-full" 
+                  onClick={handleConnectDevice}
+                  disabled={isConnecting}
+                >
+                  {isConnecting ? "Verifying..." : "Connect Device"}
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
+                <p className="font-mono text-[10px] break-all">
+                  Format: BUNERGY_PRODUCT_SERIAL_HASH
+                </p>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </Card>
 
       {/* All Tiers Overview */}

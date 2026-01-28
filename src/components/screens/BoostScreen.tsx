@@ -157,6 +157,17 @@ export function BoostScreen() {
   const capacityLevel = getBoosterLevel("energyCapacity");
   const actualMaxEnergy = 1500 + (capacityLevel - 1) * 100;
 
+  // Referral requirements for Energy boosters
+  const getReferralRequirement = (boosterKey: string, level: number): number | null => {
+    if (!boosterKey.startsWith("energy")) return null;
+    
+    // Energy boosters: L1-L2 free, L3+ require referrals
+    if (level < 2) return null;
+    if (level === 2) return 3;
+    if (level === 3 || level === 4) return 5;
+    return 7;
+  };
+
   return (
     <div className="p-6 space-y-4 max-w-2xl mx-auto pb-24">
       {/* Info Block (Non-closable) - FIXED: Now shows correct bzPerHour from Build */}

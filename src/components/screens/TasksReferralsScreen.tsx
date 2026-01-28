@@ -89,7 +89,7 @@ export function TasksReferralsScreen() {
         
         console.log("✅ Profile loaded:", profile);
         setReferralCode(profile.referralCode);
-        setReferralLink(`https://t.me/bunergy_bot/app?startapp=${profile.referralCode.toLowerCase()}`);
+        setReferralLink(`https://t.me/bunergy_bot/BunBun?startapp=${profile.referralCode}`);
 
         // Get Referral Stats
         console.log("🔍 Fetching stats...");
@@ -237,17 +237,25 @@ export function TasksReferralsScreen() {
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(referralLink);
-    toast({ 
-      title: "Copied!", 
-      description: "Referral link copied to clipboard" 
-    });
+    if (referralLink) {
+      navigator.clipboard.writeText(referralLink);
+      toast({
+        title: "Link Copied!",
+        description: "Share this link with friends to earn rewards together!",
+      });
+    }
   };
 
-  const handleShareToTelegram = () => {
-    const message = `Join me on Bunergy! Tap to earn BunZap tokens 🐰⚡\n\n${referralLink}`;
-    const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${encodeURIComponent(message)}`;
-    window.open(telegramUrl, "_blank");
+  const handleShareTelegram = () => {
+    if (referralLink) {
+      const shareText = encodeURIComponent(
+        "⚡ Join me on Bunergy and let's earn together!\n\n🎮 Tap to earn BZ\n⚡ Build energy empire\n🏆 Level up for rewards\n\nStart now:"
+      );
+      window.open(
+        `https://t.me/share/url?url=${encodeURIComponent(referralLink)}&text=${shareText}`,
+        "_blank"
+      );
+    }
   };
 
   const tasks: Task[] = [
@@ -510,7 +518,7 @@ export function TasksReferralsScreen() {
                 <Button 
                   className="w-full" 
                   variant="outline"
-                  onClick={handleShareToTelegram}
+                  onClick={handleShareTelegram}
                 >
                   <Share2 className="mr-2 h-4 w-4" />
                   Share to Telegram
