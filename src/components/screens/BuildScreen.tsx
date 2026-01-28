@@ -390,10 +390,14 @@ export function BuildScreen() {
         localStorage.setItem("idleState", JSON.stringify(newIdleState));
       }
 
-      toast({
-        title: "🎉 Upgrade Successful!",
-        description: `${part.name} upgraded to L${newLevel} • +${getPartYield(part, newLevel).toFixed(1)} BZ/h • +${xpReward} XP Earned!`,
-      });
+      // Show toast AFTER all state updates
+      setTimeout(() => {
+        toast({
+          title: "🎉 Upgrade Successful!",
+          description: `${part.name} upgraded to L${newLevel} • +${getPartYield(part, newLevel).toFixed(1)} BZ/h • +${xpReward} XP Earned!`,
+          duration: 4000,
+        });
+      }, 100);
     }
   };
 

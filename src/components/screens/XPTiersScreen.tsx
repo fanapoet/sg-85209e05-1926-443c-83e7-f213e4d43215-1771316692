@@ -99,10 +99,12 @@ export function XPTiersScreen() {
 
   const handleConnectDevice = async () => {
     if (!qrInput.trim()) {
+      console.log("❌ Empty input detected");
       toast({
         title: "Invalid Input",
         description: "Please enter a valid QR code",
         variant: "destructive",
+        duration: 4000,
       });
       return;
     }
@@ -119,22 +121,29 @@ export function XPTiersScreen() {
           title: "Authentication Required",
           description: "Please log in to connect devices",
           variant: "destructive",
+          duration: 4000,
         });
         setIsConnecting(false);
         return;
       }
 
       console.log("✅ User authenticated:", user.id);
+      console.log("📞 Calling verifyAndClaimDevice...");
+      
       const result = await verifyAndClaimDevice(qrInput.trim(), user.id);
       console.log("📦 Verification result:", result);
       
       if (result.success) {
         console.log("✅ SUCCESS - Device connected!");
-        toast({
-          title: "✅ Device Connected!",
-          description: `${result.product} • +${result.xp?.toLocaleString()} XP added!`,
-          duration: 5000,
-        });
+        
+        // Show success toast
+        setTimeout(() => {
+          toast({
+            title: "✅ Device Connected!",
+            description: `${result.product} • +${result.xp?.toLocaleString()} XP added!`,
+            duration: 5000,
+          });
+        }, 100);
         
         if (result.xp) {
           addXP(result.xp);
@@ -144,21 +153,29 @@ export function XPTiersScreen() {
         await loadDevices();
       } else {
         console.log("❌ FAILED - Connection error:", result.message);
-        toast({
-          title: "❌ Connection Failed",
-          description: result.message,
-          variant: "destructive",
-          duration: 5000,
-        });
+        
+        // Show error toast
+        setTimeout(() => {
+          toast({
+            title: "❌ Connection Failed",
+            description: result.message || "Unknown error occurred",
+            variant: "destructive",
+            duration: 5000,
+          });
+        }, 100);
       }
     } catch (error) {
       console.error("💥 Exception during connection:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
-        variant: "destructive",
-        duration: 5000,
-      });
+      
+      // Show exception toast
+      setTimeout(() => {
+        toast({
+          title: "❌ Error",
+          description: error instanceof Error ? error.message : "An unexpected error occurred",
+          variant: "destructive",
+          duration: 5000,
+        });
+      }, 100);
     } finally {
       console.log("🏁 Connection attempt finished");
       setIsConnecting(false);
