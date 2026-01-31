@@ -29,7 +29,7 @@ function getAppUrl(): string {
  * Generate a unique 8-character referral code
  */
 function generateReferralCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Removed confusing chars (I, O, 0, 1)
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "REF";
   for (let i = 0; i < 5; i++) {
     code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -38,175 +38,187 @@ function generateReferralCode(): string {
 }
 
 /**
- * Sign in or create user with anonymous auth tied to Telegram ID
- * Initializes ALL profile fields on first signup
+ * Get Telegram user data from WebApp
  */
-export async function signInWithTelegram(telegramUser: TelegramUser) {
+function getTelegramUser(): TelegramUser | null {
+  if (typeof window === "undefined") return null;
+  
+  const tg = (window as any).Telegram?.WebApp;
+  if (!tg?.initDataUnsafe?.user) {
+    console.warn("⚠️ No Telegram user data available");
+    return null;
+  }
+  
+  const user = tg.initDataUnsafe.user;
+  console.log("✅ Telegram user detected:", {
+    id: user.id,
+    first_name: user.first_name,
+    username: user.username,
+  });
+  
+  return {
+    id: user.id,
+    first_name: user.first_name,
+    last_name: user.last_name,
+    username: user.username,
+    language_code: user.language_code,
+    photo_url: user.photo_url,
+  };
+}
+
+/**
+ * Sign in or create user with Telegram identity
+ * This is the ONLY entry point for authentication
+ */
+export async function signInWithTelegram(telegramUser?: TelegramUser) {
   try {
-    console.log("🔐 Starting Telegram sign-in for user:", telegramUser.id);
-    console.log("👤 Telegram user data:", {
-      id: telegramUser.id,
-      username: telegramUser.username,
-      first_name: telegramUser.first_name,
-      last_name: telegramUser.last_name,
-    });
+    // Get Telegram user if not provided
+    const tgUser = telegramUser || getTelegramUser();
     
-    // Step 1: Check if profile already exists by telegram_id
-    console.log("🔍 Checking if profile exists for telegram_id:", telegramUser.id);
-    const { data: existingByTelegramId, error: telegramCheckError } = await supabase
+    if (!tgUser) {
+      console.error("❌ No Telegram user data available");
+      return {
+        success: false,
+        error: "Telegram user data not available. Please open this app in Telegram.",
+      };
+    }
+
+    console.log("🔐 Starting auth for Telegram user:", tgUser.id);
+
+    // Step 1: Check if profile exists by telegram_id
+    const { data: existingProfile, error: checkError } = await supabase
       .from("profiles")
       .select("id, telegram_id, display_name, bz_balance, xp")
-      .eq("telegram_id", telegramUser.id)
+      .eq("telegram_id", tgUser.id)
       .maybeSingle();
 
-    console.log("🔍 Existing profile check result:", {
-      found: !!existingByTelegramId,
-      data: existingByTelegramId,
-      error: telegramCheckError,
+    console.log("🔍 Profile check:", {
+      found: !!existingProfile,
+      telegram_id: tgUser.id,
+      error: checkError,
     });
 
-    if (existingByTelegramId) {
-      console.log("✅ Existing user found, signing in as:", existingByTelegramId.id);
+    if (existingProfile) {
+      // Existing user - just sign in
+      console.log("✅ Existing user found:", existingProfile.id);
       
-      // Sign in with the existing user's auth ID
-      const { data: sessionData, error: sessionError } = await supabase.auth.signInAnonymously({
+      const { error: signInError } = await supabase.auth.signInAnonymously({
         options: {
           data: {
-            telegram_id: telegramUser.id.toString(),
-            user_id: existingByTelegramId.id,
+            telegram_id: tgUser.id.toString(),
+            user_id: existingProfile.id,
           },
         },
       });
 
-      if (sessionError) {
-        console.error("❌ Session creation error:", sessionError);
+      if (signInError) {
+        console.error("❌ Sign in error:", signInError);
+        throw signInError;
       }
 
       return {
         success: true,
-        user: { id: existingByTelegramId.id },
+        user: { id: existingProfile.id },
         isNewUser: false,
       };
     }
 
-    // Step 2: Sign in anonymously (creates new auth user)
-    console.log("🆕 No existing profile found, creating new user...");
+    // Step 2: New user - create auth + profile atomically
+    console.log("🆕 Creating new user for telegram_id:", tgUser.id);
+
+    // Create anonymous auth session
     const { data: authData, error: authError } = await supabase.auth.signInAnonymously({
       options: {
         data: {
-          telegram_id: telegramUser.id.toString(),
-          telegram_username: telegramUser.username || null,
-          telegram_first_name: telegramUser.first_name || null,
-          telegram_last_name: telegramUser.last_name || null,
+          telegram_id: tgUser.id.toString(),
         },
       },
     });
 
-    console.log("🔐 Anonymous auth result:", { 
-      success: !authError, 
-      userId: authData?.user?.id,
-      error: authError 
-    });
-
-    if (authError) {
-      console.error("❌ Auth error:", authError);
-      throw authError;
-    }
-    if (!authData.user) {
-      console.error("❌ No user returned from auth");
-      throw new Error("No user returned from auth");
+    if (authError || !authData.user) {
+      console.error("❌ Auth creation failed:", authError);
+      throw authError || new Error("No user returned from auth");
     }
 
-    console.log("✅ Anonymous auth successful, user ID:", authData.user.id);
+    console.log("✅ Auth created:", authData.user.id);
 
-    // Step 3: Create profile with ALL fields initialized
+    // Generate display data
     const referralCode = generateReferralCode();
-    const displayName = telegramUser.username || 
-                       telegramUser.first_name || 
-                       `User${telegramUser.id.toString().slice(-6)}`;
+    const displayName = tgUser.username || 
+                       tgUser.first_name || 
+                       `User${tgUser.id.toString().slice(-6)}`;
 
+    // Step 3: Create profile with ALL required fields
     const profileData = {
       id: authData.user.id,
-      telegram_id: telegramUser.id,
-      telegram_username: telegramUser.username || null,
-      telegram_first_name: telegramUser.first_name || null,
-      telegram_last_name: telegramUser.last_name || null,
+      telegram_id: tgUser.id,
+      telegram_username: tgUser.username || null,
+      telegram_first_name: tgUser.first_name || null,
+      telegram_last_name: tgUser.last_name || null,
       display_name: displayName,
-      full_name: `${telegramUser.first_name || ""} ${telegramUser.last_name || ""}`.trim() || displayName,
+      username: tgUser.username || null,
       referral_code: referralCode,
       
-      // Initialize all currency & XP fields
-      bz_balance: 0,
+      // Initialize game state
+      bz_balance: 5000, // Starting balance
       bb_balance: 0,
       xp: 0,
       tier: "Bronze",
       
-      // Initialize energy system
+      // Energy system
       current_energy: 1500,
       max_energy: 1500,
       energy_recovery_rate: 0.3,
       last_energy_update: new Date().toISOString(),
       
-      // Initialize boosters (all at level 1)
+      // Boosters
       booster_income_per_tap: 1,
       booster_energy_per_tap: 1,
       booster_energy_capacity: 1,
       booster_recovery_rate: 1,
       
-      // Initialize QuickCharge
+      // QuickCharge
       quickcharge_uses_remaining: 5,
       quickcharge_last_reset: new Date().toISOString(),
-      quickcharge_cooldown_until: null,
       
-      // Initialize build/idle system
+      // Build/Idle
       last_claim_timestamp: new Date().toISOString(),
-      active_build_part_id: null,
-      active_build_end_time: null,
       
-      // Initialize referral tracking
-      referred_by_code: null,
+      // Referrals
       total_referrals: 0,
-      referral_milestone_5_claimed: false,
-      referral_milestone_10_claimed: false,
-      referral_milestone_25_claimed: false,
-      referral_milestone_50_claimed: false,
       
-      // Initialize daily rewards
-      daily_reward_streak: 0,
-      daily_reward_last_claim: null,
-      
-      // Initialize NFT tracking
-      nfts_owned: [],
-      
-      // Initialize tap tracking
+      // Taps
       total_taps: 0,
+      taps_today: 0,
       
       // Timestamps
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
 
-    console.log("📝 Inserting profile data:", {
-      userId: profileData.id,
-      telegramId: profileData.telegram_id,
-      displayName: profileData.display_name,
-      fullName: profileData.full_name,
-      referralCode: profileData.referral_code
+    console.log("📝 Creating profile:", {
+      id: profileData.id,
+      telegram_id: profileData.telegram_id,
+      display_name: profileData.display_name,
+      referral_code: profileData.referral_code,
     });
 
-    const { error: insertError } = await supabase.from("profiles").insert(profileData);
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .insert(profileData);
 
-    if (insertError) {
-      console.error("❌ Profile insert error:", insertError);
-      throw insertError;
+    if (profileError) {
+      console.error("❌ Profile creation failed:", profileError);
+      // Try to clean up auth user
+      await supabase.auth.signOut();
+      throw profileError;
     }
 
-    console.log("✅ New user profile created successfully:", {
-      userId: authData.user.id,
-      telegramId: telegramUser.id,
-      username: telegramUser.username,
-      referralCode,
-      displayName,
+    console.log("✅ Profile created successfully:", {
+      user_id: authData.user.id,
+      telegram_id: tgUser.id,
+      display_name: displayName,
+      referral_code: referralCode,
     });
 
     return {
@@ -215,10 +227,10 @@ export async function signInWithTelegram(telegramUser: TelegramUser) {
       isNewUser: true,
     };
   } catch (error) {
-    console.error("❌ Telegram sign-in error:", error);
+    console.error("❌ Auth error:", error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: error instanceof Error ? error.message : "Unknown auth error",
     };
   }
 }
@@ -272,6 +284,28 @@ export async function getUserProfile(userId: string) {
     return { success: true, profile: data };
   } catch (error) {
     console.error("❌ Get profile error:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Get user profile by telegram_id
+ */
+export async function getProfileByTelegramId(telegramId: number) {
+  try {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("telegram_id", telegramId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return { success: true, profile: data };
+  } catch (error) {
+    console.error("❌ Get profile by telegram_id error:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

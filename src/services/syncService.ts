@@ -28,7 +28,6 @@ const lastSync = {
 };
 
 // Sync status tracking
-const isOnline = true;
 let syncErrorCount = 0;
 
 /**
@@ -37,6 +36,37 @@ let syncErrorCount = 0;
 export function checkOnlineStatus(): boolean {
   if (typeof window === "undefined") return true;
   return window.navigator.onLine;
+}
+
+/**
+ * Get current user's profile by auth ID (not telegram_id)
+ * This ensures we always work with the authenticated user
+ */
+async function getCurrentUserProfile() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    console.log("❌ No authenticated user");
+    return null;
+  }
+
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  if (error) {
+    console.error("❌ Failed to get profile:", error);
+    return null;
+  }
+
+  console.log("✅ Current user profile:", {
+    id: profile.id,
+    telegram_id: profile.telegram_id,
+    display_name: profile.display_name,
+  });
+
+  return profile;
 }
 
 /**
@@ -55,68 +85,43 @@ export async function syncPlayerState(localState: {
 }) {
   try {
     if (!checkOnlineStatus()) {
-      console.log("Offline - skipping sync");
+      console.log("⚠️ Offline - skipping sync");
       return { success: false, error: "Offline" };
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      console.log("❌ Sync failed: Not authenticated");
+    const profile = await getCurrentUserProfile();
+    if (!profile) {
       return { success: false, error: "Not authenticated" };
     }
 
-    console.log("🔄 Syncing player state for user:", user.id);
-
-    // Get current server state by auth user ID (not telegram_id)
-    const { data: serverProfile, error: fetchError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (fetchError) {
-      console.error("❌ Sync fetch error:", fetchError);
-      syncErrorCount++;
-      return { success: false, error: fetchError.message };
-    }
-
-    if (!serverProfile) {
-      console.error("❌ No profile found for user:", user.id);
-      return { success: false, error: "Profile not found" };
-    }
-
-    console.log("📊 Current server state:", {
-      bz: serverProfile.bz_balance,
-      bb: serverProfile.bb_balance,
-      xp: serverProfile.xp,
-      totalTaps: serverProfile.total_taps,
-    });
-
-    console.log("📊 Local state to sync:", {
+    console.log("🔄 Syncing player state for user:", profile.id);
+    console.log("📊 Local state:", {
       bz: localState.bz,
       bb: localState.bb,
       xp: localState.xp,
       totalTaps: localState.totalTaps,
     });
-
-    // Cast to extended type for sync-specific fields
-    const serverData = serverProfile as any;
+    console.log("📊 Server state:", {
+      bz: profile.bz_balance,
+      bb: profile.bb_balance,
+      xp: profile.xp,
+      totalTaps: profile.total_taps,
+    });
 
     // Monotonic merge: never decrease values
-    const merged: any = {
-      bz_balance: Math.max(localState.bz, serverProfile.bz_balance || 0),
-      bb_balance: Math.max(localState.bb, Number(serverProfile.bb_balance || 0)),
-      xp: Math.max(localState.xp, serverProfile.xp || 0),
-      tier: getTierFromXP(Math.max(localState.xp, serverProfile.xp || 0)),
+    const merged = {
+      bz_balance: Math.max(localState.bz, Number(profile.bz_balance || 0)),
+      bb_balance: Math.max(localState.bb, Number(profile.bb_balance || 0)),
+      xp: Math.max(localState.xp, Number(profile.xp || 0)),
+      tier: getTierFromXP(Math.max(localState.xp, Number(profile.xp || 0))),
       current_energy: localState.energy,
       max_energy: localState.maxEnergy,
-      total_taps: Math.max(localState.totalTaps, serverProfile.total_taps || 0),
+      total_taps: Math.max(localState.totalTaps, Number(profile.total_taps || 0)),
       last_claim_timestamp: new Date(Math.max(
         localState.lastClaimTimestamp,
-        new Date(serverProfile.last_claim_timestamp || 0).getTime()
+        new Date(profile.last_claim_timestamp || 0).getTime()
       )).toISOString(),
       last_sync_at: new Date().toISOString(),
-      sync_version: (serverData.sync_version || 0) + 1,
       updated_at: new Date().toISOString(),
     };
 
@@ -127,11 +132,11 @@ export async function syncPlayerState(localState: {
       totalTaps: merged.total_taps,
     });
 
-    // Update server using auth user ID
+    // Update profile
     const { data, error } = await supabase
       .from("profiles")
       .update(merged)
-      .eq("id", user.id)
+      .eq("id", profile.id)
       .select()
       .single();
 
@@ -142,13 +147,12 @@ export async function syncPlayerState(localState: {
     }
 
     lastSync.profile = Date.now();
-    syncErrorCount = 0; // Reset error count on success
+    syncErrorCount = 0;
     console.log("✅ Player state synced successfully:", {
       bz: merged.bz_balance,
       bb: merged.bb_balance,
       xp: merged.xp,
       totalTaps: merged.total_taps,
-      syncVersion: merged.sync_version,
     });
     
     return { success: true, data };
@@ -161,7 +165,6 @@ export async function syncPlayerState(localState: {
 
 /**
  * Sync tap data to Supabase (high-frequency)
- * Tracks total_taps and last_tap_time
  */
 export async function syncTapData(tapData: {
   totalTaps: number;
@@ -172,33 +175,23 @@ export async function syncTapData(tapData: {
   try {
     if (!checkOnlineStatus()) return { success: false, error: "Offline" };
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "Not authenticated" };
+    const profile = await getCurrentUserProfile();
+    if (!profile) return { success: false, error: "Not authenticated" };
 
-    // Use wildcard select to bypass type checking for new columns
-    const { data: serverProfile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    const serverData = serverProfile as any;
-
-    const updateData: any = {
-      total_taps: Math.max(tapData.totalTaps, serverData?.total_taps || 0),
-      taps_today: Math.max(tapData.tapsToday, serverData?.taps_today || 0),
+    const updateData = {
+      total_taps: Math.max(tapData.totalTaps, Number(profile.total_taps || 0)),
+      taps_today: Math.max(tapData.tapsToday, Number(profile.taps_today || 0)),
       last_tap_time: new Date(tapData.lastTapTime).toISOString(),
-      sync_version: (serverData?.sync_version || 0) + 1,
       updated_at: new Date().toISOString(),
     };
 
     const { error } = await supabase
       .from("profiles")
       .update(updateData)
-      .eq("id", user.id);
+      .eq("id", profile.id);
 
     if (error) {
-      console.error("Tap sync error:", error);
+      console.error("❌ Tap sync error:", error);
       return { success: false, error: error.message };
     }
 
@@ -206,7 +199,7 @@ export async function syncTapData(tapData: {
     console.log("✅ Tap data synced:", { totalTaps: tapData.totalTaps });
     return { success: true };
   } catch (error) {
-    console.error("Tap sync error:", error);
+    console.error("❌ Tap sync error:", error);
     return { success: false, error: String(error) };
   }
 }
@@ -223,34 +216,24 @@ export async function syncBoosters(boosters: {
   try {
     if (!checkOnlineStatus()) return { success: false, error: "Offline" };
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "Not authenticated" };
+    const profile = await getCurrentUserProfile();
+    if (!profile) return { success: false, error: "Not authenticated" };
 
-    // Use wildcard select to bypass type checking for new columns
-    const { data: serverProfile } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    const serverData = serverProfile as any;
-
-    const updateData: any = {
-      booster_income_per_tap: Math.max(boosters.incomePerTap, serverData?.booster_income_per_tap || 1),
-      booster_energy_per_tap: Math.max(boosters.energyPerTap, serverData?.booster_energy_per_tap || 1),
-      booster_energy_capacity: Math.max(boosters.energyCapacity, serverData?.booster_energy_capacity || 1),
-      booster_recovery_rate: Math.max(boosters.recoveryRate, serverData?.booster_recovery_rate || 1),
-      sync_version: (serverData?.sync_version || 0) + 1,
+    const updateData = {
+      booster_income_per_tap: Math.max(boosters.incomePerTap, Number(profile.booster_income_per_tap || 1)),
+      booster_energy_per_tap: Math.max(boosters.energyPerTap, Number(profile.booster_energy_per_tap || 1)),
+      booster_energy_capacity: Math.max(boosters.energyCapacity, Number(profile.booster_energy_capacity || 1)),
+      booster_recovery_rate: Math.max(boosters.recoveryRate, Number(profile.booster_recovery_rate || 1)),
       updated_at: new Date().toISOString(),
     };
 
     const { error } = await supabase
       .from("profiles")
       .update(updateData)
-      .eq("id", user.id);
+      .eq("id", profile.id);
 
     if (error) {
-      console.error("Booster sync error:", error);
+      console.error("❌ Booster sync error:", error);
       return { success: false, error: error.message };
     }
 
@@ -258,7 +241,7 @@ export async function syncBoosters(boosters: {
     console.log("✅ Boosters synced");
     return { success: true };
   } catch (error) {
-    console.error("Booster sync error:", error);
+    console.error("❌ Booster sync error:", error);
     return { success: false, error: String(error) };
   }
 }
@@ -278,7 +261,6 @@ export async function syncBuildPart(partId: string, partData: {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "Not authenticated" };
 
-    // Check if part exists
     const { data: existing } = await supabase
       .from("user_build_parts")
       .select("id, current_level")
@@ -299,18 +281,16 @@ export async function syncBuildPart(partId: string, partData: {
     };
 
     if (existing) {
-      // Update
       const { error } = await supabase
         .from("user_build_parts")
         .update(payload)
         .eq("id", existing.id);
 
       if (error) {
-        console.error("Build part update error:", error);
+        console.error("❌ Build part update error:", error);
         return { success: false, error: error.message };
       }
     } else {
-      // Insert
       const { error } = await supabase
         .from("user_build_parts")
         .insert({
@@ -320,7 +300,7 @@ export async function syncBuildPart(partId: string, partData: {
         });
 
       if (error) {
-        console.error("Build part insert error:", error);
+        console.error("❌ Build part insert error:", error);
         return { success: false, error: error.message };
       }
     }
@@ -329,7 +309,7 @@ export async function syncBuildPart(partId: string, partData: {
     console.log("✅ Build part synced:", partId);
     return { success: true };
   } catch (error) {
-    console.error("Build part sync error:", error);
+    console.error("❌ Build part sync error:", error);
     return { success: false, error: String(error) };
   }
 }
@@ -361,7 +341,7 @@ export async function syncQuickCharge(quickCharge: {
       .eq("id", user.id);
 
     if (error) {
-      console.error("QuickCharge sync error:", error);
+      console.error("❌ QuickCharge sync error:", error);
       return { success: false, error: error.message };
     }
 
@@ -369,66 +349,53 @@ export async function syncQuickCharge(quickCharge: {
     console.log("✅ QuickCharge synced");
     return { success: true };
   } catch (error) {
-    console.error("QuickCharge sync error:", error);
+    console.error("❌ QuickCharge sync error:", error);
     return { success: false, error: String(error) };
   }
 }
 
 /**
  * Load player state from Supabase
- * Used on app start or after logout/login
  */
 export async function loadPlayerState() {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "Not authenticated" };
-
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (error) {
-      console.error("Load state error:", error);
-      return { success: false, error: error.message };
+    const profile = await getCurrentUserProfile();
+    if (!profile) {
+      return { success: false, error: "Not authenticated" };
     }
-
-    // Cast to extended type for sync-specific fields
-    const profileData = data as any;
 
     console.log("✅ Player state loaded from Supabase");
     
     return {
       success: true,
       data: {
-        bz: data.bz_balance || 0,
-        bb: Number(data.bb_balance || 0),
-        xp: data.xp || 0,
-        tier: data.tier || "Bronze",
-        energy: data.current_energy || 1500,
-        maxEnergy: data.max_energy || 1500,
-        totalTaps: data.total_taps || 0,
-        tapsToday: profileData.taps_today || 0,
-        lastClaimTimestamp: new Date(data.last_claim_timestamp || Date.now()).getTime(),
-        lastTapTime: profileData.last_tap_time ? new Date(profileData.last_tap_time).getTime() : Date.now(),
+        bz: Number(profile.bz_balance || 0),
+        bb: Number(profile.bb_balance || 0),
+        xp: Number(profile.xp || 0),
+        tier: profile.tier || "Bronze",
+        energy: Number(profile.current_energy || 1500),
+        maxEnergy: Number(profile.max_energy || 1500),
+        totalTaps: Number(profile.total_taps || 0),
+        tapsToday: Number(profile.taps_today || 0),
+        lastClaimTimestamp: new Date(profile.last_claim_timestamp || Date.now()).getTime(),
+        lastTapTime: profile.last_tap_time ? new Date(profile.last_tap_time).getTime() : Date.now(),
         boosters: {
-          incomePerTap: data.booster_income_per_tap || 1,
-          energyPerTap: data.booster_energy_per_tap || 1,
-          energyCapacity: data.booster_energy_capacity || 1,
-          recoveryRate: data.booster_recovery_rate || 1,
+          incomePerTap: Number(profile.booster_income_per_tap || 1),
+          energyPerTap: Number(profile.booster_energy_per_tap || 1),
+          energyCapacity: Number(profile.booster_energy_capacity || 1),
+          recoveryRate: Number(profile.booster_recovery_rate || 1),
         },
         quickCharge: {
-          usesRemaining: data.quickcharge_uses_remaining || 5,
-          cooldownEndTime: data.quickcharge_cooldown_until 
-            ? new Date(data.quickcharge_cooldown_until).getTime() 
+          usesRemaining: Number(profile.quickcharge_uses_remaining || 5),
+          cooldownEndTime: profile.quickcharge_cooldown_until 
+            ? new Date(profile.quickcharge_cooldown_until).getTime() 
             : undefined,
-          lastReset: new Date(data.quickcharge_last_reset || Date.now()).getTime(),
+          lastReset: new Date(profile.quickcharge_last_reset || Date.now()).getTime(),
         },
       },
     };
   } catch (error) {
-    console.error("Load state error:", error);
+    console.error("❌ Load state error:", error);
     return { success: false, error: String(error) };
   }
 }
@@ -447,14 +414,14 @@ export async function loadBuildParts() {
       .eq("user_id", user.id);
 
     if (error) {
-      console.error("Load build parts error:", error);
+      console.error("❌ Load build parts error:", error);
       return { success: false, error: error.message };
     }
 
     console.log("✅ Build parts loaded:", data?.length || 0);
     return { success: true, data: data || [] };
   } catch (error) {
-    console.error("Load build parts error:", error);
+    console.error("❌ Load build parts error:", error);
     return { success: false, error: String(error) };
   }
 }
@@ -486,18 +453,18 @@ export async function recordConversion(conversion: {
         burned_amount: conversion.burned,
         tier_at_conversion: conversion.tier,
         tier_bonus_percent: conversion.tierBonus,
-        exchange_rate: 1000000, // 1M BZ = 1 BB
+        exchange_rate: 1000000,
       });
 
     if (error) {
-      console.error("Record conversion error:", error);
+      console.error("❌ Record conversion error:", error);
       return { success: false, error: error.message };
     }
 
     console.log("✅ Conversion recorded");
     return { success: true };
   } catch (error) {
-    console.error("Record conversion error:", error);
+    console.error("❌ Record conversion error:", error);
     return { success: false, error: String(error) };
   }
 }
@@ -512,7 +479,6 @@ export async function purchaseNFT(nftId: string, priceBB: number) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { success: false, error: "Not authenticated" };
 
-    // Check if already owned
     const { data: existing } = await supabase
       .from("user_nfts")
       .select("id")
@@ -524,7 +490,6 @@ export async function purchaseNFT(nftId: string, priceBB: number) {
       return { success: false, error: "NFT already owned" };
     }
 
-    // Insert purchase
     const { error } = await supabase
       .from("user_nfts")
       .insert({
@@ -534,14 +499,14 @@ export async function purchaseNFT(nftId: string, priceBB: number) {
       });
 
     if (error) {
-      console.error("Purchase NFT error:", error);
+      console.error("❌ Purchase NFT error:", error);
       return { success: false, error: error.message };
     }
 
     console.log("✅ NFT purchased:", nftId);
     return { success: true };
   } catch (error) {
-    console.error("Purchase NFT error:", error);
+    console.error("❌ Purchase NFT error:", error);
     return { success: false, error: String(error) };
   }
 }
@@ -560,14 +525,14 @@ export async function loadOwnedNFTs() {
       .eq("user_id", user.id);
 
     if (error) {
-      console.error("Load NFTs error:", error);
+      console.error("❌ Load NFTs error:", error);
       return { success: false, error: error.message };
     }
 
     console.log("✅ NFTs loaded:", data?.length || 0);
     return { success: true, data: data || [] };
   } catch (error) {
-    console.error("Load NFTs error:", error);
+    console.error("❌ Load NFTs error:", error);
     return { success: false, error: String(error) };
   }
 }
@@ -601,17 +566,14 @@ function getTierFromXP(xp: number): string {
 
 /**
  * Auto-sync manager
- * Call this once on app start to enable background sync
  */
 let syncIntervals: NodeJS.Timeout[] = [];
 
 export function startAutoSync(getGameState: () => any) {
-  // Clear existing intervals
   stopAutoSync();
 
   console.log("🚀 Starting auto-sync...");
 
-  // Sync player state every 10s (critical)
   const profileInterval = setInterval(() => {
     const state = getGameState();
     if (state && typeof window !== "undefined" && checkOnlineStatus()) {
@@ -628,7 +590,6 @@ export function startAutoSync(getGameState: () => any) {
     }
   }, SYNC_INTERVALS.critical);
 
-  // Sync boosters every 30s (standard)
   const boosterInterval = setInterval(() => {
     const state = getGameState();
     if (state?.boosters && typeof window !== "undefined" && checkOnlineStatus()) {
@@ -641,7 +602,6 @@ export function startAutoSync(getGameState: () => any) {
     }
   }, SYNC_INTERVALS.standard);
 
-  // Sync QuickCharge every 1m (low priority)
   const qcInterval = setInterval(() => {
     const state = getGameState();
     if (state?.quickCharge && typeof window !== "undefined" && checkOnlineStatus()) {
