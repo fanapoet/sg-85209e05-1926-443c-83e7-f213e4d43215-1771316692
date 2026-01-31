@@ -44,8 +44,53 @@ function generateReferralCode(): string {
 export async function signInWithTelegram(telegramUser: TelegramUser) {
   try {
     console.log("🔐 Starting Telegram sign-in for user:", telegramUser.id);
+    console.log("👤 Telegram user data:", {
+      id: telegramUser.id,
+      username: telegramUser.username,
+      first_name: telegramUser.first_name,
+      last_name: telegramUser.last_name,
+    });
     
-    // Step 1: Sign in anonymously
+    // Step 1: Check if profile already exists by telegram_id
+    console.log("🔍 Checking if profile exists for telegram_id:", telegramUser.id);
+    const { data: existingByTelegramId, error: telegramCheckError } = await supabase
+      .from("profiles")
+      .select("id, telegram_id, display_name, bz_balance, xp")
+      .eq("telegram_id", telegramUser.id)
+      .maybeSingle();
+
+    console.log("🔍 Existing profile check result:", {
+      found: !!existingByTelegramId,
+      data: existingByTelegramId,
+      error: telegramCheckError,
+    });
+
+    if (existingByTelegramId) {
+      console.log("✅ Existing user found, signing in as:", existingByTelegramId.id);
+      
+      // Sign in with the existing user's auth ID
+      const { data: sessionData, error: sessionError } = await supabase.auth.signInAnonymously({
+        options: {
+          data: {
+            telegram_id: telegramUser.id.toString(),
+            user_id: existingByTelegramId.id,
+          },
+        },
+      });
+
+      if (sessionError) {
+        console.error("❌ Session creation error:", sessionError);
+      }
+
+      return {
+        success: true,
+        user: { id: existingByTelegramId.id },
+        isNewUser: false,
+      };
+    }
+
+    // Step 2: Sign in anonymously (creates new auth user)
+    console.log("🆕 No existing profile found, creating new user...");
     const { data: authData, error: authError } = await supabase.auth.signInAnonymously({
       options: {
         data: {
@@ -63,129 +108,111 @@ export async function signInWithTelegram(telegramUser: TelegramUser) {
       error: authError 
     });
 
-    if (authError) throw authError;
-    if (!authData.user) throw new Error("No user returned from auth");
+    if (authError) {
+      console.error("❌ Auth error:", authError);
+      throw authError;
+    }
+    if (!authData.user) {
+      console.error("❌ No user returned from auth");
+      throw new Error("No user returned from auth");
+    }
 
     console.log("✅ Anonymous auth successful, user ID:", authData.user.id);
 
-    // Step 2: Check if profile exists
-    console.log("🔍 Checking for existing profile...");
-    const { data: existingProfile, error: fetchError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", authData.user.id)
-      .single();
+    // Step 3: Create profile with ALL fields initialized
+    const referralCode = generateReferralCode();
+    const displayName = telegramUser.username || 
+                       telegramUser.first_name || 
+                       `User${telegramUser.id.toString().slice(-6)}`;
 
-    console.log("🔍 Profile check result:", {
-      exists: !!existingProfile,
-      error: fetchError,
-      errorCode: fetchError?.code
+    const profileData = {
+      id: authData.user.id,
+      telegram_id: telegramUser.id,
+      telegram_username: telegramUser.username || null,
+      telegram_first_name: telegramUser.first_name || null,
+      telegram_last_name: telegramUser.last_name || null,
+      display_name: displayName,
+      full_name: `${telegramUser.first_name || ""} ${telegramUser.last_name || ""}`.trim() || displayName,
+      referral_code: referralCode,
+      
+      // Initialize all currency & XP fields
+      bz_balance: 0,
+      bb_balance: 0,
+      xp: 0,
+      tier: "Bronze",
+      
+      // Initialize energy system
+      current_energy: 1500,
+      max_energy: 1500,
+      energy_recovery_rate: 0.3,
+      last_energy_update: new Date().toISOString(),
+      
+      // Initialize boosters (all at level 1)
+      booster_income_per_tap: 1,
+      booster_energy_per_tap: 1,
+      booster_energy_capacity: 1,
+      booster_recovery_rate: 1,
+      
+      // Initialize QuickCharge
+      quickcharge_uses_remaining: 5,
+      quickcharge_last_reset: new Date().toISOString(),
+      quickcharge_cooldown_until: null,
+      
+      // Initialize build/idle system
+      last_claim_timestamp: new Date().toISOString(),
+      active_build_part_id: null,
+      active_build_end_time: null,
+      
+      // Initialize referral tracking
+      referred_by_code: null,
+      total_referrals: 0,
+      referral_milestone_5_claimed: false,
+      referral_milestone_10_claimed: false,
+      referral_milestone_25_claimed: false,
+      referral_milestone_50_claimed: false,
+      
+      // Initialize daily rewards
+      daily_reward_streak: 0,
+      daily_reward_last_claim: null,
+      
+      // Initialize NFT tracking
+      nfts_owned: [],
+      
+      // Initialize tap tracking
+      total_taps: 0,
+      
+      // Timestamps
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    console.log("📝 Inserting profile data:", {
+      userId: profileData.id,
+      telegramId: profileData.telegram_id,
+      displayName: profileData.display_name,
+      fullName: profileData.full_name,
+      referralCode: profileData.referral_code
     });
 
-    if (fetchError && fetchError.code !== "PGRST116") {
-      // PGRST116 = not found (expected for new users)
-      console.error("❌ Profile fetch error:", fetchError);
-      throw fetchError;
+    const { error: insertError } = await supabase.from("profiles").insert(profileData);
+
+    if (insertError) {
+      console.error("❌ Profile insert error:", insertError);
+      throw insertError;
     }
 
-    // Step 3: If profile doesn't exist, create it with ALL fields initialized
-    if (!existingProfile) {
-      console.log("🆕 Creating new profile...");
-      const referralCode = generateReferralCode();
-      const displayName = telegramUser.username || 
-                         telegramUser.first_name || 
-                         `User${telegramUser.id.toString().slice(-6)}`;
-
-      const profileData = {
-        id: authData.user.id,
-        telegram_id: telegramUser.id, // Passed as number to match database type
-        telegram_username: telegramUser.username || null,
-        telegram_first_name: telegramUser.first_name || null,
-        telegram_last_name: telegramUser.last_name || null,
-        display_name: displayName,
-        referral_code: referralCode,
-        
-        // Initialize all currency & XP fields
-        bz_balance: 0,
-        bb_balance: 0,
-        xp: 0,
-        tier: "Bronze",
-        
-        // Initialize energy system
-        current_energy: 1500,
-        max_energy: 1500,
-        energy_recovery_rate: 0.3,
-        last_energy_update: new Date().toISOString(),
-        
-        // Initialize boosters (all at level 1)
-        booster_income_per_tap: 1,
-        booster_energy_per_tap: 1,
-        booster_energy_capacity: 1,
-        booster_recovery_rate: 1,
-        
-        // Initialize QuickCharge
-        quickcharge_uses_remaining: 5,
-        quickcharge_last_reset: new Date().toISOString(),
-        quickcharge_cooldown_until: null,
-        
-        // Initialize build/idle system
-        last_claim_timestamp: new Date().toISOString(),
-        active_build_part_id: null,
-        active_build_end_time: null,
-        
-        // Initialize referral tracking
-        referred_by_code: null,
-        total_referrals: 0,
-        referral_milestone_5_claimed: false,
-        referral_milestone_10_claimed: false,
-        referral_milestone_25_claimed: false,
-        referral_milestone_50_claimed: false,
-        
-        // Initialize daily rewards
-        daily_reward_streak: 0,
-        daily_reward_last_claim: null,
-        
-        // Initialize NFT tracking
-        nfts_owned: [],
-        
-        // Timestamps
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      console.log("📝 Inserting profile data:", {
-        userId: profileData.id,
-        telegramId: profileData.telegram_id,
-        displayName: profileData.display_name,
-        referralCode: profileData.referral_code
-      });
-
-      const { error: insertError } = await supabase.from("profiles").insert(profileData);
-
-      if (insertError) {
-        console.error("❌ Profile insert error:", insertError);
-        throw insertError;
-      }
-
-      console.log("✅ New user profile created with full initialization:", {
-        userId: authData.user.id,
-        telegramId: telegramUser.id,
-        username: telegramUser.username,
-        referralCode,
-        displayName,
-      });
-    } else {
-      console.log("✅ Existing user signed in:", {
-        userId: authData.user.id,
-        telegramId: telegramUser.id,
-        referralCode: existingProfile.referral_code,
-      });
-    }
+    console.log("✅ New user profile created successfully:", {
+      userId: authData.user.id,
+      telegramId: telegramUser.id,
+      username: telegramUser.username,
+      referralCode,
+      displayName,
+    });
 
     return {
       success: true,
       user: authData.user,
-      isNewUser: !existingProfile,
+      isNewUser: true,
     };
   } catch (error) {
     console.error("❌ Telegram sign-in error:", error);

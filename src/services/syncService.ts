@@ -60,9 +60,14 @@ export async function syncPlayerState(localState: {
     }
 
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "Not authenticated" };
+    if (!user) {
+      console.log("❌ Sync failed: Not authenticated");
+      return { success: false, error: "Not authenticated" };
+    }
 
-    // Get current server state
+    console.log("🔄 Syncing player state for user:", user.id);
+
+    // Get current server state by auth user ID (not telegram_id)
     const { data: serverProfile, error: fetchError } = await supabase
       .from("profiles")
       .select("*")
@@ -70,33 +75,59 @@ export async function syncPlayerState(localState: {
       .single();
 
     if (fetchError) {
-      console.error("Sync fetch error:", fetchError);
+      console.error("❌ Sync fetch error:", fetchError);
       syncErrorCount++;
       return { success: false, error: fetchError.message };
     }
+
+    if (!serverProfile) {
+      console.error("❌ No profile found for user:", user.id);
+      return { success: false, error: "Profile not found" };
+    }
+
+    console.log("📊 Current server state:", {
+      bz: serverProfile.bz_balance,
+      bb: serverProfile.bb_balance,
+      xp: serverProfile.xp,
+      totalTaps: serverProfile.total_taps,
+    });
+
+    console.log("📊 Local state to sync:", {
+      bz: localState.bz,
+      bb: localState.bb,
+      xp: localState.xp,
+      totalTaps: localState.totalTaps,
+    });
 
     // Cast to extended type for sync-specific fields
     const serverData = serverProfile as any;
 
     // Monotonic merge: never decrease values
     const merged: any = {
-      bz_balance: Math.max(localState.bz, serverProfile?.bz_balance || 0),
-      bb_balance: Math.max(localState.bb, Number(serverProfile?.bb_balance || 0)),
-      xp: Math.max(localState.xp, serverProfile?.xp || 0),
-      tier: getTierFromXP(Math.max(localState.xp, serverProfile?.xp || 0)),
+      bz_balance: Math.max(localState.bz, serverProfile.bz_balance || 0),
+      bb_balance: Math.max(localState.bb, Number(serverProfile.bb_balance || 0)),
+      xp: Math.max(localState.xp, serverProfile.xp || 0),
+      tier: getTierFromXP(Math.max(localState.xp, serverProfile.xp || 0)),
       current_energy: localState.energy,
       max_energy: localState.maxEnergy,
-      total_taps: Math.max(localState.totalTaps, serverProfile?.total_taps || 0),
+      total_taps: Math.max(localState.totalTaps, serverProfile.total_taps || 0),
       last_claim_timestamp: new Date(Math.max(
         localState.lastClaimTimestamp,
-        new Date(serverProfile?.last_claim_timestamp || 0).getTime()
+        new Date(serverProfile.last_claim_timestamp || 0).getTime()
       )).toISOString(),
       last_sync_at: new Date().toISOString(),
-      sync_version: (serverData?.sync_version || 0) + 1,
+      sync_version: (serverData.sync_version || 0) + 1,
       updated_at: new Date().toISOString(),
     };
 
-    // Update server
+    console.log("💾 Merged state to save:", {
+      bz: merged.bz_balance,
+      bb: merged.bb_balance,
+      xp: merged.xp,
+      totalTaps: merged.total_taps,
+    });
+
+    // Update server using auth user ID
     const { data, error } = await supabase
       .from("profiles")
       .update(merged)
@@ -105,23 +136,24 @@ export async function syncPlayerState(localState: {
       .single();
 
     if (error) {
-      console.error("Sync update error:", error);
+      console.error("❌ Sync update error:", error);
       syncErrorCount++;
       return { success: false, error: error.message };
     }
 
     lastSync.profile = Date.now();
     syncErrorCount = 0; // Reset error count on success
-    console.log("✅ Player state synced:", {
+    console.log("✅ Player state synced successfully:", {
       bz: merged.bz_balance,
       bb: merged.bb_balance,
       xp: merged.xp,
       totalTaps: merged.total_taps,
+      syncVersion: merged.sync_version,
     });
     
     return { success: true, data };
   } catch (error) {
-    console.error("Sync error:", error);
+    console.error("❌ Sync error:", error);
     syncErrorCount++;
     return { success: false, error: String(error) };
   }

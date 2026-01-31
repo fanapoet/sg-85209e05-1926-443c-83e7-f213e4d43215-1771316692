@@ -226,31 +226,45 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isInitialized) return;
 
+    console.log("🚀 Starting auto-sync system...");
+
     // Start auto-sync with current state getter
-    startAutoSync(() => ({
-      bz,
-      bb,
-      xp,
-      tier: getTier(xp),
-      energy,
-      maxEnergy,
-      totalTaps,
-      lastClaimTimestamp,
-      boosters: safeGetItem("boosters", {
-        incomePerTap: 1,
-        energyPerTap: 1,
-        energyCapacity: 1,
-        recoveryRate: 1,
-      }),
-      quickCharge: safeGetItem("quickCharge", {
-        usesRemaining: 5,
-        cooldownEndTime: undefined,
-        lastReset: Date.now(),
-      }),
-    }));
+    startAutoSync(() => {
+      const currentState = {
+        bz,
+        bb,
+        xp,
+        tier: getTier(xp),
+        energy,
+        maxEnergy,
+        totalTaps,
+        lastClaimTimestamp,
+        boosters: safeGetItem("boosters", {
+          incomePerTap: 1,
+          energyPerTap: 1,
+          energyCapacity: 1,
+          recoveryRate: 1,
+        }),
+        quickCharge: safeGetItem("quickCharge", {
+          usesRemaining: 5,
+          cooldownEndTime: undefined,
+          lastReset: Date.now(),
+        }),
+      };
+      
+      console.log("📊 Current game state for sync:", {
+        bz: currentState.bz,
+        bb: currentState.bb,
+        xp: currentState.xp,
+        totalTaps: currentState.totalTaps,
+      });
+      
+      return currentState;
+    });
 
     // Cleanup on unmount
     return () => {
+      console.log("🛑 Stopping auto-sync system...");
       stopAutoSync();
     };
   }, [isInitialized, bz, bb, xp, energy, maxEnergy, totalTaps, lastClaimTimestamp]);
