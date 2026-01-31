@@ -86,35 +86,42 @@ export async function signInWithTelegram(telegramUser?: TelegramUser) {
     console.log("🔐 Starting auth for Telegram user:", tgUser.id);
 
     // Step 1: Check if profile exists by telegram_id
+    console.log("🔍 Checking for existing profile with telegram_id:", tgUser.id);
     const { data: existingProfile, error: checkError } = await supabase
       .from("profiles")
       .select("id, telegram_id, display_name, bz_balance, xp")
       .eq("telegram_id", tgUser.id)
       .maybeSingle();
 
-    console.log("🔍 Profile check:", {
-      found: !!existingProfile,
-      telegram_id: tgUser.id,
-      error: checkError,
-    });
+    if (checkError) {
+      console.error("❌ Error checking profile:", checkError);
+    } else {
+      console.log("🔍 Profile check result:", existingProfile ? "FOUND" : "NOT FOUND", existingProfile);
+    }
 
     if (existingProfile) {
       // Existing user - just sign in
       console.log("✅ Existing user found:", existingProfile.id);
       
-      const { error: signInError } = await supabase.auth.signInAnonymously({
+      // Sign in anonymously with metadata linking to telegram_id
+      const { data: authData, error: signInError } = await supabase.auth.signInAnonymously({
         options: {
           data: {
             telegram_id: tgUser.id.toString(),
-            user_id: existingProfile.id,
+            profile_id: existingProfile.id,
           },
         },
       });
 
       if (signInError) {
         console.error("❌ Sign in error:", signInError);
-        throw signInError;
+        return {
+          success: false,
+          error: `Sign in failed: ${signInError.message}`,
+        };
       }
+
+      console.log("✅ Signed in successfully:", authData.user?.id);
 
       return {
         success: true,
@@ -126,7 +133,8 @@ export async function signInWithTelegram(telegramUser?: TelegramUser) {
     // Step 2: New user - create auth + profile atomically
     console.log("🆕 Creating new user for telegram_id:", tgUser.id);
 
-    // Create anonymous auth session
+    // Create anonymous auth session FIRST
+    console.log("🔐 Step 1: Creating auth session...");
     const { data: authData, error: authError } = await supabase.auth.signInAnonymously({
       options: {
         data: {
@@ -135,9 +143,20 @@ export async function signInWithTelegram(telegramUser?: TelegramUser) {
       },
     });
 
-    if (authError || !authData.user) {
+    if (authError) {
       console.error("❌ Auth creation failed:", authError);
-      throw authError || new Error("No user returned from auth");
+      return {
+        success: false,
+        error: `Auth failed: ${authError.message}`,
+      };
+    }
+
+    if (!authData.user) {
+      console.error("❌ No user returned from auth");
+      return {
+        success: false,
+        error: "No user returned from auth",
+      };
     }
 
     console.log("✅ Auth created:", authData.user.id);
@@ -149,6 +168,7 @@ export async function signInWithTelegram(telegramUser?: TelegramUser) {
                        `User${tgUser.id.toString().slice(-6)}`;
 
     // Step 3: Create profile with ALL required fields
+    console.log("📝 Step 2: Creating profile...");
     const profileData = {
       id: authData.user.id,
       telegram_id: tgUser.id,
@@ -160,7 +180,7 @@ export async function signInWithTelegram(telegramUser?: TelegramUser) {
       referral_code: referralCode,
       
       // Initialize game state
-      bz_balance: 5000, // Starting balance
+      bz_balance: 5000,
       bb_balance: 0,
       xp: 0,
       tier: "Bronze",
@@ -196,25 +216,35 @@ export async function signInWithTelegram(telegramUser?: TelegramUser) {
       updated_at: new Date().toISOString(),
     };
 
-    console.log("📝 Creating profile:", {
+    console.log("📝 Profile data to insert:", {
       id: profileData.id,
       telegram_id: profileData.telegram_id,
       display_name: profileData.display_name,
       referral_code: profileData.referral_code,
     });
 
-    const { error: profileError } = await supabase
+    const { data: insertedProfile, error: profileError } = await supabase
       .from("profiles")
-      .insert(profileData);
+      .insert(profileData)
+      .select()
+      .single();
 
     if (profileError) {
       console.error("❌ Profile creation failed:", profileError);
-      // Try to clean up auth user
+      console.error("❌ Full error details:", JSON.stringify(profileError, null, 2));
+      
+      // Try to clean up auth user if profile creation failed
+      console.log("🧹 Cleaning up auth session...");
       await supabase.auth.signOut();
-      throw profileError;
+      
+      return {
+        success: false,
+        error: `Profile creation failed: ${profileError.message}`,
+      };
     }
 
-    console.log("✅ Profile created successfully:", {
+    console.log("✅ Profile created successfully:", insertedProfile);
+    console.log("✅ Full user setup complete!", {
       user_id: authData.user.id,
       telegram_id: tgUser.id,
       display_name: displayName,
@@ -224,10 +254,11 @@ export async function signInWithTelegram(telegramUser?: TelegramUser) {
     return {
       success: true,
       user: authData.user,
+      profile: insertedProfile,
       isNewUser: true,
     };
   } catch (error) {
-    console.error("❌ Auth error:", error);
+    console.error("❌ Unexpected auth error:", error);
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown auth error",

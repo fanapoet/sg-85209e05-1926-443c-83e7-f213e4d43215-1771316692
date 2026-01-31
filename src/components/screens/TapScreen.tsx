@@ -381,28 +381,36 @@ export function TapScreen() {
             filter: bunnyGlow ? 'drop-shadow(0 0 20px rgba(251, 191, 36, 0.8))' : 'none'
           }}
         >
-          {/* Theme-Aware Background Circle - FIXED */}
+          {/* Theme-Aware Background Circle - BIGGER SIZE */}
           <div 
             className="absolute inset-0 rounded-full backdrop-blur-lg border-2 transition-all duration-300"
             style={{
-              width: '256px',
-              height: '256px',
-              backgroundColor: isDarkTheme ? 'rgba(31, 41, 55, 0.6)' : 'rgba(243, 244, 246, 0.9)',
-              borderColor: isDarkTheme ? 'rgba(251, 191, 36, 0.3)' : 'rgba(251, 191, 36, 0.5)',
+              width: '320px',
+              height: '320px',
+              left: '50%',
+              top: '50%',
+              transform: 'translate(-50%, -50%)',
+              backgroundColor: isDarkTheme 
+                ? 'rgba(88, 28, 135, 0.3)' 
+                : 'rgba(249, 168, 212, 0.4)',
+              borderColor: isDarkTheme 
+                ? 'rgba(168, 85, 247, 0.4)' 
+                : 'rgba(236, 72, 153, 0.5)',
               boxShadow: isDarkTheme 
-                ? '0 4px 20px rgba(0,0,0,0.5)' 
-                : '0 4px 20px rgba(0,0,0,0.15)'
+                ? '0 8px 32px rgba(168, 85, 247, 0.3), inset 0 0 60px rgba(139, 92, 246, 0.1)' 
+                : '0 8px 32px rgba(236, 72, 153, 0.2), inset 0 0 60px rgba(249, 168, 212, 0.15)'
             }}
           />
 
-          {/* Bunny Character Image - Transparent */}
+          {/* Bunny Character Image - Transparent PNG */}
           <div className="relative w-64 h-64">
             <img 
               src="/bunny-character-transparent.png" 
               alt="Bunny Character"
               className="w-full h-full object-contain relative z-10"
               style={{
-                imageRendering: 'crisp-edges'
+                imageRendering: 'crisp-edges',
+                filter: 'none'
               }}
             />
             

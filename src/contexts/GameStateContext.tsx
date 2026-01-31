@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { signInWithTelegram } from "@/services/authService";
 import { 
   syncPlayerState, 
   syncBoosters, 
@@ -167,13 +168,26 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeState = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          console.log("No user logged in, using local state");
-          setIsInitialized(true);
-          return;
+        // Step 1: Check if user is authenticated
+        console.log("🔐 Checking authentication...");
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          console.log("❌ No session found, attempting Telegram auth...");
+          const authResult = await signInWithTelegram();
+          
+          if (!authResult.success) {
+            console.error("❌ Telegram auth failed:", authResult.error);
+            setIsInitialized(true);
+            return;
+          }
+          
+          console.log("✅ Telegram auth successful!", authResult);
+        } else {
+          console.log("✅ Existing session found:", session.user.id);
         }
 
+        // Step 2: Load player state from Supabase
         console.log("🔄 Loading player state from Supabase...");
         const result = await loadPlayerState();
         
@@ -213,7 +227,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           setLastSyncTime(Date.now());
         }
       } catch (error) {
-        console.error("❌ Failed to load initial state:", error);
+        console.error("❌ Failed to initialize state:", error);
       } finally {
         setIsInitialized(true);
       }
