@@ -1,5 +1,6 @@
 import { useGameState } from "@/contexts/GameStateContext";
 import { useState, useEffect } from "react";
+import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Zap, Clock, TrendingUp } from "lucide-react";
@@ -41,6 +42,9 @@ export function TapScreen() {
     totalTaps
   } = useGameState();
 
+  const { theme, resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  
   const [isOnCooldown, setIsOnCooldown] = useState(false);
   const [lastTapTime, setLastTapTime] = useState(0);
   const [quickChargeUses, setQuickChargeUses] = useState(5);
@@ -52,20 +56,13 @@ export function TapScreen() {
   const [recoveryRate, setRecoveryRate] = useState(0.3);
   const [bunnyScale, setBunnyScale] = useState(1);
   const [bunnyGlow, setBunnyGlow] = useState(false);
-  const [isDarkTheme, setIsDarkTheme] = useState(true);
 
-  // Detect Telegram theme
+  // Ensure theme is mounted
   useEffect(() => {
-    if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-      const tg = window.Telegram.WebApp;
-      setIsDarkTheme(tg.colorScheme === "dark");
-      
-      // Listen for theme changes
-      tg.onEvent("themeChanged", () => {
-        setIsDarkTheme(tg.colorScheme === "dark");
-      });
-    }
+    setMounted(true);
   }, []);
+
+  const isDarkTheme = mounted ? resolvedTheme === "dark" : true;
 
   // Load persisted QuickCharge state and check for 24h reset
   useEffect(() => {
@@ -375,6 +372,7 @@ export function TapScreen() {
         {/* Bunny Character Button - Theme-Aware */}
         <button
           onClick={handleTap}
+          onTouchStart={handleTap}
           disabled={energy < energyCost}
           className="relative select-none touch-manipulation transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ 
@@ -385,20 +383,17 @@ export function TapScreen() {
         >
           {/* Theme-Aware Background Circle */}
           <div 
-            className="absolute inset-0 rounded-full transition-all duration-300"
+            className={`
+              absolute inset-0 rounded-full transition-all duration-300
+              ${isDarkTheme 
+                ? 'bg-gray-900/50 border-yellow-400/30 shadow-[0_4px_20px_rgba(0,0,0,0.3)]' 
+                : 'bg-white/80 border-yellow-400/40 shadow-[0_4px_20px_rgba(0,0,0,0.1)]'
+              }
+              backdrop-blur-lg border-2
+            `}
             style={{
               width: '256px',
               height: '256px',
-              backgroundColor: isDarkTheme 
-                ? 'rgba(30, 30, 30, 0.5)' 
-                : 'rgba(255, 255, 255, 0.8)',
-              backdropFilter: 'blur(10px)',
-              border: isDarkTheme 
-                ? '2px solid rgba(251, 191, 36, 0.3)' 
-                : '2px solid rgba(251, 191, 36, 0.4)',
-              boxShadow: isDarkTheme
-                ? '0 4px 20px rgba(0, 0, 0, 0.3)'
-                : '0 4px 20px rgba(0, 0, 0, 0.1)',
             }}
           />
 
@@ -419,7 +414,7 @@ export function TapScreen() {
             )}
           </div>
 
-          {/* Character Level Badge (Future: Shows tier/level) */}
+          {/* Character Level Badge */}
           <div className="absolute -top-2 -right-2 bg-gradient-to-br from-yellow-400 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg z-20">
             Lv {Math.floor(totalTaps / 1000) + 1}
           </div>
