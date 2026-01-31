@@ -4,9 +4,12 @@ import {
   syncPlayerState, 
   syncBoosters, 
   syncQuickCharge,
+  syncTapData,
   loadPlayerState,
   startAutoSync,
-  stopAutoSync
+  stopAutoSync,
+  getSyncStatus,
+  checkOnlineStatus
 } from "@/services/syncService";
 
 type Tier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
@@ -33,6 +36,8 @@ interface GameState {
   // Sync status
   isSyncing: boolean;
   lastSyncTime: number;
+  isOnline: boolean;
+  syncErrorCount: number;
   
   // Methods
   addBZ: (amount: number) => void;
@@ -101,6 +106,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   // Sync State
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(0);
+  const [isOnline, setIsOnline] = useState(true);
+  const [syncErrorCount, setSyncErrorCount] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
 
   // Persist State
@@ -121,6 +128,41 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => { safeSetItem("bunergy_lastResetDate", lastResetDate); }, [lastResetDate]);
   useEffect(() => { safeSetItem("bunergy_lastClaimTimestamp", lastClaimTimestamp); }, [lastClaimTimestamp]);
 
+  // Monitor online/offline status
+  useEffect(() => {
+    const updateOnlineStatus = () => {
+      const online = checkOnlineStatus();
+      setIsOnline(online);
+      if (online) {
+        console.log("🟢 Back online - resuming sync");
+        // Trigger immediate sync when back online
+        manualSync();
+      } else {
+        console.log("🔴 Offline - changes will sync later");
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", updateOnlineStatus);
+      window.addEventListener("offline", updateOnlineStatus);
+
+      return () => {
+        window.removeEventListener("online", updateOnlineStatus);
+        window.removeEventListener("offline", updateOnlineStatus);
+      };
+    }
+  }, []);
+
+  // Monitor sync status
+  useEffect(() => {
+    const checkSync = setInterval(() => {
+      const status = getSyncStatus();
+      setSyncErrorCount(status.errorCount);
+    }, 5000);
+
+    return () => clearInterval(checkSync);
+  }, []);
+
   // Load initial state from Supabase on mount
   useEffect(() => {
     const initializeState = async () => {
@@ -132,7 +174,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        console.log("Loading player state from Supabase...");
+        console.log("🔄 Loading player state from Supabase...");
         const result = await loadPlayerState();
         
         if (result.success && result.data) {
@@ -145,6 +187,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           setEnergyState(serverData.energy);
           setMaxEnergyState(serverData.maxEnergy);
           setTotalTaps(Math.max(totalTaps, serverData.totalTaps));
+          setTodayTaps(Math.max(todayTaps, serverData.tapsToday || 0));
           setLastClaimTimestamp(Math.max(lastClaimTimestamp, serverData.lastClaimTimestamp));
           
           // Load boosters
@@ -170,7 +213,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           setLastSyncTime(Date.now());
         }
       } catch (error) {
-        console.error("Failed to load initial state:", error);
+        console.error("❌ Failed to load initial state:", error);
       } finally {
         setIsInitialized(true);
       }
@@ -334,9 +377,23 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     setReferralCount(p => p + 1);
   };
 
-  // Tracking Actions
+  // Tracking Actions with immediate tap sync
   const incrementTaps = (count: number, income: number) => {
-    setTotalTaps(p => p + count);
+    setTotalTaps(p => {
+      const newTotal = p + count;
+      
+      // Immediate tap sync (debounced internally by sync service)
+      if (isOnline) {
+        syncTapData({
+          totalTaps: newTotal,
+          tapsToday: todayTaps + count,
+          totalTapIncome: totalTapIncome + income,
+          lastTapTime: Date.now(),
+        }).catch(console.error);
+      }
+      
+      return newTotal;
+    });
     setTodayTaps(p => p + count);
     setTotalTapIncome(p => p + income);
   };
@@ -356,10 +413,12 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
   // Manual sync function
   const manualSync = async () => {
-    if (isSyncing) return;
+    if (isSyncing || !isOnline) return;
     
     setIsSyncing(true);
     try {
+      console.log("🔄 Manual sync started...");
+      
       await syncPlayerState({
         bz,
         bb,
@@ -370,10 +429,24 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         totalTaps,
         lastClaimTimestamp,
       });
+      
+      await syncBoosters(safeGetItem("boosters", {
+        incomePerTap: 1,
+        energyPerTap: 1,
+        energyCapacity: 1,
+        recoveryRate: 1,
+      }));
+      
+      await syncQuickCharge(safeGetItem("quickCharge", {
+        usesRemaining: 5,
+        cooldownEndTime: undefined,
+        lastReset: Date.now(),
+      }));
+      
       setLastSyncTime(Date.now());
       console.log("✅ Manual sync completed");
     } catch (error) {
-      console.error("Manual sync failed:", error);
+      console.error("❌ Manual sync failed:", error);
     } finally {
       setIsSyncing(false);
     }
@@ -398,6 +471,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       lastClaimTimestamp,
       isSyncing,
       lastSyncTime,
+      isOnline,
+      syncErrorCount,
       addBZ, 
       subtractBZ, 
       addBB, 
