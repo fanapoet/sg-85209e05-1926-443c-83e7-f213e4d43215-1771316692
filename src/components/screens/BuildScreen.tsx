@@ -45,6 +45,15 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { recordReferralEarnings } from "@/services/referralService";
 
+// Speed-Up Configuration
+const SPEEDUP_CONFIG = {
+  minLevel: 4,                    // Available from L4+ (30min timer)
+  bbCostPerHour: 0.01,            // 0.01 BB per hour ($0.02 value)
+  starCostPerHour: 1,             // 1 star per hour ($0.02 value)
+  minBBCost: 0.005,               // Minimum 0.005 BB (for <30min)
+  minStarCost: 1,                 // Minimum 1 star
+};
+
 type PartKey = string;
 
 interface Part {
@@ -157,6 +166,11 @@ export function BuildScreen() {
   const [upgradeButtonMessage, setUpgradeButtonMessage] = useState<Record<PartKey, string>>({});
   const [completionCelebrations, setCompletionCelebrations] = useState<Record<PartKey, boolean>>({});
   const [claimAnimating, setClaimAnimating] = useState(false);
+  const [speedUpDialog, setSpeedUpDialog] = useState<{
+    open: boolean;
+    partKey: string | null;
+    step: "choose" | "confirmBB";
+  }>({ open: false, partKey: null, step: "choose" });
 
   // Load persisted state ONCE on mount
   useEffect(() => {
@@ -333,6 +347,28 @@ export function BuildScreen() {
     };
   };
 
+  // Speed-Up cost calculation
+  const getSpeedUpCost = (timeRemaining: number): { bb: number; stars: number } => {
+    const hoursRemaining = timeRemaining / (60 * 60 * 1000);
+    const bbCost = Math.max(
+      SPEEDUP_CONFIG.minBBCost,
+      hoursRemaining * SPEEDUP_CONFIG.bbCostPerHour
+    );
+    const starCost = Math.max(
+      SPEEDUP_CONFIG.minStarCost,
+      Math.ceil(hoursRemaining * SPEEDUP_CONFIG.starCostPerHour)
+    );
+    return { bb: Number(bbCost.toFixed(6)), stars: starCost };
+  };
+
+  // Check if Speed-Up is available for a part
+  const canSpeedUp = (part: Part, state: PartState): boolean => {
+    if (!state.upgrading) return false;
+    if (part.stage < 1 || state.level < SPEEDUP_CONFIG.minLevel - 1) return false;
+    const timeRemaining = Math.max(0, state.upgradeEndTime - currentTime);
+    return timeRemaining > 0;
+  };
+
   // Claim idle income with animation
   const handleClaim = () => {
     const accrued = getAccruedIncome();
@@ -369,6 +405,192 @@ export function BuildScreen() {
     }
   };
 
+  // Open Speed-Up dialog
+  const handleOpenSpeedUp = (partKey: string) => {
+    setSpeedUpDialog({ open: true, partKey, step: "choose" });
+  };
+
+  // Close Speed-Up dialog
+  const handleCloseSpeedUp = () => {
+    setSpeedUpDialog({ open: false, partKey: null, step: "choose" });
+  };
+
+  // Handle BB payment (show confirmation)
+  const handleBBPaymentRequest = () => {
+    setSpeedUpDialog(prev => ({ ...prev, step: "confirmBB" }));
+  };
+
+  // Confirm BB payment and complete build
+  const handleConfirmBBPayment = () => {
+    const { partKey } = speedUpDialog;
+    if (!partKey) return;
+
+    const part = allParts.find(p => p.key === partKey);
+    const state = partStates[partKey];
+    if (!part || !state) return;
+
+    const timeRemaining = Math.max(0, state.upgradeEndTime - currentTime);
+    const cost = getSpeedUpCost(timeRemaining);
+
+    // Check BB balance
+    if (bb < cost.bb) {
+      toast({
+        title: "Insufficient Balance",
+        description: `You need ${cost.bb.toFixed(6)} BB but only have ${bb.toFixed(6)} BB.`,
+        variant: "destructive"
+      });
+      handleCloseSpeedUp();
+      return;
+    }
+
+    // Deduct BB
+    if (subtractBB(cost.bb)) {
+      // Complete build instantly
+      completeBuildInstantly(partKey);
+      
+      toast({
+        title: "Build Completed!",
+        description: `Spent ${cost.bb.toFixed(6)} BB to complete "${part.name}" instantly.`,
+      });
+
+      handleCloseSpeedUp();
+    }
+  };
+
+  // Handle Telegram Stars payment
+  const handleStarsPayment = async () => {
+    const { partKey } = speedUpDialog;
+    if (!partKey) return;
+
+    const part = allParts.find(p => p.key === partKey);
+    const state = partStates[partKey];
+    if (!part || !state) return;
+
+    const timeRemaining = Math.max(0, state.upgradeEndTime - currentTime);
+    const cost = getSpeedUpCost(timeRemaining);
+
+    try {
+      // Telegram Stars payment integration
+      if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+        const tg = window.Telegram.WebApp;
+        
+        // Create invoice for Stars payment
+        const invoice = {
+          title: `Speed Up: ${part.name}`,
+          description: `Complete build instantly (${formatTime(timeRemaining)} remaining)`,
+          payload: JSON.stringify({ type: "speedup", partKey }),
+          currency: "XTR", // Telegram Stars currency code
+          prices: [{ label: "Speed Up", amount: cost.stars }]
+        };
+
+        // Open Telegram payment
+        tg.openInvoice(JSON.stringify(invoice), (status: string) => {
+          if (status === "paid") {
+            // Payment successful - complete build
+            completeBuildInstantly(partKey);
+            
+            toast({
+              title: "Build Completed!",
+              description: `Spent ${cost.stars} Stars to complete "${part.name}" instantly.`,
+            });
+
+            handleCloseSpeedUp();
+          } else if (status === "cancelled") {
+            toast({
+              title: "Payment Cancelled",
+              description: "Speed-up payment was cancelled.",
+              variant: "destructive"
+            });
+            handleCloseSpeedUp();
+          } else {
+            toast({
+              title: "Payment Failed",
+              description: "Something went wrong with the payment.",
+              variant: "destructive"
+            });
+            handleCloseSpeedUp();
+          }
+        });
+      } else {
+        toast({
+          title: "Not Available",
+          description: "Telegram Stars payment is only available in Telegram.",
+          variant: "destructive"
+        });
+        handleCloseSpeedUp();
+      }
+    } catch (error) {
+      console.error("Stars payment error:", error);
+      toast({
+        title: "Payment Error",
+        description: "Failed to process Stars payment.",
+        variant: "destructive"
+      });
+      handleCloseSpeedUp();
+    }
+  };
+
+  // Complete build instantly (used by both BB and Stars)
+  const completeBuildInstantly = (partKey: string) => {
+    const state = partStates[partKey];
+    if (!state) return;
+
+    // Calculate XP reward
+    const newLevel = state.level + 1;
+    let xpReward = 0;
+    if (newLevel <= 5) xpReward = 50;
+    else if (newLevel <= 10) xpReward = 100;
+    else xpReward = 200;
+
+    addXP(xpReward);
+    incrementUpgrades();
+
+    // Update part state
+    const newStates = {
+      ...partStates,
+      [partKey]: {
+        ...state,
+        level: newLevel,
+        upgrading: false,
+        upgradeStartTime: 0,
+        upgradeEndTime: 0
+      }
+    };
+
+    setPartStates(newStates);
+    localStorage.setItem("buildParts", JSON.stringify(newStates));
+
+    // Clear active build
+    if (idleState.activeBuildKey === partKey) {
+      const newIdleState = { ...idleState, activeBuildKey: null };
+      setIdleState(newIdleState);
+      localStorage.setItem("idleState", JSON.stringify(newIdleState));
+    }
+
+    // Show completion celebration
+    setCompletionCelebrations(prev => ({ ...prev, [partKey]: true }));
+    setTimeout(() => {
+      setCompletionCelebrations(prev => {
+        const updated = { ...prev };
+        delete updated[partKey];
+        return updated;
+      });
+    }, 3000);
+
+    // Show XP reward message
+    setUpgradeButtonMessage(prev => ({
+      ...prev,
+      [partKey]: `✅ +${xpReward} XP Earned!`
+    }));
+    setTimeout(() => {
+      setUpgradeButtonMessage(prev => {
+        const updated = { ...prev };
+        delete updated[partKey];
+        return updated;
+      });
+    }, 3000);
+  };
+
   // Start upgrade
   const handleUpgrade = (part: Part) => {
     const state = partStates[part.key];
@@ -385,7 +607,7 @@ export function BuildScreen() {
     const upgradeTime = getUpgradeTime(state.level);
 
     if (subtractBZ(cost)) {
-      // Calculate XP Reward based on new level
+      // Calculate XP reward based on new level
       const newLevel = state.level + 1;
       let xpReward = 0;
       
@@ -741,6 +963,18 @@ export function BuildScreen() {
                             `Upgrade for ${cost.toLocaleString()} BZ`
                           )}
                         </Button>
+
+                        {/* Speed-Up Button */}
+                        {canSpeedUp(part, state) && (
+                          <Button
+                            onClick={() => handleOpenSpeedUp(part.key)}
+                            className="w-full mt-2 bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600"
+                            size="sm"
+                          >
+                            <Zap className="mr-2 h-4 w-4" />
+                            Speed Up: {getSpeedUpCost(Math.max(0, state.upgradeEndTime - currentTime)).bb.toFixed(3)} BB or {getSpeedUpCost(Math.max(0, state.upgradeEndTime - currentTime)).stars} ⭐
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </Card>
@@ -750,6 +984,115 @@ export function BuildScreen() {
           </div>
         );
       })}
+
+      {/* Speed-Up Dialog */}
+      {speedUpDialog.open && speedUpDialog.partKey && (() => {
+        const part = allParts.find(p => p.key === speedUpDialog.partKey);
+        const state = partStates[speedUpDialog.partKey];
+        if (!part || !state) return null;
+
+        const timeRemaining = Math.max(0, state.upgradeEndTime - currentTime);
+        const cost = getSpeedUpCost(timeRemaining);
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <Card className="w-full max-w-md p-6 space-y-4">
+              {speedUpDialog.step === "choose" ? (
+                <>
+                  <div className="text-center">
+                    <Zap className="h-12 w-12 mx-auto mb-2 text-yellow-500" />
+                    <h2 className="text-xl font-bold">⚡ Speed Up Build?</h2>
+                  </div>
+
+                  <div className="text-center text-sm text-muted-foreground">
+                    <p className="font-semibold">{part.name} (Level {state.level + 1})</p>
+                    <p>Time remaining: {formatTime(timeRemaining)}</p>
+                  </div>
+
+                  <p className="text-center">Complete instantly?</p>
+
+                  {/* BB Payment Option */}
+                  <Card className="p-4 space-y-2 border-2 hover:border-primary transition-colors cursor-pointer" onClick={handleBBPaymentRequest}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          💎
+                        </div>
+                        <div className="text-left">
+                          <p className="font-semibold">Pay with $BUNBUN (BB)</p>
+                          <p className="text-xs text-muted-foreground">Cost: {cost.bb.toFixed(6)} BB</p>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">Balance: {bb.toFixed(6)} BB</p>
+                    <Button className="w-full" variant="outline">
+                      Pay {cost.bb.toFixed(6)} BB
+                    </Button>
+                  </Card>
+
+                  {/* Telegram Stars Option */}
+                  <Card className="p-4 space-y-2 border-2 hover:border-primary transition-colors cursor-pointer" onClick={handleStarsPayment}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          ⭐
+                        </div>
+                        <div className="text-left">
+                          <p className="font-semibold">Pay with Telegram Stars</p>
+                          <p className="text-xs text-muted-foreground">Cost: {cost.stars} Stars (~${(cost.stars * 0.02).toFixed(2)})</p>
+                        </div>
+                      </div>
+                    </div>
+                    <Button className="w-full" variant="outline">
+                      Pay {cost.stars} Stars ⭐
+                    </Button>
+                  </Card>
+
+                  <Button onClick={handleCloseSpeedUp} variant="ghost" className="w-full">
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <div className="text-center">
+                    <h2 className="text-xl font-bold">Confirm Payment</h2>
+                  </div>
+
+                  <div className="text-center text-sm space-y-2">
+                    <p>Spend <span className="font-bold">{cost.bb.toFixed(6)} BB</span> to complete</p>
+                    <p className="font-semibold">"{part.name}"</p>
+                    <p>instantly?</p>
+                  </div>
+
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Current balance:</span>
+                      <span className="font-semibold">{bb.toFixed(6)} BB</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">After payment:</span>
+                      <span className="font-semibold">{(bb - cost.bb).toFixed(6)} BB</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-orange-100 dark:bg-orange-900/20 p-3 rounded text-xs">
+                    <p>⚠️ This will complete the build instantly and grant XP reward.</p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button onClick={handleCloseSpeedUp} variant="outline" className="flex-1">
+                      Cancel
+                    </Button>
+                    <Button onClick={handleConfirmBBPayment} className="flex-1">
+                      Confirm Payment
+                    </Button>
+                  </div>
+                </>
+              )}
+            </Card>
+          </div>
+        );
+      })()}
 
       <style jsx>{`
         @keyframes shimmer {
