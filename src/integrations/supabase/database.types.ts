@@ -458,6 +458,95 @@ export type Database = {
         }
         Relationships: []
       }
+      star_invoices: {
+        Row: {
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          invoice_payload: string
+          paid_at: string | null
+          part_key: string
+          part_level: number
+          part_name: string
+          stars_amount: number
+          status: string
+          telegram_payment_charge_id: string | null
+          telegram_user_id: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          invoice_payload: string
+          paid_at?: string | null
+          part_key: string
+          part_level: number
+          part_name: string
+          stars_amount: number
+          status?: string
+          telegram_payment_charge_id?: string | null
+          telegram_user_id: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          invoice_payload?: string
+          paid_at?: string | null
+          part_key?: string
+          part_level?: number
+          part_name?: string
+          stars_amount?: number
+          status?: string
+          telegram_payment_charge_id?: string | null
+          telegram_user_id?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      star_transactions: {
+        Row: {
+          created_at: string | null
+          id: string
+          invoice_id: string
+          metadata: Json | null
+          stars_paid: number
+          telegram_user_id: number
+          transaction_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          invoice_id: string
+          metadata?: Json | null
+          stars_paid: number
+          telegram_user_id: number
+          transaction_type?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          invoice_id?: string
+          metadata?: Json | null
+          stars_paid?: number
+          telegram_user_id?: number
+          transaction_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "star_transactions_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "star_invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           created_at: string | null

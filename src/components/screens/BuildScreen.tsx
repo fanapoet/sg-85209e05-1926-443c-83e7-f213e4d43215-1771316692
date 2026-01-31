@@ -464,7 +464,11 @@ export function BuildScreen() {
       if (!key) return { partKey: null, part: null, cost: null };
       const p = allParts.find(pr => pr.key === key);
       if (!p) return { partKey: null, part: null, cost: null };
-      const c = getSpeedUpCost(Math.max(0, partStates[key]?.upgradeEndTime - currentTime));
+      
+      const state = partStates[key];
+      const timeRemaining = state ? Math.max(0, state.upgradeEndTime - currentTime) : 0;
+      const c = getSpeedUpCost(timeRemaining);
+      
       return { partKey: key, part: p, cost: c };
     })();
 
