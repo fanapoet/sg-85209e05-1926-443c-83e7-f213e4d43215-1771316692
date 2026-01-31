@@ -16,6 +16,7 @@ declare global {
         expand: () => void;
         ready: () => void;
         close: () => void;
+        openInvoice: (url: string, callback?: (status: string) => void) => void;
         MainButton?: {
           text: string;
           color: string;

@@ -154,7 +154,7 @@ const allParts: Part[] = [
 ];
 
 export function BuildScreen() {
-  const { bz, subtractBZ, addBZ, referralCount, tier, setBzPerHour, incrementUpgrades, addXP, markIdleClaimed, hasClaimedIdleToday } = useGameState();
+  const { bz, subtractBZ, addBZ, referralCount, tier, setBzPerHour, incrementUpgrades, addXP, markIdleClaimed, hasClaimedIdleToday, bb, subtractBB } = useGameState();
   const { toast } = useToast();
   const [partStates, setPartStates] = useState<Record<PartKey, PartState>>({});
   const [idleState, setIdleState] = useState<IdleState>({
