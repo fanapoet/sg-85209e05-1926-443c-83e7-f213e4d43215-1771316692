@@ -459,36 +459,73 @@ export function BuildScreen() {
 
   // Handle Telegram Stars payment
   const handleStarsPayment = async () => {
-    const { partKey } = speedUpDialog;
-    if (!partKey) return;
+    const { partKey, part, cost } = (() => {
+      const key = speedUpDialog.partKey;
+      if (!key) return { partKey: null, part: null, cost: null };
+      const p = allParts.find(pr => pr.key === key);
+      if (!p) return { partKey: null, part: null, cost: null };
+      const c = getSpeedUpCost(Math.max(0, partStates[key]?.upgradeEndTime - currentTime));
+      return { partKey: key, part: p, cost: c };
+    })();
 
-    const part = allParts.find(p => p.key === partKey);
-    const state = partStates[partKey];
-    if (!part || !state) return;
-
-    const timeRemaining = Math.max(0, state.upgradeEndTime - currentTime);
-    const cost = getSpeedUpCost(timeRemaining);
+    if (!partKey || !part || !cost) return;
 
     try {
-      // Telegram Stars payment integration
-      if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-        const tg = window.Telegram.WebApp;
-        
-        // Create invoice for Stars payment
-        const invoice = {
-          title: `Speed Up: ${part.name}`,
-          description: `Complete build instantly (${formatTime(timeRemaining)} remaining)`,
-          payload: JSON.stringify({ type: "speedup", partKey }),
-          currency: "XTR", // Telegram Stars currency code
-          prices: [{ label: "Speed Up", amount: cost.stars }]
-        };
+      // Get Telegram user data
+      if (typeof window === "undefined" || !window.Telegram?.WebApp?.initDataUnsafe?.user) {
+        toast({
+          title: "Error",
+          description: "Telegram user data not available. Please restart the app.",
+          variant: "destructive"
+        });
+        return;
+      }
 
-        // Open Telegram payment
-        tg.openInvoice(JSON.stringify(invoice), (status: string) => {
+      const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
+      const telegramUserId = tgUser.id;
+
+      // Get user ID from Supabase (you'll need to implement getUserId)
+      // For now, using telegram_id as fallback
+      const userId = telegramUserId.toString(); // Replace with actual Supabase user ID
+
+      toast({
+        title: "Creating Invoice...",
+        description: "Please wait while we prepare your payment.",
+      });
+
+      // Call API to create invoice
+      const response = await fetch("/api/create-stars-invoice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          userId,
+          telegramUserId,
+          stars: cost.stars,
+          partKey,
+          partName: part.name,
+          partLevel: partStates[partKey]?.level || 0
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to create invoice");
+      }
+
+      const { invoiceLink, invoiceId, invoicePayload } = data;
+
+      // Open invoice in Telegram
+      if (window.Telegram?.WebApp) {
+        window.Telegram.WebApp.openInvoice(invoiceLink, (status) => {
+          console.log("Invoice status:", status);
+
           if (status === "paid") {
             // Payment successful - complete build
             completeBuildInstantly(partKey);
-            
+
             toast({
               title: "Build Completed!",
               description: `Spent ${cost.stars} Stars to complete "${part.name}" instantly.`,
@@ -502,28 +539,24 @@ export function BuildScreen() {
               variant: "destructive"
             });
             handleCloseSpeedUp();
-          } else {
+          } else if (status === "failed") {
             toast({
               title: "Payment Failed",
-              description: "Something went wrong with the payment.",
+              description: "Payment could not be processed. Please try again.",
               variant: "destructive"
             });
             handleCloseSpeedUp();
           }
         });
       } else {
-        toast({
-          title: "Not Available",
-          description: "Telegram Stars payment is only available in Telegram.",
-          variant: "destructive"
-        });
-        handleCloseSpeedUp();
+        throw new Error("Telegram WebApp not available");
       }
+
     } catch (error) {
       console.error("Stars payment error:", error);
       toast({
         title: "Payment Error",
-        description: "Failed to process Stars payment.",
+        description: error instanceof Error ? error.message : "Failed to process Stars payment.",
         variant: "destructive"
       });
       handleCloseSpeedUp();
@@ -543,9 +576,8 @@ export function BuildScreen() {
     else xpReward = 200;
 
     addXP(xpReward);
-    incrementUpgrades();
-
-    // Update part state
+    incrementUpgrades(); // Track for tasks
+    const now = Date.now();
     const newStates = {
       ...partStates,
       [partKey]: {
