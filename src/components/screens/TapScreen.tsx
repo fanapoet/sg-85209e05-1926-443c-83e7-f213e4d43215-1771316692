@@ -52,6 +52,20 @@ export function TapScreen() {
   const [recoveryRate, setRecoveryRate] = useState(0.3);
   const [bunnyScale, setBunnyScale] = useState(1);
   const [bunnyGlow, setBunnyGlow] = useState(false);
+  const [isDarkTheme, setIsDarkTheme] = useState(true);
+
+  // Detect Telegram theme
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+      const tg = window.Telegram.WebApp;
+      setIsDarkTheme(tg.colorScheme === "dark");
+      
+      // Listen for theme changes
+      tg.onEvent("themeChanged", () => {
+        setIsDarkTheme(tg.colorScheme === "dark");
+      });
+    }
+  }, []);
 
   // Load persisted QuickCharge state and check for 24h reset
   useEffect(() => {
@@ -343,7 +357,7 @@ export function TapScreen() {
         </Button>
       </div>
 
-      {/* Bunny Character Tap Area - NFT Ready */}
+      {/* Bunny Character Tap Area - Theme-Aware Background */}
       <div className="relative flex flex-col items-center justify-center py-4">
         {/* Tap Info */}
         <div className="text-center mb-3">
@@ -358,7 +372,7 @@ export function TapScreen() {
           </div>
         </div>
 
-        {/* Bunny Character Button - Using Transparent PNG */}
+        {/* Bunny Character Button - Theme-Aware */}
         <button
           onClick={handleTap}
           disabled={energy < energyCost}
@@ -369,12 +383,24 @@ export function TapScreen() {
             filter: bunnyGlow ? 'drop-shadow(0 0 20px rgba(251, 191, 36, 0.8))' : 'none'
           }}
         >
+          {/* Theme-Aware Background Circle */}
+          <div 
+            className="absolute inset-0 rounded-full transition-colors duration-300"
+            style={{
+              width: '256px',
+              height: '256px',
+              backgroundColor: isDarkTheme ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.5)',
+              backdropFilter: 'blur(10px)',
+              border: isDarkTheme ? '2px solid rgba(251, 191, 36, 0.2)' : '2px solid rgba(251, 191, 36, 0.3)',
+            }}
+          />
+
           {/* Bunny Character Image - Transparent */}
           <div className="relative w-64 h-64">
             <img 
               src="/bunny-character-transparent.png" 
               alt="Bunny Character"
-              className="w-full h-full object-contain"
+              className="w-full h-full object-contain relative z-10"
               style={{
                 imageRendering: 'crisp-edges'
               }}
@@ -387,7 +413,7 @@ export function TapScreen() {
           </div>
 
           {/* Character Level Badge (Future: Shows tier/level) */}
-          <div className="absolute -top-2 -right-2 bg-gradient-to-br from-yellow-400 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
+          <div className="absolute -top-2 -right-2 bg-gradient-to-br from-yellow-400 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg z-20">
             Lv {Math.floor(totalTaps / 1000) + 1}
           </div>
         </button>
@@ -463,6 +489,10 @@ export function TapScreen() {
         @keyframes shimmer {
           0% { transform: translateX(-100%); }
           100% { transform: translateX(100%); }
+        }
+        
+        .animate-float {
+          animation: float 1.5s ease-out;
         }
         
         .animate-ripple {
