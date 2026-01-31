@@ -381,16 +381,14 @@ export function TapScreen() {
             filter: bunnyGlow ? 'drop-shadow(0 0 20px rgba(251, 191, 36, 0.8))' : 'none'
           }}
         >
-          {/* Theme-Aware Background Circle */}
+          {/* Theme-Aware Background Circle - FIXED */}
           <div 
-            className={`absolute inset-0 rounded-full backdrop-blur-lg border-2 transition-all duration-300 ${
-              isDarkTheme 
-                ? 'bg-gray-800/60 border-yellow-400/30' 
-                : 'bg-gray-100/90 border-yellow-400/50'
-            }`}
+            className="absolute inset-0 rounded-full backdrop-blur-lg border-2 transition-all duration-300"
             style={{
               width: '256px',
               height: '256px',
+              backgroundColor: isDarkTheme ? 'rgba(31, 41, 55, 0.6)' : 'rgba(243, 244, 246, 0.9)',
+              borderColor: isDarkTheme ? 'rgba(251, 191, 36, 0.3)' : 'rgba(251, 191, 36, 0.5)',
               boxShadow: isDarkTheme 
                 ? '0 4px 20px rgba(0,0,0,0.5)' 
                 : '0 4px 20px rgba(0,0,0,0.15)'
