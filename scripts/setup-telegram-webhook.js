@@ -6,19 +6,39 @@
  */
 
 const https = require('https');
+const fs = require('fs');
+const path = require('path');
 
-// Load environment variables
-require('dotenv').config({ path: '.env.local' });
+// Load environment variables from .env.local
+function loadEnv() {
+  const envPath = path.join(__dirname, '..', '.env.local');
+  const envFile = fs.readFileSync(envPath, 'utf8');
+  const envVars = {};
+  
+  envFile.split('\n').forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const [key, ...valueParts] = trimmed.split('=');
+      if (key && valueParts.length > 0) {
+        const value = valueParts.join('=').replace(/^["']|["']$/g, '');
+        envVars[key] = value;
+      }
+    }
+  });
+  
+  return envVars;
+}
 
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const WEBHOOK_URL = `${process.env.NEXT_PUBLIC_SITE_URL}/api/telegram-webhook`;
+const env = loadEnv();
+const BOT_TOKEN = env.TELEGRAM_BOT_TOKEN;
+const WEBHOOK_URL = `${env.NEXT_PUBLIC_SITE_URL}/api/telegram-webhook`;
 
 if (!BOT_TOKEN) {
   console.error('❌ Error: TELEGRAM_BOT_TOKEN not found in .env.local');
   process.exit(1);
 }
 
-if (!process.env.NEXT_PUBLIC_SITE_URL) {
+if (!env.NEXT_PUBLIC_SITE_URL) {
   console.error('❌ Error: NEXT_PUBLIC_SITE_URL not found in .env.local');
   process.exit(1);
 }
@@ -147,7 +167,7 @@ async function main() {
 
     console.log('\n🎉 Setup complete! Your Telegram webhook is now active.\n');
     console.log('💡 Next steps:');
-    console.log('   1. Deploy to Vercel (if not already done)');
+    console.log('   1. Deploy Edge Function to Supabase');
     console.log('   2. Add environment variables to Vercel');
     console.log('   3. Test payments in Telegram app\n');
 
