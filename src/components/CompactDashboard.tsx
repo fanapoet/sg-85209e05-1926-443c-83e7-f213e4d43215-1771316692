@@ -1,10 +1,9 @@
 import { useGameState } from "@/contexts/GameStateContext";
 import { Badge } from "@/components/ui/badge";
-import { Users, Zap, TrendingUp, User } from "lucide-react";
+import { Users, Zap, TrendingUp } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 
@@ -19,10 +18,12 @@ export function CompactDashboard() {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [selectedAvatar, setSelectedAvatar] = useState<string>("");
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const [telegramUser, setTelegramUser] = useState<any>(null);
 
   useEffect(() => {
     loadUserProfile();
     loadSelectedAvatar();
+    loadTelegramUser();
   }, []);
 
   const loadUserProfile = async () => {
@@ -44,6 +45,19 @@ export function CompactDashboard() {
       }
     } catch (error) {
       console.error("Error loading avatar:", error);
+    }
+  };
+
+  const loadTelegramUser = () => {
+    try {
+      if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+        const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
+        if (tgUser) {
+          setTelegramUser(tgUser);
+        }
+      }
+    } catch (error) {
+      console.error("Error loading Telegram user:", error);
     }
   };
 
@@ -104,7 +118,31 @@ export function CompactDashboard() {
 
   const tierBonus = getTierBonus(tier);
 
+  const getUserDisplayName = () => {
+    // Priority: Telegram username/first_name > full_name from metadata > email > "User"
+    if (telegramUser) {
+      if (telegramUser.username) return `@${telegramUser.username}`;
+      if (telegramUser.first_name) {
+        return telegramUser.last_name 
+          ? `${telegramUser.first_name} ${telegramUser.last_name}`
+          : telegramUser.first_name;
+      }
+    }
+    if (userProfile?.user_metadata?.full_name) {
+      return userProfile.user_metadata.full_name;
+    }
+    if (userProfile?.email) {
+      return userProfile.email.split('@')[0];
+    }
+    return "User";
+  };
+
   const getUserInitials = () => {
+    if (telegramUser?.first_name) {
+      const firstName = telegramUser.first_name[0];
+      const lastName = telegramUser.last_name?.[0] || "";
+      return (firstName + lastName).toUpperCase();
+    }
     if (userProfile?.user_metadata?.full_name) {
       return userProfile.user_metadata.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
     }
@@ -124,7 +162,7 @@ export function CompactDashboard() {
   return (
     <>
       <div className="bg-card border-b border-border shadow-md sticky top-0 z-50">
-        <div className="p-3 space-y-3">
+        <div className="p-3 space-y-2">
           {/* Top Row: Left (BZ, BB) | Center (Logo) | Right (Tier, Avatar) */}
           <div className="flex items-center justify-between">
             {/* Left: BZ & BB */}
@@ -167,8 +205,8 @@ export function CompactDashboard() {
             </div>
           </div>
           
-          {/* Bottom Row: Stats */}
-          <div className="flex items-center justify-between gap-3 text-[10px]">
+          {/* Bottom Row: Stats - NO GAP ABOVE, LARGER FONT */}
+          <div className="flex items-center justify-between gap-3 text-xs">
             {/* XP */}
             <div className="flex items-center gap-1">
               <span className="text-muted-foreground font-semibold">XP:</span>
@@ -177,15 +215,15 @@ export function CompactDashboard() {
             
             {/* Energy */}
             <div className="flex items-center gap-1 text-muted-foreground">
-              <Zap className="h-3 w-3 text-yellow-500" />
+              <Zap className="h-3.5 w-3.5 text-yellow-500" />
               <span className="font-mono font-semibold">{Math.floor(energy)}/{actualMaxEnergy}</span>
             </div>
             
             {/* BZ/h Rate */}
             <div className="flex items-center gap-1 text-muted-foreground">
-              <TrendingUp className="h-3 w-3" />
+              <TrendingUp className="h-3.5 w-3.5" />
               <span className="font-mono font-semibold">{formatRate(bzPerHour)}</span>
-              <span className="text-[9px]">BZ/h</span>
+              <span className="text-[10px]">BZ/h</span>
             </div>
             
             {/* Tier Bonus */}
@@ -235,19 +273,23 @@ export function CompactDashboard() {
 
               <div className="text-center">
                 <h3 className="font-semibold text-lg">
-                  {userProfile?.user_metadata?.full_name || "Anonymous User"}
+                  {getUserDisplayName()}
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                  {userProfile?.email || "No email"}
-                </p>
+                {telegramUser?.username && (
+                  <p className="text-sm text-muted-foreground">
+                    Telegram User
+                  </p>
+                )}
               </div>
             </div>
 
             <div className="space-y-3 pt-4">
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="text-sm text-muted-foreground">User ID</span>
-                <span className="text-xs font-mono">{userProfile?.id?.slice(0, 8)}...</span>
-              </div>
+              {userProfile?.id && (
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <span className="text-sm text-muted-foreground">User ID</span>
+                  <span className="text-xs font-mono">{userProfile.id.slice(0, 8)}...</span>
+                </div>
+              )}
 
               <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
                 <span className="text-sm text-muted-foreground">Current Tier</span>
