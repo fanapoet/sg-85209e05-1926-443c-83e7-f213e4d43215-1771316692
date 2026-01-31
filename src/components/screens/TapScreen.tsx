@@ -385,7 +385,7 @@ export function TapScreen() {
         >
           {/* Theme-Aware Background Circle */}
           <div 
-            className="absolute inset-0 rounded-full transition-colors duration-300"
+            className="absolute inset-0 rounded-full transition-all duration-300"
             style={{
               width: '256px',
               height: '256px',
