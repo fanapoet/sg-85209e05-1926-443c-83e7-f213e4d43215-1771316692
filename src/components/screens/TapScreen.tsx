@@ -212,7 +212,7 @@ export function TapScreen() {
     incrementTaps(1, tapReward);
 
     // Bunny animation
-    setBunnyScale(1.2);
+    setBunnyScale(1.15);
     setBunnyGlow(true);
     setTimeout(() => {
       setBunnyScale(1);
@@ -274,116 +274,136 @@ export function TapScreen() {
   const isEnergyFull = energy >= displayMaxEnergy * 0.95;
 
   return (
-    <div className="p-4 space-y-3 max-w-2xl mx-auto pb-24">
-      {/* Compact Stats - Lifetime Taps & Energy Combined */}
-      <Card className="p-3 space-y-2">
-        {/* Lifetime Taps */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-orange-500" />
-            <span className="font-semibold text-sm">Lifetime Taps</span>
-          </div>
-          <span className="text-xl font-bold text-orange-500">
-            {totalTaps.toLocaleString()}
-          </span>
-        </div>
-        {totalTaps > 0 && (
-          <p className="text-[10px] text-muted-foreground">
-            Next milestone: {(Math.ceil(totalTaps / 100) * 100).toLocaleString()} taps 🎉
-          </p>
-        )}
-
-        {/* Divider */}
-        <div className="border-t border-border my-2" />
-
-        {/* Energy Bar */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="flex items-center gap-1.5">
-              <Zap className={`h-4 w-4 text-yellow-500 ${isEnergyFull ? 'animate-pulse' : ''}`} />
-              <span className="font-semibold text-sm">Energy</span>
-            </div>
-            <span className="text-base font-bold">
-              {Math.floor(energy)} / {displayMaxEnergy}
-            </span>
-          </div>
-          <div className="w-full bg-muted rounded-full h-2.5 relative overflow-hidden">
-            <div
-              className={`h-2.5 rounded-full transition-all duration-300 ${
-                isEnergyFull 
-                  ? 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 animate-pulse shadow-lg shadow-yellow-500/50' 
-                  : 'bg-yellow-500'
-              }`}
-              style={{ width: `${(energy / displayMaxEnergy) * 100}%` }}
-            />
-            {isEnergyFull && (
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
-            )}
-          </div>
-          <div className="flex items-center justify-between mt-1.5">
-            <p className="text-[10px] text-muted-foreground">
-              Recovery: +{recoveryRate.toFixed(2)}/sec
-            </p>
-            {isEnergyFull && (
-              <span className="text-[10px] text-green-500 font-semibold">⚡ FULL!</span>
-            )}
-          </div>
-        </div>
-      </Card>
-
-      {/* QuickCharge - Compact */}
-      <Card className="p-3">
-        <div className="flex items-center justify-between mb-2">
+    <div className="p-3 space-y-2 max-w-2xl mx-auto pb-24">
+      {/* Ultra-Compact Stats - Single Row with Taps Left + Energy Right */}
+      <Card className="p-2">
+        <div className="grid grid-cols-2 gap-3">
+          {/* Left: Lifetime Taps */}
           <div>
-            <h3 className="font-semibold text-sm">QuickCharge</h3>
-            <p className="text-[10px] text-muted-foreground">Instant full restore</p>
+            <div className="flex items-center gap-1.5 mb-1">
+              <TrendingUp className="h-3.5 w-3.5 text-orange-500" />
+              <span className="font-semibold text-xs">Taps</span>
+            </div>
+            <div className="text-lg font-bold text-orange-500">
+              {totalTaps.toLocaleString()}
+            </div>
+            {totalTaps > 0 && (
+              <p className="text-[9px] text-muted-foreground mt-0.5">
+                Next: {(Math.ceil(totalTaps / 100) * 100).toLocaleString()} 🎉
+              </p>
+            )}
           </div>
-          <div className="text-xs font-medium text-muted-foreground">{quickChargeUses}/5</div>
-        </div>
 
-        <Button
-          onClick={handleQuickCharge}
-          disabled={!canQuickCharge}
-          className="w-full"
-          size="sm"
-          variant={canQuickCharge ? "default" : "secondary"}
-        >
-          {quickChargeCooldown > 0 ? (
-            <><Clock className="mr-2 h-3.5 w-3.5" />Cooldown: {formatCooldown(quickChargeCooldown)}</>
-          ) : energy >= displayMaxEnergy * 0.5 ? (
-            "Available when energy < 50%"
-          ) : quickChargeUses <= 0 ? (
-            "No uses remaining"
-          ) : (
-            <><Zap className="mr-2 h-3.5 w-3.5" />Use QuickCharge</>
-          )}
-        </Button>
+          {/* Right: Energy */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-1.5">
+                <Zap className={`h-3.5 w-3.5 text-yellow-500 ${isEnergyFull ? 'animate-pulse' : ''}`} />
+                <span className="font-semibold text-xs">Energy</span>
+              </div>
+              {isEnergyFull && (
+                <span className="text-[9px] text-green-500 font-semibold">⚡ FULL</span>
+              )}
+            </div>
+            <div className="text-base font-bold mb-1">
+              {Math.floor(energy)} / {displayMaxEnergy}
+            </div>
+            <div className="w-full bg-muted rounded-full h-1.5 relative overflow-hidden">
+              <div
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  isEnergyFull 
+                    ? 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 animate-pulse shadow-lg shadow-yellow-500/50' 
+                    : 'bg-yellow-500'
+                }`}
+                style={{ width: `${(energy / displayMaxEnergy) * 100}%` }}
+              />
+              {isEnergyFull && (
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+              )}
+            </div>
+            <p className="text-[9px] text-muted-foreground mt-0.5">
+              +{recoveryRate.toFixed(2)}/s
+            </p>
+          </div>
+        </div>
       </Card>
 
-      {/* Main Tap Button with Bunny */}
-      <div className="relative flex items-center justify-center py-6">
+      {/* Ultra-Compact QuickCharge */}
+      <Card className="p-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Zap className="h-3.5 w-3.5 text-blue-500" />
+            <div>
+              <span className="font-semibold text-xs">QuickCharge</span>
+              <span className="text-[9px] text-muted-foreground ml-1.5">{quickChargeUses}/5</span>
+            </div>
+          </div>
+          <Button
+            onClick={handleQuickCharge}
+            disabled={!canQuickCharge}
+            size="sm"
+            className="h-7 text-xs px-3"
+            variant={canQuickCharge ? "default" : "secondary"}
+          >
+            {quickChargeCooldown > 0 ? (
+              <><Clock className="mr-1 h-3 w-3" />{formatCooldown(quickChargeCooldown)}</>
+            ) : energy >= displayMaxEnergy * 0.5 ? (
+              "Need < 50%"
+            ) : quickChargeUses <= 0 ? (
+              "No uses"
+            ) : (
+              "Use"
+            )}
+          </Button>
+        </div>
+      </Card>
+
+      {/* Bunny Character Tap Area - NFT Ready */}
+      <div className="relative flex flex-col items-center justify-center py-4">
+        {/* Tap Info */}
+        <div className="text-center mb-3">
+          <div className="text-sm text-muted-foreground">Tap to earn</div>
+          <div className="text-2xl font-bold text-yellow-500">
+            +{tapReward.toLocaleString()} BZ
+            {tierMultiplier > 1 && (
+              <span className="text-sm text-orange-500 ml-1">
+                (+{Math.floor((tierMultiplier - 1) * 100)}%)
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Bunny Character Button */}
         <button
           onClick={handleTap}
           disabled={energy < energyCost}
-          className="relative w-48 h-48 rounded-full bg-gradient-to-br from-yellow-400 to-orange-500 shadow-2xl active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed select-none touch-manipulation overflow-hidden"
+          className="relative select-none touch-manipulation transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
           style={{ 
             WebkitTapHighlightColor: "transparent",
             transform: `scale(${bunnyScale})`,
-            boxShadow: bunnyGlow ? '0 0 40px rgba(251, 191, 36, 0.8)' : undefined
+            filter: bunnyGlow ? 'drop-shadow(0 0 20px rgba(251, 191, 36, 0.8))' : 'none'
           }}
         >
-          {/* Animated background pulse */}
-          <div className="absolute inset-0 rounded-full bg-white/20 animate-ping" />
-          
-          {/* Bunny Character */}
-          <div className="relative z-10 text-6xl mb-2 transition-transform duration-150">
-            🐰
+          {/* Bunny Character Image */}
+          <div className="relative w-64 h-64">
+            <img 
+              src="/bunny-character-1.png" 
+              alt="Bunny Character"
+              className="w-full h-full object-contain"
+              style={{
+                imageRendering: 'crisp-edges'
+              }}
+            />
+            
+            {/* Glow effect on tap */}
+            {bunnyGlow && (
+              <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping" />
+            )}
           </div>
-          
-          <div className="relative z-10 text-white font-bold text-2xl">TAP</div>
-          <div className="relative z-10 text-white text-sm mt-1">
-            {tapReward > 0 && `+${tapReward.toLocaleString()}`}
-            {tierMultiplier > 1 && ` (+${Math.floor((tierMultiplier - 1) * 100)}%)`}
+
+          {/* Character Level Badge (Future: Shows tier/level) */}
+          <div className="absolute -top-2 -right-2 bg-gradient-to-br from-yellow-400 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">
+            Lv {Math.floor(totalTaps / 1000) + 1}
           </div>
         </button>
 
