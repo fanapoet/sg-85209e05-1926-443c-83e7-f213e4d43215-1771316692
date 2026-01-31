@@ -11,6 +11,7 @@ import { ConvertScreen } from "@/components/screens/ConvertScreen";
 import { XPTiersScreen } from "@/components/screens/XPTiersScreen";
 import { RewardsNFTsScreen } from "@/components/screens/RewardsNFTsScreen";
 import { TasksReferralsScreen } from "@/components/screens/TasksReferralsScreen";
+import { signInWithTelegram } from "@/services/authService";
 
 type TabKey = "tap" | "boost" | "build" | "convert" | "xp" | "rewards" | "tasks";
 
@@ -18,16 +19,38 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabKey>("tap");
   const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
   const [showWelcome, setShowWelcome] = useState<boolean>(true);
+  const [isAuthenticating, setIsAuthenticating] = useState(true);
 
   useEffect(() => {
     // Check if running in Telegram
-    const checkTelegram = () => {
+    const checkTelegram = async () => {
       const isTg = !!(window.Telegram?.WebApp?.initData);
       setIsInTelegram(isTg);
 
       if (isTg) {
         // Expand to full height
         window.Telegram?.WebApp?.expand();
+
+        // 🔥 CRITICAL: Authenticate user to trigger sync
+        try {
+          console.log("🔐 Authenticating with Telegram...");
+          const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
+          
+          if (tgUser) {
+            const result = await signInWithTelegram(tgUser);
+            if (result.success) {
+              console.log("✅ Authentication successful - sync will start automatically");
+            } else {
+              console.error("❌ Authentication failed:", result.error);
+            }
+          }
+        } catch (error) {
+          console.error("❌ Auth error:", error);
+        } finally {
+          setIsAuthenticating(false);
+        }
+      } else {
+        setIsAuthenticating(false);
       }
     };
 
@@ -39,7 +62,7 @@ export default function Home() {
   };
 
   // Show loading while checking Telegram
-  if (isInTelegram === null) {
+  if (isInTelegram === null || isAuthenticating) {
     return (
       <>
         <SEO 
@@ -47,7 +70,12 @@ export default function Home() {
           description="Play Bunergy, the ultimate tap-to-earn Telegram mini app. Build, earn, and compete!"
         />
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="text-sm text-muted-foreground">
+              {isAuthenticating ? "Connecting..." : "Loading..."}
+            </p>
+          </div>
         </div>
       </>
     );

@@ -389,9 +389,16 @@ export function TapScreen() {
             style={{
               width: '256px',
               height: '256px',
-              backgroundColor: isDarkTheme ? 'rgba(0, 0, 0, 0.3)' : 'rgba(255, 255, 255, 0.5)',
+              backgroundColor: isDarkTheme 
+                ? 'rgba(30, 30, 30, 0.5)' 
+                : 'rgba(255, 255, 255, 0.8)',
               backdropFilter: 'blur(10px)',
-              border: isDarkTheme ? '2px solid rgba(251, 191, 36, 0.2)' : '2px solid rgba(251, 191, 36, 0.3)',
+              border: isDarkTheme 
+                ? '2px solid rgba(251, 191, 36, 0.3)' 
+                : '2px solid rgba(251, 191, 36, 0.4)',
+              boxShadow: isDarkTheme
+                ? '0 4px 20px rgba(0, 0, 0, 0.3)'
+                : '0 4px 20px rgba(0, 0, 0, 0.1)',
             }}
           />
 
