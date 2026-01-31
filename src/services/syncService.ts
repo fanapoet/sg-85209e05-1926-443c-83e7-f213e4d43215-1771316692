@@ -180,7 +180,7 @@ export async function syncTapData(tapData: {
 
     const updateData = {
       total_taps: Math.max(tapData.totalTaps, Number(profile.total_taps || 0)),
-      taps_today: Math.max(tapData.tapsToday, Number(profile.taps_today || 0)),
+      taps_today: Math.max(tapData.tapsToday, Number((profile as any).taps_today || 0)),
       last_tap_time: new Date(tapData.lastTapTime).toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -376,9 +376,9 @@ export async function loadPlayerState() {
         energy: Number(profile.current_energy || 1500),
         maxEnergy: Number(profile.max_energy || 1500),
         totalTaps: Number(profile.total_taps || 0),
-        tapsToday: Number(profile.taps_today || 0),
+        tapsToday: Number((profile as any).taps_today || 0),
         lastClaimTimestamp: new Date(profile.last_claim_timestamp || Date.now()).getTime(),
-        lastTapTime: profile.last_tap_time ? new Date(profile.last_tap_time).getTime() : Date.now(),
+        lastTapTime: (profile as any).last_tap_time ? new Date((profile as any).last_tap_time).getTime() : Date.now(),
         boosters: {
           incomePerTap: Number(profile.booster_income_per_tap || 1),
           energyPerTap: Number(profile.booster_energy_per_tap || 1),
