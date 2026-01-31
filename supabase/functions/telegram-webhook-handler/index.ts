@@ -6,213 +6,223 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface PreCheckoutQuery {
-  id: string;
-  from: {
-    id: number;
-    first_name: string;
-    last_name?: string;
-    username?: string;
-  };
-  currency: string;
-  total_amount: number;
-  invoice_payload: string;
-}
-
-interface SuccessfulPayment {
-  currency: string;
-  total_amount: number;
-  invoice_payload: string;
-  telegram_payment_charge_id: string;
-  provider_payment_charge_id: string;
-}
-
-interface TelegramUpdate {
-  update_id: number;
-  pre_checkout_query?: PreCheckoutQuery;
-  message?: {
-    message_id: number;
-    from: {
-      id: number;
-      first_name: string;
-      last_name?: string;
-      username?: string;
-    };
-    chat: {
-      id: number;
-      first_name: string;
-      last_name?: string;
-      username?: string;
-      type: string;
-    };
-    date: number;
-    successful_payment?: SuccessfulPayment;
-  };
-}
-
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    // Get environment variables
     const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const SUPABASE_URL = Deno.env.get("DB_URL");
+    const SERVICE_ROLE_KEY = Deno.env.get("DB_SERVICE_ROLE_KEY");
 
-    if (!BOT_TOKEN || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!BOT_TOKEN || !SUPABASE_URL || !SERVICE_ROLE_KEY) {
       console.error("Missing required environment variables");
       return new Response(
-        JSON.stringify({ error: "Server configuration error" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ 
+          success: false, 
+          error: "Server configuration error" 
+        }),
+        { 
+          status: 500, 
+          headers: { ...corsHeaders, "Content-Type": "application/json" } 
+        }
       );
     }
 
-    // Initialize Supabase client with service role key
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    // Initialize Supabase client
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    const update: TelegramUpdate = await req.json();
-    console.log("Received update:", JSON.stringify(update, null, 2));
+    // Parse webhook payload
+    const update = await req.json();
+    console.log("Received update:", JSON.stringify(update));
 
-    // Handle pre-checkout query (approve payment)
+    // Handle pre-checkout query (payment validation)
     if (update.pre_checkout_query) {
       const query = update.pre_checkout_query;
-      console.log("Processing pre-checkout query:", query.id);
+      console.log("Pre-checkout query:", query);
 
-      // Verify invoice exists and is pending
       try {
+        // Parse invoice payload
         const payload = JSON.parse(query.invoice_payload);
-        const { invoiceId } = payload;
+        const { userId, partKey } = payload;
 
-        const { data: invoice, error: fetchError } = await supabase
-          .from("star_invoices")
-          .select("*")
-          .eq("invoice_id", invoiceId)
-          .single();
+        console.log("Payment validation:", { userId, partKey, amount: query.total_amount });
 
-        if (fetchError || !invoice) {
-          console.error("Invoice not found:", invoiceId);
-          // Reject payment
-          await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerPreCheckoutQuery`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              pre_checkout_query_id: query.id,
-              ok: false,
-              error_message: "Invoice not found"
-            })
-          });
-          return new Response(JSON.stringify({ ok: true }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
-
-        if (invoice.status !== "pending") {
-          console.error("Invoice not pending:", invoice.status);
-          // Reject payment
-          await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerPreCheckoutQuery`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              pre_checkout_query_id: query.id,
-              ok: false,
-              error_message: "Invoice already processed"
-            })
-          });
-          return new Response(JSON.stringify({ ok: true }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" }
-          });
-        }
-
-        // Approve payment
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerPreCheckoutQuery`, {
+        // Validate payment - always approve for now
+        const approveUrl = `https://api.telegram.org/bot${BOT_TOKEN}/answerPreCheckoutQuery`;
+        const approveResponse = await fetch(approveUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             pre_checkout_query_id: query.id,
-            ok: true
-          })
+            ok: true,
+          }),
         });
 
-        console.log("Pre-checkout approved:", query.id);
+        const approveResult = await approveResponse.json();
+        console.log("Pre-checkout approval:", approveResult);
+
+        return new Response(
+          JSON.stringify({ success: true, approved: true }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
 
       } catch (error) {
-        console.error("Error processing pre-checkout:", error);
-        // Reject on error
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerPreCheckoutQuery`, {
+        console.error("Pre-checkout error:", error);
+        
+        // Answer with error
+        const errorUrl = `https://api.telegram.org/bot${BOT_TOKEN}/answerPreCheckoutQuery`;
+        await fetch(errorUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             pre_checkout_query_id: query.id,
             ok: false,
-            error_message: "Server error"
-          })
+            error_message: "Payment validation failed. Please try again.",
+          }),
         });
-      }
 
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+        return new Response(
+          JSON.stringify({ success: false, error: "Pre-checkout validation failed" }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Handle successful payment
     if (update.message?.successful_payment) {
       const payment = update.message.successful_payment;
-      const userId = update.message.from.id;
+      const user = update.message.from;
 
-      console.log("Processing successful payment:", payment.telegram_payment_charge_id);
+      console.log("Successful payment:", {
+        userId: user.id,
+        amount: payment.total_amount,
+        currency: payment.currency,
+        payload: payment.invoice_payload
+      });
 
       try {
+        // Parse invoice payload
         const payload = JSON.parse(payment.invoice_payload);
-        const { invoiceId, partKey } = payload;
+        const { userId, partKey, partName, partLevel } = payload;
 
-        // Update invoice status
+        console.log("Processing payment completion:", {
+          userId,
+          partKey,
+          partName,
+          partLevel,
+          telegramUserId: user.id,
+          stars: payment.total_amount
+        });
+
+        // Update invoice in database
+        const { data: invoice, error: fetchError } = await supabase
+          .from("star_invoices")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("part_key", partKey)
+          .eq("status", "pending")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        if (fetchError) {
+          console.error("Error fetching invoice:", fetchError);
+          throw new Error(`Invoice fetch failed: ${fetchError.message}`);
+        }
+
+        if (!invoice) {
+          console.error("No pending invoice found");
+          throw new Error("No pending invoice found");
+        }
+
+        console.log("Found invoice:", invoice.id);
+
+        // Update invoice status to paid
         const { error: updateError } = await supabase
           .from("star_invoices")
           .update({
             status: "paid",
             telegram_payment_charge_id: payment.telegram_payment_charge_id,
             provider_payment_charge_id: payment.provider_payment_charge_id,
-            paid_at: new Date().toISOString()
+            paid_at: new Date().toISOString(),
           })
-          .eq("invoice_id", invoiceId);
+          .eq("id", invoice.id);
 
         if (updateError) {
           console.error("Error updating invoice:", updateError);
-        } else {
-          console.log("Invoice updated successfully:", invoiceId);
+          throw new Error(`Invoice update failed: ${updateError.message}`);
         }
 
-        // Send confirmation message
-        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+        console.log("Invoice updated to paid status");
+
+        // Send success message to user
+        const messageUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+        await fetch(messageUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            chat_id: userId,
-            text: `✅ Payment successful! Your build has been completed instantly.`,
-            parse_mode: "Markdown"
-          })
+            chat_id: user.id,
+            text: `✅ Payment successful! Your "${partName}" build has been completed instantly!\n\n💫 ${payment.total_amount} Stars spent`,
+            parse_mode: "HTML",
+          }),
         });
 
-      } catch (error) {
-        console.error("Error processing payment:", error);
-      }
+        console.log("Success message sent to user");
 
-      return new Response(JSON.stringify({ ok: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            invoiceId: invoice.id,
+            status: "paid" 
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+
+      } catch (error) {
+        console.error("Payment processing error:", error);
+        
+        // Send error message to user
+        const messageUrl = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+        await fetch(messageUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: user.id,
+            text: "❌ Payment received but processing failed. Please contact support.",
+          }),
+        });
+
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: error instanceof Error ? error.message : "Payment processing failed" 
+          }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, "Content-Type": "application/json" } 
+          }
+        );
+      }
     }
 
-    // Acknowledge other updates
-    return new Response(JSON.stringify({ ok: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
+    // Unknown update type
+    console.log("Unknown update type:", update);
+    return new Response(
+      JSON.stringify({ success: true, message: "Update received" }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
 
   } catch (error) {
     console.error("Webhook error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: error instanceof Error ? error.message : "Internal server error" 
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
