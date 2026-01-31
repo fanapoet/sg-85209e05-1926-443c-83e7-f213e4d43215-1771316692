@@ -1,4 +1,4 @@
- 
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 export type Json =
   | string
   | number
@@ -281,6 +281,7 @@ export type Database = {
           telegram_username: string | null
           tier: string | null
           total_referrals: number | null
+          total_taps: number | null
           updated_at: string | null
           xp: number | null
         }
@@ -322,6 +323,7 @@ export type Database = {
           telegram_username?: string | null
           tier?: string | null
           total_referrals?: number | null
+          total_taps?: number | null
           updated_at?: string | null
           xp?: number | null
         }
@@ -363,6 +365,7 @@ export type Database = {
           telegram_username?: string | null
           tier?: string | null
           total_referrals?: number | null
+          total_taps?: number | null
           updated_at?: string | null
           xp?: number | null
         }
