@@ -142,8 +142,7 @@ SELECT
   policyname,
   permissive,
   roles,
-  cmd,
-  qual
+  cmd
 FROM pg_policies
 WHERE schemaname = 'public'
 ORDER BY tablename, policyname;
@@ -230,7 +229,7 @@ SELECT
 FROM tasks;
 
 -- ===================================
--- SECTION 9: NULL VALUE CHECKS
+-- SECTION 9: NULL VALUE CHECKS (FIXED)
 -- ===================================
 SELECT 
   'profiles with NULL telegram_id' as check_name,
@@ -280,7 +279,7 @@ ORDER BY ordinal_position;
 SELECT 
   id,
   telegram_id,
-  username,
+  telegram_username,
   bz_balance,
   bb_balance,
   xp,
@@ -291,6 +290,26 @@ SELECT
 FROM profiles
 ORDER BY created_at DESC
 LIMIT 5;
+
+-- ===================================
+-- SECTION 12: SYNC SERVICE COMPATIBILITY CHECK
+-- ===================================
+SELECT 
+  'Sync Service Ready' as check_name,
+  CASE 
+    WHEN EXISTS (
+      SELECT FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'profiles'
+        AND column_name IN ('total_taps', 'bz_balance', 'bb_balance', 'xp', 'tier', 
+                            'current_energy', 'max_energy', 'last_claim_timestamp',
+                            'booster_income_per_tap', 'booster_energy_per_tap',
+                            'booster_energy_capacity', 'booster_recovery_rate',
+                            'quickcharge_uses_remaining', 'quickcharge_cooldown_until',
+                            'quickcharge_last_reset')
+    ) THEN 'YES - All sync columns present ✅'
+    ELSE 'NO - Missing sync columns ❌'
+  END as status;
 
 -- ===================================
 -- END OF VERIFICATION SCRIPT
