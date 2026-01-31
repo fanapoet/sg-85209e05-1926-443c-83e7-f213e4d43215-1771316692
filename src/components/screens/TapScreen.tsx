@@ -383,17 +383,17 @@ export function TapScreen() {
         >
           {/* Theme-Aware Background Circle */}
           <div 
-            className={`
-              absolute inset-0 rounded-full transition-all duration-300
-              ${isDarkTheme 
-                ? 'bg-gray-900/50 border-yellow-400/30 shadow-[0_4px_20px_rgba(0,0,0,0.3)]' 
-                : 'bg-white/80 border-yellow-400/40 shadow-[0_4px_20px_rgba(0,0,0,0.1)]'
-              }
-              backdrop-blur-lg border-2
-            `}
+            className={`absolute inset-0 rounded-full backdrop-blur-lg border-2 transition-all duration-300 ${
+              isDarkTheme 
+                ? 'bg-gray-800/60 border-yellow-400/30' 
+                : 'bg-gray-100/90 border-yellow-400/50'
+            }`}
             style={{
               width: '256px',
               height: '256px',
+              boxShadow: isDarkTheme 
+                ? '0 4px 20px rgba(0,0,0,0.5)' 
+                : '0 4px 20px rgba(0,0,0,0.15)'
             }}
           />
 
