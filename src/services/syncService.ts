@@ -75,8 +75,11 @@ export async function syncPlayerState(localState: {
       return { success: false, error: fetchError.message };
     }
 
+    // Cast to extended type for sync-specific fields
+    const serverData = serverProfile as any;
+
     // Monotonic merge: never decrease values
-    const merged: ProfileUpdate = {
+    const merged: any = {
       bz_balance: Math.max(localState.bz, serverProfile?.bz_balance || 0),
       bb_balance: Math.max(localState.bb, Number(serverProfile?.bb_balance || 0)),
       xp: Math.max(localState.xp, serverProfile?.xp || 0),
@@ -89,7 +92,7 @@ export async function syncPlayerState(localState: {
         new Date(serverProfile?.last_claim_timestamp || 0).getTime()
       )).toISOString(),
       last_sync_at: new Date().toISOString(),
-      sync_version: (serverProfile?.sync_version || 0) + 1,
+      sync_version: (serverData?.sync_version || 0) + 1,
       updated_at: new Date().toISOString(),
     };
 
@@ -146,15 +149,19 @@ export async function syncTapData(tapData: {
       .eq("id", user.id)
       .single();
 
+    const serverData = serverProfile as any;
+
+    const updateData: any = {
+      total_taps: Math.max(tapData.totalTaps, serverProfile?.total_taps || 0),
+      taps_today: Math.max(tapData.tapsToday, serverData?.taps_today || 0),
+      last_tap_time: new Date(tapData.lastTapTime).toISOString(),
+      sync_version: (serverData?.sync_version || 0) + 1,
+      updated_at: new Date().toISOString(),
+    };
+
     const { error } = await supabase
       .from("profiles")
-      .update({
-        total_taps: Math.max(tapData.totalTaps, serverProfile?.total_taps || 0),
-        taps_today: Math.max(tapData.tapsToday, serverProfile?.taps_today || 0),
-        last_tap_time: new Date(tapData.lastTapTime).toISOString(),
-        sync_version: (serverProfile?.sync_version || 0) + 1,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("id", user.id);
 
     if (error) {
@@ -192,16 +199,20 @@ export async function syncBoosters(boosters: {
       .eq("id", user.id)
       .single();
 
+    const serverData = serverProfile as any;
+
+    const updateData: any = {
+      booster_income_per_tap: Math.max(boosters.incomePerTap, serverProfile?.booster_income_per_tap || 1),
+      booster_energy_per_tap: Math.max(boosters.energyPerTap, serverProfile?.booster_energy_per_tap || 1),
+      booster_energy_capacity: Math.max(boosters.energyCapacity, serverProfile?.booster_energy_capacity || 1),
+      booster_recovery_rate: Math.max(boosters.recoveryRate, serverProfile?.booster_recovery_rate || 1),
+      sync_version: (serverData?.sync_version || 0) + 1,
+      updated_at: new Date().toISOString(),
+    };
+
     const { error } = await supabase
       .from("profiles")
-      .update({
-        booster_income_per_tap: Math.max(boosters.incomePerTap, serverProfile?.booster_income_per_tap || 1),
-        booster_energy_per_tap: Math.max(boosters.energyPerTap, serverProfile?.booster_energy_per_tap || 1),
-        booster_energy_capacity: Math.max(boosters.energyCapacity, serverProfile?.booster_energy_capacity || 1),
-        booster_recovery_rate: Math.max(boosters.recoveryRate, serverProfile?.booster_recovery_rate || 1),
-        sync_version: (serverProfile?.sync_version || 0) + 1,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq("id", user.id);
 
     if (error) {
@@ -349,6 +360,9 @@ export async function loadPlayerState() {
       return { success: false, error: error.message };
     }
 
+    // Cast to extended type for sync-specific fields
+    const profileData = data as any;
+
     console.log("✅ Player state loaded from Supabase");
     
     return {
@@ -361,9 +375,9 @@ export async function loadPlayerState() {
         energy: data.current_energy || 1500,
         maxEnergy: data.max_energy || 1500,
         totalTaps: data.total_taps || 0,
-        tapsToday: data.taps_today || 0,
+        tapsToday: profileData.taps_today || 0,
         lastClaimTimestamp: new Date(data.last_claim_timestamp || Date.now()).getTime(),
-        lastTapTime: data.last_tap_time ? new Date(data.last_tap_time).getTime() : Date.now(),
+        lastTapTime: profileData.last_tap_time ? new Date(profileData.last_tap_time).getTime() : Date.now(),
         boosters: {
           incomePerTap: data.booster_income_per_tap || 1,
           energyPerTap: data.booster_energy_per_tap || 1,
