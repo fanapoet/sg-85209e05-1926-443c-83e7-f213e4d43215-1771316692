@@ -1,5 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { 
+  syncPlayerState, 
+  syncBoosters, 
+  syncQuickCharge,
+  loadPlayerState,
+  startAutoSync,
+  stopAutoSync
+} from "@/services/syncService";
 
 type Tier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
 
@@ -20,6 +28,11 @@ interface GameState {
   totalUpgrades: number;
   totalConversions: number;
   hasClaimedIdleToday: boolean;
+  lastClaimTimestamp: number;
+  
+  // Sync status
+  isSyncing: boolean;
+  lastSyncTime: number;
   
   // Methods
   addBZ: (amount: number) => void;
@@ -37,6 +50,9 @@ interface GameState {
   incrementUpgrades: () => void;
   incrementConversions: (amount: number) => void;
   markIdleClaimed: () => void;
+  
+  // Sync methods
+  manualSync: () => Promise<void>;
 }
 
 const GameStateContext = createContext<GameState | null>(null);
@@ -80,6 +96,12 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [totalConversions, setTotalConversions] = useState(() => safeGetItem("bunergy_totalConversions", 0));
   const [hasClaimedIdleToday, setHasClaimedIdleToday] = useState(() => safeGetItem("bunergy_hasClaimedIdleToday", false));
   const [lastResetDate, setLastResetDate] = useState(() => safeGetItem("bunergy_lastResetDate", new Date().toDateString()));
+  const [lastClaimTimestamp, setLastClaimTimestamp] = useState(() => safeGetItem("bunergy_lastClaimTimestamp", Date.now()));
+
+  // Sync State
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(0);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Persist State
   useEffect(() => { safeSetItem("bunergy_bz", bz); }, [bz]);
@@ -97,6 +119,98 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => { safeSetItem("bunergy_totalConversions", totalConversions); }, [totalConversions]);
   useEffect(() => { safeSetItem("bunergy_hasClaimedIdleToday", hasClaimedIdleToday); }, [hasClaimedIdleToday]);
   useEffect(() => { safeSetItem("bunergy_lastResetDate", lastResetDate); }, [lastResetDate]);
+  useEffect(() => { safeSetItem("bunergy_lastClaimTimestamp", lastClaimTimestamp); }, [lastClaimTimestamp]);
+
+  // Load initial state from Supabase on mount
+  useEffect(() => {
+    const initializeState = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          console.log("No user logged in, using local state");
+          setIsInitialized(true);
+          return;
+        }
+
+        console.log("Loading player state from Supabase...");
+        const result = await loadPlayerState();
+        
+        if (result.success && result.data) {
+          const serverData = result.data;
+          
+          // Merge server data with local (local wins if newer)
+          setBz(Math.max(bz, serverData.bz));
+          setBb(Math.max(bb, serverData.bb));
+          setXp(Math.max(xp, serverData.xp));
+          setEnergyState(serverData.energy);
+          setMaxEnergyState(serverData.maxEnergy);
+          setTotalTaps(Math.max(totalTaps, serverData.totalTaps));
+          setLastClaimTimestamp(Math.max(lastClaimTimestamp, serverData.lastClaimTimestamp));
+          
+          // Load boosters
+          const savedBoosters = safeGetItem("boosters", {});
+          const mergedBoosters = {
+            incomePerTap: Math.max(savedBoosters.incomePerTap || 1, serverData.boosters.incomePerTap),
+            energyPerTap: Math.max(savedBoosters.energyPerTap || 1, serverData.boosters.energyPerTap),
+            energyCapacity: Math.max(savedBoosters.energyCapacity || 1, serverData.boosters.energyCapacity),
+            recoveryRate: Math.max(savedBoosters.recoveryRate || 1, serverData.boosters.recoveryRate),
+          };
+          safeSetItem("boosters", mergedBoosters);
+          
+          // Load QuickCharge
+          const savedQC = safeGetItem("quickCharge", {});
+          const mergedQC = {
+            usesRemaining: Math.max(savedQC.usesRemaining || 5, serverData.quickCharge.usesRemaining),
+            cooldownEndTime: serverData.quickCharge.cooldownEndTime || savedQC.cooldownEndTime,
+            lastReset: Math.max(savedQC.lastReset || Date.now(), serverData.quickCharge.lastReset),
+          };
+          safeSetItem("quickCharge", mergedQC);
+          
+          console.log("✅ State loaded from Supabase and merged with local");
+          setLastSyncTime(Date.now());
+        }
+      } catch (error) {
+        console.error("Failed to load initial state:", error);
+      } finally {
+        setIsInitialized(true);
+      }
+    };
+
+    initializeState();
+  }, []); // Only run once on mount
+
+  // Start auto-sync after initialization
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    // Start auto-sync with current state getter
+    startAutoSync(() => ({
+      bz,
+      bb,
+      xp,
+      tier: getTier(xp),
+      energy,
+      maxEnergy,
+      totalTaps,
+      lastClaimTimestamp,
+      boosters: safeGetItem("boosters", {
+        incomePerTap: 1,
+        energyPerTap: 1,
+        energyCapacity: 1,
+        recoveryRate: 1,
+      }),
+      quickCharge: safeGetItem("quickCharge", {
+        usesRemaining: 5,
+        cooldownEndTime: undefined,
+        lastReset: Date.now(),
+      }),
+    }));
+
+    // Cleanup on unmount
+    return () => {
+      stopAutoSync();
+    };
+  }, [isInitialized, bz, bb, xp, energy, maxEnergy, totalTaps, lastClaimTimestamp]);
 
   // Daily Reset Logic
   useEffect(() => {
@@ -141,7 +255,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     syncReferrals();
     const interval = setInterval(syncReferrals, 30000); // Sync every 30s
     return () => clearInterval(interval);
-  }, []);
+  }, [referralCount]);
 
   // Tier Calculation
   const getTier = (xpValue: number): Tier => {
@@ -237,6 +351,32 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   
   const markIdleClaimed = () => {
     setHasClaimedIdleToday(true);
+    setLastClaimTimestamp(Date.now());
+  };
+
+  // Manual sync function
+  const manualSync = async () => {
+    if (isSyncing) return;
+    
+    setIsSyncing(true);
+    try {
+      await syncPlayerState({
+        bz,
+        bb,
+        xp,
+        tier,
+        energy,
+        maxEnergy,
+        totalTaps,
+        lastClaimTimestamp,
+      });
+      setLastSyncTime(Date.now());
+      console.log("✅ Manual sync completed");
+    } catch (error) {
+      console.error("Manual sync failed:", error);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   return (
@@ -255,6 +395,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       totalUpgrades, 
       totalConversions, 
       hasClaimedIdleToday,
+      lastClaimTimestamp,
+      isSyncing,
+      lastSyncTime,
       addBZ, 
       subtractBZ, 
       addBB, 
@@ -267,7 +410,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       incrementTaps, 
       incrementUpgrades, 
       incrementConversions, 
-      markIdleClaimed
+      markIdleClaimed,
+      manualSync
     }}>
       {children}
     </GameStateContext.Provider>
