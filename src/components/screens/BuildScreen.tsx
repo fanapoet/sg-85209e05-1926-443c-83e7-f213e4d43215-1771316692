@@ -47,11 +47,11 @@ import { recordReferralEarnings } from "@/services/referralService";
 
 // Speed-Up Configuration
 const SPEEDUP_CONFIG = {
-  minLevel: 4,                    // Available from L4+ (30min timer)
-  bbCostPerHour: 0.01,            // 0.01 BB per hour ($0.02 value)
-  starCostPerHour: 1,             // 1 star per hour ($0.02 value)
-  minBBCost: 0.005,               // Minimum 0.005 BB (for <30min)
-  minStarCost: 1,                 // Minimum 1 star
+  minLevel: 4,
+  bbCostPerHour: 0.01,
+  starCostPerHour: 1,
+  minBBCost: 0.005,
+  minStarCost: 1,
 };
 
 type PartKey = string;
@@ -182,7 +182,6 @@ export function BuildScreen() {
         const loaded = JSON.parse(savedParts);
         setPartStates(loaded);
       } else {
-        // Initialize all parts at L0
         const initial: Record<PartKey, PartState> = {};
         allParts.forEach(part => {
           initial[part.key] = { level: 0, upgrading: false, upgradeStartTime: 0, upgradeEndTime: 0 };
@@ -202,7 +201,6 @@ export function BuildScreen() {
       setIsLoaded(true);
     } catch (error) {
       console.error("Failed to load build state:", error);
-      // Initialize fresh state on error
       const initial: Record<PartKey, PartState> = {};
       allParts.forEach(part => {
         initial[part.key] = { level: 0, upgrading: false, upgradeStartTime: 0, upgradeEndTime: 0 };
@@ -238,7 +236,6 @@ export function BuildScreen() {
         state.upgradeEndTime = 0;
         updated = true;
 
-        // Show completion celebration
         newCelebrations[key] = true;
         setTimeout(() => {
           setCompletionCelebrations(prev => {
@@ -263,41 +260,37 @@ export function BuildScreen() {
     }
   }, [currentTime, isLoaded]);
 
-  // Update global bzPerHour whenever partStates change
+  // Update global bzPerHour
   useEffect(() => {
     if (!isLoaded) return;
     const totalYield = getTotalHourlyYield();
     setBzPerHour(totalYield);
   }, [partStates, isLoaded, setBzPerHour]);
 
-  // Timer duration by level
   const getUpgradeTime = (level: number): number => {
     if (level < 3) return 0;
-    if (level === 3) return 15 * 60 * 1000; // 15m
-    if (level === 4) return 30 * 60 * 1000; // 30m
-    if (level === 5) return 60 * 60 * 1000; // 1h
-    if (level === 6) return 4 * 60 * 60 * 1000; // 4h
-    if (level === 7) return 8 * 60 * 60 * 1000; // 8h
-    if (level === 8) return 16 * 60 * 60 * 1000; // 16h
-    if (level === 9) return 24 * 60 * 60 * 1000; // 24h
-    if (level === 10) return 36 * 60 * 60 * 1000; // 36h
-    return 48 * 60 * 60 * 1000; // 48h
+    if (level === 3) return 15 * 60 * 1000;
+    if (level === 4) return 30 * 60 * 1000;
+    if (level === 5) return 60 * 60 * 1000;
+    if (level === 6) return 4 * 60 * 60 * 1000;
+    if (level === 7) return 8 * 60 * 60 * 1000;
+    if (level === 8) return 16 * 60 * 60 * 1000;
+    if (level === 9) return 24 * 60 * 60 * 1000;
+    if (level === 10) return 36 * 60 * 60 * 1000;
+    return 48 * 60 * 60 * 1000;
   };
 
-  // Upgrade cost formula
   const getUpgradeCost = (part: Part, currentLevel: number): number => {
     return Math.floor(
       part.baseCost * Math.pow(1.2, currentLevel) * (1 + 0.10 * part.stage)
     );
   };
 
-  // Yield per hour per part
   const getPartYield = (part: Part, level: number): number => {
     if (level === 0) return 0;
     return part.baseYield * Math.pow(1.15, level) * (1 + 0.15 * part.stage);
   };
 
-  // Total hourly yield
   const getTotalHourlyYield = (): number => {
     let total = 0;
     allParts.forEach(part => {
@@ -309,7 +302,6 @@ export function BuildScreen() {
     return total;
   };
 
-  // Tier multiplier
   const getTierMultiplier = (): number => {
     if (tier === "Bronze") return 1.0;
     if (tier === "Silver") return 1.05;
@@ -319,24 +311,22 @@ export function BuildScreen() {
     return 1.0;
   };
 
-  // Accrued idle income
   const getAccruedIncome = (): { base: number; surge: number; total: number; hours: number } => {
     const now = Date.now();
     const elapsed = now - idleState.lastClaimTime;
-    const hours = Math.min(elapsed / (60 * 60 * 1000), 4); // Cap at 4h
+    const hours = Math.min(elapsed / (60 * 60 * 1000), 4);
 
     const hourlyYield = getTotalHourlyYield();
     const tierMultiplier = getTierMultiplier();
     const baseIncome = hourlyYield * hours * tierMultiplier;
 
-    // PowerSurge: ALWAYS applies based on time since last claim
     let surgeBonus = 0;
     if (hours >= 1 && hours < 2) {
-      surgeBonus = baseIncome * 0.25; // 25% bonus
+      surgeBonus = baseIncome * 0.25;
     } else if (hours >= 2 && hours < 3) {
-      surgeBonus = baseIncome * 0.10; // 10% bonus
+      surgeBonus = baseIncome * 0.10;
     } else if (hours >= 3 && hours <= 4) {
-      surgeBonus = baseIncome * 0.05; // 5% bonus
+      surgeBonus = baseIncome * 0.05;
     }
 
     return {
@@ -347,7 +337,6 @@ export function BuildScreen() {
     };
   };
 
-  // Speed-Up cost calculation
   const getSpeedUpCost = (timeRemaining: number): { bb: number; stars: number } => {
     const hoursRemaining = timeRemaining / (60 * 60 * 1000);
     const bbCost = Math.max(
@@ -361,7 +350,6 @@ export function BuildScreen() {
     return { bb: Number(bbCost.toFixed(6)), stars: starCost };
   };
 
-  // Check if Speed-Up is available for a part
   const canSpeedUp = (part: Part, state: PartState): boolean => {
     if (!state.upgrading) return false;
     if (part.stage < 1 || state.level < SPEEDUP_CONFIG.minLevel - 1) return false;
@@ -369,7 +357,6 @@ export function BuildScreen() {
     return timeRemaining > 0;
   };
 
-  // Claim idle income with animation
   const handleClaim = () => {
     const accrued = getAccruedIncome();
     if (accrued.total > 0) {
@@ -381,9 +368,8 @@ export function BuildScreen() {
       setIdleState(newIdleState);
       localStorage.setItem("idleState", JSON.stringify(newIdleState));
       
-      markIdleClaimed(); // Track for tasks
+      markIdleClaimed();
 
-      // Track referral earnings (20% share)
       const trackEarnings = async () => {
         try {
           const { data: { user } } = await supabase.auth.getUser();
@@ -405,22 +391,18 @@ export function BuildScreen() {
     }
   };
 
-  // Open Speed-Up dialog
   const handleOpenSpeedUp = (partKey: string) => {
     setSpeedUpDialog({ open: true, partKey, step: "choose" });
   };
 
-  // Close Speed-Up dialog
   const handleCloseSpeedUp = () => {
     setSpeedUpDialog({ open: false, partKey: null, step: "choose" });
   };
 
-  // Handle BB payment (show confirmation)
   const handleBBPaymentRequest = () => {
     setSpeedUpDialog(prev => ({ ...prev, step: "confirmBB" }));
   };
 
-  // Confirm BB payment and complete build
   const handleConfirmBBPayment = () => {
     const { partKey } = speedUpDialog;
     if (!partKey) return;
@@ -432,7 +414,6 @@ export function BuildScreen() {
     const timeRemaining = Math.max(0, state.upgradeEndTime - currentTime);
     const cost = getSpeedUpCost(timeRemaining);
 
-    // Check BB balance
     if (bb < cost.bb) {
       toast({
         title: "Insufficient Balance",
@@ -443,9 +424,7 @@ export function BuildScreen() {
       return;
     }
 
-    // Deduct BB
     if (subtractBB(cost.bb)) {
-      // Complete build instantly
       completeBuildInstantly(partKey);
       
       toast({
@@ -457,40 +436,39 @@ export function BuildScreen() {
     }
   };
 
-  // Handle Telegram Stars payment
   const handleStarsPayment = async () => {
-    const { partKey, part, cost } = (() => {
-      const key = speedUpDialog.partKey;
-      if (!key) return { partKey: null, part: null, cost: null };
-      const p = allParts.find(pr => pr.key === key);
-      if (!p) return { partKey: null, part: null, cost: null };
-      
-      const state = partStates[key];
-      const timeRemaining = state ? Math.max(0, state.upgradeEndTime - currentTime) : 0;
-      const c = getSpeedUpCost(timeRemaining);
-      
-      return { partKey: key, part: p, cost: c };
-    })();
+    const { partKey } = speedUpDialog;
+    if (!partKey) return;
 
-    if (!partKey || !part || !cost) return;
+    const part = allParts.find(p => p.key === partKey);
+    const state = partStates[partKey];
+    if (!part || !state) return;
+
+    const timeRemaining = Math.max(0, state.upgradeEndTime - currentTime);
+    const cost = getSpeedUpCost(timeRemaining);
 
     try {
-      // Get Telegram user data
-      if (typeof window === "undefined" || !window.Telegram?.WebApp?.initDataUnsafe?.user) {
-        toast({
-          title: "Error",
-          description: "Telegram user data not available. Please restart the app.",
-          variant: "destructive"
-        });
-        return;
+      console.log("Starting Stars payment flow...");
+
+      // Check Telegram WebApp availability
+      if (typeof window === "undefined" || !window.Telegram?.WebApp) {
+        throw new Error("Telegram WebApp not available");
       }
 
-      const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
-      const telegramUserId = tgUser.id;
+      const tgWebApp = window.Telegram.WebApp;
+      const tgUser = tgWebApp.initDataUnsafe?.user;
 
-      // Get user ID from Supabase (you'll need to implement getUserId)
-      // For now, using telegram_id as fallback
-      const userId = telegramUserId.toString(); // Replace with actual Supabase user ID
+      if (!tgUser?.id) {
+        throw new Error("Telegram user data not available. Please restart the app.");
+      }
+
+      console.log("Telegram user:", tgUser.id);
+
+      // Get Supabase user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = user?.id || tgUser.id.toString();
+
+      console.log("Creating invoice for user:", userId);
 
       toast({
         title: "Creating Invoice...",
@@ -505,56 +483,53 @@ export function BuildScreen() {
         },
         body: JSON.stringify({
           userId,
-          telegramUserId,
+          telegramUserId: tgUser.id,
           stars: cost.stars,
           partKey,
           partName: part.name,
-          partLevel: partStates[partKey]?.level || 0
+          partLevel: state.level
         })
       });
 
       const data = await response.json();
+      console.log("Invoice API response:", data);
 
       if (!response.ok || !data.success) {
-        throw new Error(data.error || "Failed to create invoice");
+        throw new Error(data.error || data.details || "Failed to create invoice");
       }
 
-      const { invoiceLink, invoiceId, invoicePayload } = data;
+      const { invoiceLink } = data;
+      console.log("Opening invoice link:", invoiceLink);
 
       // Open invoice in Telegram
-      if (window.Telegram?.WebApp) {
-        window.Telegram.WebApp.openInvoice(invoiceLink, (status) => {
-          console.log("Invoice status:", status);
+      tgWebApp.openInvoice(invoiceLink, (status) => {
+        console.log("Invoice status:", status);
 
-          if (status === "paid") {
-            // Payment successful - complete build
-            completeBuildInstantly(partKey);
+        if (status === "paid") {
+          completeBuildInstantly(partKey);
 
-            toast({
-              title: "Build Completed!",
-              description: `Spent ${cost.stars} Stars to complete "${part.name}" instantly.`,
-            });
+          toast({
+            title: "Build Completed!",
+            description: `Spent ${cost.stars} Stars to complete "${part.name}" instantly.`,
+          });
 
-            handleCloseSpeedUp();
-          } else if (status === "cancelled") {
-            toast({
-              title: "Payment Cancelled",
-              description: "Speed-up payment was cancelled.",
-              variant: "destructive"
-            });
-            handleCloseSpeedUp();
-          } else if (status === "failed") {
-            toast({
-              title: "Payment Failed",
-              description: "Payment could not be processed. Please try again.",
-              variant: "destructive"
-            });
-            handleCloseSpeedUp();
-          }
-        });
-      } else {
-        throw new Error("Telegram WebApp not available");
-      }
+          handleCloseSpeedUp();
+        } else if (status === "cancelled") {
+          toast({
+            title: "Payment Cancelled",
+            description: "Speed-up payment was cancelled.",
+            variant: "destructive"
+          });
+          handleCloseSpeedUp();
+        } else if (status === "failed") {
+          toast({
+            title: "Payment Failed",
+            description: "Payment could not be processed. Please try again.",
+            variant: "destructive"
+          });
+          handleCloseSpeedUp();
+        }
+      });
 
     } catch (error) {
       console.error("Stars payment error:", error);
@@ -567,12 +542,10 @@ export function BuildScreen() {
     }
   };
 
-  // Complete build instantly (used by both BB and Stars)
   const completeBuildInstantly = (partKey: string) => {
     const state = partStates[partKey];
     if (!state) return;
 
-    // Calculate XP reward
     const newLevel = state.level + 1;
     let xpReward = 0;
     if (newLevel <= 5) xpReward = 50;
@@ -580,8 +553,8 @@ export function BuildScreen() {
     else xpReward = 200;
 
     addXP(xpReward);
-    incrementUpgrades(); // Track for tasks
-    const now = Date.now();
+    incrementUpgrades();
+
     const newStates = {
       ...partStates,
       [partKey]: {
@@ -596,14 +569,12 @@ export function BuildScreen() {
     setPartStates(newStates);
     localStorage.setItem("buildParts", JSON.stringify(newStates));
 
-    // Clear active build
     if (idleState.activeBuildKey === partKey) {
       const newIdleState = { ...idleState, activeBuildKey: null };
       setIdleState(newIdleState);
       localStorage.setItem("idleState", JSON.stringify(newIdleState));
     }
 
-    // Show completion celebration
     setCompletionCelebrations(prev => ({ ...prev, [partKey]: true }));
     setTimeout(() => {
       setCompletionCelebrations(prev => {
@@ -613,7 +584,6 @@ export function BuildScreen() {
       });
     }, 3000);
 
-    // Show XP reward message
     setUpgradeButtonMessage(prev => ({
       ...prev,
       [partKey]: `✅ +${xpReward} XP Earned!`
@@ -627,7 +597,6 @@ export function BuildScreen() {
     }, 3000);
   };
 
-  // Start upgrade
   const handleUpgrade = (part: Part) => {
     const state = partStates[part.key];
     if (!state) return;
@@ -637,13 +606,11 @@ export function BuildScreen() {
 
     if (!canUpgradePart(part)) return;
 
-    // Check for active build
     if (idleState.activeBuildKey && idleState.activeBuildKey !== part.key) return;
 
     const upgradeTime = getUpgradeTime(state.level);
 
     if (subtractBZ(cost)) {
-      // Calculate XP reward based on new level
       const newLevel = state.level + 1;
       let xpReward = 0;
       
@@ -651,13 +618,11 @@ export function BuildScreen() {
       else if (newLevel <= 10) xpReward = 100;
       else xpReward = 200;
 
-      // Show XP reward on button
       setUpgradeButtonMessage({
         ...upgradeButtonMessage,
         [part.key]: `✅ +${xpReward} XP Earned!`
       });
 
-      // Clear message after 3 seconds
       setTimeout(() => {
         setUpgradeButtonMessage(prev => {
           const updated = { ...prev };
@@ -667,7 +632,7 @@ export function BuildScreen() {
       }, 3000);
 
       addXP(xpReward);
-      incrementUpgrades(); // Track for tasks
+      incrementUpgrades();
       const now = Date.now();
       const newStates = {
         ...partStates,
@@ -691,7 +656,6 @@ export function BuildScreen() {
     }
   };
 
-  // Check if part is unlocked
   const isPartUnlocked = (part: Part): boolean => {
     if (part.index === 1) return true;
 
@@ -702,7 +666,6 @@ export function BuildScreen() {
     return prevState ? prevState.level >= 5 : false;
   };
 
-  // Check if stage is visible
   const isStageVisible = (stageId: number): boolean => {
     if (stageId === 1) return true;
 
@@ -716,14 +679,12 @@ export function BuildScreen() {
     return prevStageL5Count >= prevStageParts.length * 0.8;
   };
 
-  // Check if stage is unlocked (referral gate)
   const isStageUnlocked = (stageId: number): boolean => {
     const stage = stages.find(s => s.id === stageId);
     if (!stage) return false;
     return referralCount >= stage.referralRequirement;
   };
 
-  // Can upgrade part
   const canUpgradePart = (part: Part): boolean => {
     const state = partStates[part.key];
     if (!state) return false;
@@ -736,7 +697,6 @@ export function BuildScreen() {
     return true;
   };
 
-  // Format time
   const formatTime = (ms: number): string => {
     const hours = Math.floor(ms / (60 * 60 * 1000));
     const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
@@ -785,7 +745,6 @@ export function BuildScreen() {
               <span className="font-bold">{accrued.base.toLocaleString()} BZ</span>
             </div>
             
-            {/* ALWAYS SHOW PowerSurge row - fixed height */}
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-1">
                 <Flame className="h-4 w-4 text-orange-500" />
@@ -806,7 +765,6 @@ export function BuildScreen() {
             </p>
           </div>
 
-          {/* Fixed height info box */}
           <div className="text-xs bg-orange-100 dark:bg-orange-900 p-2 rounded h-[60px] flex flex-col justify-center">
             <div className="flex items-center gap-1 font-semibold mb-1">
               <Flame className="h-3 w-3 text-orange-500" />
@@ -1000,7 +958,6 @@ export function BuildScreen() {
                           )}
                         </Button>
 
-                        {/* Speed-Up Button */}
                         {canSpeedUp(part, state) && (
                           <Button
                             onClick={() => handleOpenSpeedUp(part.key)}
@@ -1047,7 +1004,6 @@ export function BuildScreen() {
 
                   <p className="text-center">Complete instantly?</p>
 
-                  {/* BB Payment Option */}
                   <Card className="p-4 space-y-2 border-2 hover:border-primary transition-colors cursor-pointer" onClick={handleBBPaymentRequest}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -1066,7 +1022,6 @@ export function BuildScreen() {
                     </Button>
                   </Card>
 
-                  {/* Telegram Stars Option */}
                   <Card className="p-4 space-y-2 border-2 hover:border-primary transition-colors cursor-pointer" onClick={handleStarsPayment}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
