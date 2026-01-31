@@ -274,57 +274,94 @@ export function TapScreen() {
   const isEnergyFull = energy >= displayMaxEnergy * 0.95;
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl mx-auto">
-      {/* Lifetime Taps Counter */}
-      <Card className="p-4 bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border-orange-500/20">
+    <div className="p-4 space-y-3 max-w-2xl mx-auto pb-24">
+      {/* Compact Stats - Lifetime Taps & Energy Combined */}
+      <Card className="p-3 space-y-2">
+        {/* Lifetime Taps */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-orange-500" />
+            <TrendingUp className="h-4 w-4 text-orange-500" />
             <span className="font-semibold text-sm">Lifetime Taps</span>
           </div>
-          <span className="text-2xl font-bold text-orange-500">
+          <span className="text-xl font-bold text-orange-500">
             {totalTaps.toLocaleString()}
           </span>
         </div>
         {totalTaps > 0 && (
-          <p className="text-xs text-muted-foreground mt-2">
+          <p className="text-[10px] text-muted-foreground">
             Next milestone: {(Math.ceil(totalTaps / 100) * 100).toLocaleString()} taps 🎉
           </p>
         )}
+
+        {/* Divider */}
+        <div className="border-t border-border my-2" />
+
+        {/* Energy Bar */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-1.5">
+              <Zap className={`h-4 w-4 text-yellow-500 ${isEnergyFull ? 'animate-pulse' : ''}`} />
+              <span className="font-semibold text-sm">Energy</span>
+            </div>
+            <span className="text-base font-bold">
+              {Math.floor(energy)} / {displayMaxEnergy}
+            </span>
+          </div>
+          <div className="w-full bg-muted rounded-full h-2.5 relative overflow-hidden">
+            <div
+              className={`h-2.5 rounded-full transition-all duration-300 ${
+                isEnergyFull 
+                  ? 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 animate-pulse shadow-lg shadow-yellow-500/50' 
+                  : 'bg-yellow-500'
+              }`}
+              style={{ width: `${(energy / displayMaxEnergy) * 100}%` }}
+            />
+            {isEnergyFull && (
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+            )}
+          </div>
+          <div className="flex items-center justify-between mt-1.5">
+            <p className="text-[10px] text-muted-foreground">
+              Recovery: +{recoveryRate.toFixed(2)}/sec
+            </p>
+            {isEnergyFull && (
+              <span className="text-[10px] text-green-500 font-semibold">⚡ FULL!</span>
+            )}
+          </div>
+        </div>
       </Card>
 
-      {/* Energy Bar */}
-      <Card className="p-4">
+      {/* QuickCharge - Compact */}
+      <Card className="p-3">
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Zap className={`h-5 w-5 text-yellow-500 ${isEnergyFull ? 'animate-pulse' : ''}`} />
-            <span className="font-semibold">Energy</span>
+          <div>
+            <h3 className="font-semibold text-sm">QuickCharge</h3>
+            <p className="text-[10px] text-muted-foreground">Instant full restore</p>
           </div>
-          <span className="text-lg font-bold">
-            {Math.floor(energy)} / {displayMaxEnergy}
-          </span>
+          <div className="text-xs font-medium text-muted-foreground">{quickChargeUses}/5</div>
         </div>
-        <div className="w-full bg-muted rounded-full h-3 relative overflow-hidden">
-          <div
-            className={`h-3 rounded-full transition-all duration-300 ${
-              isEnergyFull 
-                ? 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 animate-pulse shadow-lg shadow-yellow-500/50' 
-                : 'bg-yellow-500'
-            }`}
-            style={{ width: `${(energy / displayMaxEnergy) * 100}%` }}
-          />
-          {isEnergyFull && (
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+
+        <Button
+          onClick={handleQuickCharge}
+          disabled={!canQuickCharge}
+          className="w-full"
+          size="sm"
+          variant={canQuickCharge ? "default" : "secondary"}
+        >
+          {quickChargeCooldown > 0 ? (
+            <><Clock className="mr-2 h-3.5 w-3.5" />Cooldown: {formatCooldown(quickChargeCooldown)}</>
+          ) : energy >= displayMaxEnergy * 0.5 ? (
+            "Available when energy < 50%"
+          ) : quickChargeUses <= 0 ? (
+            "No uses remaining"
+          ) : (
+            <><Zap className="mr-2 h-3.5 w-3.5" />Use QuickCharge</>
           )}
-        </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Recovery: +{recoveryRate.toFixed(2)}/sec
-          {isEnergyFull && <span className="text-green-500 font-semibold ml-2">⚡ FULL ENERGY!</span>}
-        </p>
+        </Button>
       </Card>
 
       {/* Main Tap Button with Bunny */}
-      <div className="relative flex items-center justify-center py-8">
+      <div className="relative flex items-center justify-center py-6">
         <button
           onClick={handleTap}
           disabled={energy < energyCost}
@@ -401,34 +438,6 @@ export function TapScreen() {
           </div>
         ))}
       </div>
-
-      {/* QuickCharge Panel */}
-      <Card className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="font-semibold">QuickCharge</h3>
-            <p className="text-xs text-muted-foreground">Instantly restore energy to full</p>
-          </div>
-          <div className="text-sm font-medium text-muted-foreground">{quickChargeUses}/5 uses</div>
-        </div>
-
-        <Button
-          onClick={handleQuickCharge}
-          disabled={!canQuickCharge}
-          className="w-full"
-          variant={canQuickCharge ? "default" : "secondary"}
-        >
-          {quickChargeCooldown > 0 ? (
-            <><Clock className="mr-2 h-4 w-4" />Cooldown: {formatCooldown(quickChargeCooldown)}</>
-          ) : energy >= displayMaxEnergy * 0.5 ? (
-            "Available when energy < 50%"
-          ) : quickChargeUses <= 0 ? (
-            "No uses remaining"
-          ) : (
-            <><Zap className="mr-2 h-4 w-4" />Use QuickCharge</>
-          )}
-        </Button>
-      </Card>
 
       <style jsx>{`
         @keyframes float {

@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import Image from "next/image";
 
 const PRESET_AVATARS = [
   "🐰", "🔥", "⚡", "💎", "🚀", "🎮", "🏆", "⭐",
@@ -122,11 +123,12 @@ export function CompactDashboard() {
 
   return (
     <>
-      <div className="bg-card border-b border-border shadow-sm">
-        <div className="p-3 space-y-2">
-          {/* Row 1: BZ, BB (left) | Tier Badge, Avatar (right) */}
+      <div className="bg-card border-b border-border shadow-md sticky top-0 z-50">
+        <div className="p-3 space-y-3">
+          {/* Top Row: Left (BZ, BB) | Center (Logo) | Right (Tier, Avatar) */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            {/* Left: BZ & BB */}
+            <div className="flex flex-col gap-1 min-w-[80px]">
               <div className="text-xs">
                 <span className="font-bold text-sm text-foreground font-mono">{formatBZ(bz)}</span>
                 <span className="text-muted-foreground ml-1 text-[10px] font-semibold">BZ</span>
@@ -137,8 +139,23 @@ export function CompactDashboard() {
               </div>
             </div>
             
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className={`text-[10px] font-bold px-1.5 py-0 ${getTierColor(tier)}`}>
+            {/* Center: Bunergy Logo */}
+            <div className="flex items-center justify-center flex-1">
+              <div className="relative w-16 h-16 flex items-center justify-center">
+                <Image 
+                  src="/bunergy-icon.png" 
+                  alt="Bunergy" 
+                  width={64} 
+                  height={64}
+                  className="object-contain drop-shadow-lg"
+                  priority
+                />
+              </div>
+            </div>
+            
+            {/* Right: Tier & Avatar */}
+            <div className="flex flex-col items-end gap-1 min-w-[80px]">
+              <Badge variant="secondary" className={`text-[10px] font-bold px-1.5 py-0.5 ${getTierColor(tier)}`}>
                 {tier}
               </Badge>
               <button 
@@ -150,29 +167,30 @@ export function CompactDashboard() {
             </div>
           </div>
           
-          {/* Row 2: XP, Energy, BZ/h, Tier Bonus */}
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 text-[10px]">
-                <span className="text-muted-foreground font-semibold">XP:</span>
-                <span className="font-mono font-bold text-foreground text-xs">{Math.floor(xp).toLocaleString()}</span>
-              </div>
-              
-              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                <Zap className="h-3 w-3 text-yellow-500" />
-                <span className="font-mono font-semibold">{Math.floor(energy)}/{actualMaxEnergy}</span>
-              </div>
+          {/* Bottom Row: Stats */}
+          <div className="flex items-center justify-between gap-3 text-[10px]">
+            {/* XP */}
+            <div className="flex items-center gap-1">
+              <span className="text-muted-foreground font-semibold">XP:</span>
+              <span className="font-mono font-bold text-foreground">{Math.floor(xp).toLocaleString()}</span>
             </div>
             
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                <TrendingUp className="h-3 w-3" />
-                <span className="font-mono font-semibold">{formatRate(bzPerHour)}</span>
-                <span className="text-[9px]">BZ/h</span>
-              </div>
-              <div className="text-green-600 dark:text-green-400 font-bold text-[10px]">
-                +{tierBonus}%
-              </div>
+            {/* Energy */}
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Zap className="h-3 w-3 text-yellow-500" />
+              <span className="font-mono font-semibold">{Math.floor(energy)}/{actualMaxEnergy}</span>
+            </div>
+            
+            {/* BZ/h Rate */}
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <TrendingUp className="h-3 w-3" />
+              <span className="font-mono font-semibold">{formatRate(bzPerHour)}</span>
+              <span className="text-[9px]">BZ/h</span>
+            </div>
+            
+            {/* Tier Bonus */}
+            <div className="text-green-600 dark:text-green-400 font-bold">
+              +{tierBonus}%
             </div>
           </div>
         </div>

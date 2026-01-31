@@ -437,109 +437,12 @@ export function BuildScreen() {
   };
 
   const handleStarsPayment = async () => {
-    const { partKey } = speedUpDialog;
-    if (!partKey) return;
-
-    const part = allParts.find(p => p.key === partKey);
-    const state = partStates[partKey];
-    if (!part || !state) return;
-
-    const timeRemaining = Math.max(0, state.upgradeEndTime - currentTime);
-    const cost = getSpeedUpCost(timeRemaining);
-
-    try {
-      console.log("Starting Stars payment flow...");
-
-      // Check Telegram WebApp availability
-      if (typeof window === "undefined" || !window.Telegram?.WebApp) {
-        throw new Error("Telegram WebApp not available");
-      }
-
-      const tgWebApp = window.Telegram.WebApp;
-      const tgUser = tgWebApp.initDataUnsafe?.user;
-
-      if (!tgUser?.id) {
-        throw new Error("Telegram user data not available. Please restart the app.");
-      }
-
-      console.log("Telegram user:", tgUser.id);
-
-      // Get Supabase user ID
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id || tgUser.id.toString();
-
-      console.log("Creating invoice for user:", userId);
-
-      toast({
-        title: "Creating Invoice...",
-        description: "Please wait while we prepare your payment.",
-      });
-
-      // Call API to create invoice
-      const response = await fetch("/api/create-stars-invoice", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          userId,
-          telegramUserId: tgUser.id,
-          stars: cost.stars,
-          partKey,
-          partName: part.name,
-          partLevel: state.level
-        })
-      });
-
-      const data = await response.json();
-      console.log("Invoice API response:", data);
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || data.details || "Failed to create invoice");
-      }
-
-      const { invoiceLink } = data;
-      console.log("Opening invoice link:", invoiceLink);
-
-      // Open invoice in Telegram
-      tgWebApp.openInvoice(invoiceLink, (status) => {
-        console.log("Invoice status:", status);
-
-        if (status === "paid") {
-          completeBuildInstantly(partKey);
-
-          toast({
-            title: "Build Completed!",
-            description: `Spent ${cost.stars} Stars to complete "${part.name}" instantly.`,
-          });
-
-          handleCloseSpeedUp();
-        } else if (status === "cancelled") {
-          toast({
-            title: "Payment Cancelled",
-            description: "Speed-up payment was cancelled.",
-            variant: "destructive"
-          });
-          handleCloseSpeedUp();
-        } else if (status === "failed") {
-          toast({
-            title: "Payment Failed",
-            description: "Payment could not be processed. Please try again.",
-            variant: "destructive"
-          });
-          handleCloseSpeedUp();
-        }
-      });
-
-    } catch (error) {
-      console.error("Stars payment error:", error);
-      toast({
-        title: "Payment Error",
-        description: error instanceof Error ? error.message : "Failed to process Stars payment.",
-        variant: "destructive"
-      });
-      handleCloseSpeedUp();
-    }
+    // Temporarily disabled - Coming Soon
+    toast({
+      title: "Coming Soon! 🚀",
+      description: "Telegram Stars payment will be available soon. Use BB payment for now!",
+    });
+    handleCloseSpeedUp();
   };
 
   const completeBuildInstantly = (partKey: string) => {
@@ -1022,20 +925,20 @@ export function BuildScreen() {
                     </Button>
                   </Card>
 
-                  <Card className="p-4 space-y-2 border-2 hover:border-primary transition-colors cursor-pointer" onClick={handleStarsPayment}>
+                  <Card className="p-4 space-y-2 border-2 border-muted bg-muted/50 cursor-not-allowed opacity-60">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
                           ⭐
                         </div>
                         <div className="text-left">
-                          <p className="font-semibold">Pay with Telegram Stars</p>
-                          <p className="text-xs text-muted-foreground">Cost: {cost.stars} Stars (~${(cost.stars * 0.02).toFixed(2)})</p>
+                          <p className="font-semibold">Telegram Stars</p>
+                          <p className="text-xs text-muted-foreground">Coming Soon! 🚀</p>
                         </div>
                       </div>
                     </div>
-                    <Button className="w-full" variant="outline">
-                      Pay {cost.stars} Stars ⭐
+                    <Button className="w-full" variant="outline" disabled>
+                      Coming Soon
                     </Button>
                   </Card>
 
