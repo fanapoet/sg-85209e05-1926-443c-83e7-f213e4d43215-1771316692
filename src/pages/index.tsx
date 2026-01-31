@@ -25,6 +25,7 @@ export default function Home() {
     // Check if running in Telegram
     const checkTelegram = async () => {
       const isTg = !!(window.Telegram?.WebApp?.initData);
+      console.log("🔍 Telegram detection:", { isTg, initData: window.Telegram?.WebApp?.initData });
       setIsInTelegram(isTg);
 
       if (isTg) {
@@ -35,14 +36,21 @@ export default function Home() {
         try {
           console.log("🔐 Authenticating with Telegram...");
           const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
+          console.log("👤 Telegram user data:", tgUser);
           
           if (tgUser) {
             const result = await signInWithTelegram(tgUser);
+            console.log("🔐 Auth result:", result);
+            
             if (result.success) {
               console.log("✅ Authentication successful - sync will start automatically");
+              console.log("📊 User ID:", result.user?.id);
+              console.log("🆕 Is new user:", result.isNewUser);
             } else {
               console.error("❌ Authentication failed:", result.error);
             }
+          } else {
+            console.error("❌ No Telegram user data available");
           }
         } catch (error) {
           console.error("❌ Auth error:", error);

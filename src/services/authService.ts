@@ -43,6 +43,8 @@ function generateReferralCode(): string {
  */
 export async function signInWithTelegram(telegramUser: TelegramUser) {
   try {
+    console.log("🔐 Starting Telegram sign-in for user:", telegramUser.id);
+    
     // Step 1: Sign in anonymously
     const { data: authData, error: authError } = await supabase.auth.signInAnonymously({
       options: {
@@ -55,29 +57,46 @@ export async function signInWithTelegram(telegramUser: TelegramUser) {
       },
     });
 
+    console.log("🔐 Anonymous auth result:", { 
+      success: !authError, 
+      userId: authData?.user?.id,
+      error: authError 
+    });
+
     if (authError) throw authError;
     if (!authData.user) throw new Error("No user returned from auth");
 
+    console.log("✅ Anonymous auth successful, user ID:", authData.user.id);
+
     // Step 2: Check if profile exists
+    console.log("🔍 Checking for existing profile...");
     const { data: existingProfile, error: fetchError } = await supabase
       .from("profiles")
       .select("*")
       .eq("id", authData.user.id)
       .single();
 
+    console.log("🔍 Profile check result:", {
+      exists: !!existingProfile,
+      error: fetchError,
+      errorCode: fetchError?.code
+    });
+
     if (fetchError && fetchError.code !== "PGRST116") {
       // PGRST116 = not found (expected for new users)
+      console.error("❌ Profile fetch error:", fetchError);
       throw fetchError;
     }
 
     // Step 3: If profile doesn't exist, create it with ALL fields initialized
     if (!existingProfile) {
+      console.log("🆕 Creating new profile...");
       const referralCode = generateReferralCode();
       const displayName = telegramUser.username || 
                          telegramUser.first_name || 
                          `User${telegramUser.id.toString().slice(-6)}`;
 
-      const { error: insertError } = await supabase.from("profiles").insert({
+      const profileData = {
         id: authData.user.id,
         telegram_id: telegramUser.id, // Passed as number to match database type
         telegram_username: telegramUser.username || null,
@@ -132,9 +151,21 @@ export async function signInWithTelegram(telegramUser: TelegramUser) {
         // Timestamps
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
+      };
+
+      console.log("📝 Inserting profile data:", {
+        userId: profileData.id,
+        telegramId: profileData.telegram_id,
+        displayName: profileData.display_name,
+        referralCode: profileData.referral_code
       });
 
-      if (insertError) throw insertError;
+      const { error: insertError } = await supabase.from("profiles").insert(profileData);
+
+      if (insertError) {
+        console.error("❌ Profile insert error:", insertError);
+        throw insertError;
+      }
 
       console.log("✅ New user profile created with full initialization:", {
         userId: authData.user.id,
