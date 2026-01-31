@@ -1,10 +1,12 @@
 {
-  "framework": "nextjs",
-  "redirects": [
+  "buildCommand": "next build",
+  "outputDirectory": ".next",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
     {
-      "source": "/old-path",
-      "destination": "/new-path",
-      "permanent": true
+      "source": "/(.*)",
+      "destination": "/"
     }
   ],
   "headers": [
@@ -14,10 +16,17 @@
         {
           "key": "X-Content-Type-Options",
           "value": "nosniff"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
         }
       ]
     }
   ],
-  "cleanUrls": true,
-  "trailingSlash": false
+  "env": {
+    "TELEGRAM_BOT_TOKEN": "7774596180:AAFDvn2k-z7KFE1QLKpW5EAaM6N-JOL80kY",
+    "TELEGRAM_PAYMENT_PROVIDER_TOKEN": "1877036958:TEST:baf85695ca7fc4a12f5ad4462baaa500b9201ed8",
+    "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3dnR3Y2V6eWh2eGRpcXl5eXBjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTMzNDg5OCwiZXhwIjoyMDg0OTEwODk4fQ.y8RP8fpO--FYiizOZ7NCsJEKZz_rVBoB2TUdFrfEMwk"
+  }
 }

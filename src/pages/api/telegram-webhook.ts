@@ -1,9 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const botToken = process.env.TELEGRAM_BOT_TOKEN!;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://lwvtwcezyhvxdiqyyypc.supabase.co";
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx3dnR3Y2V6eWh2eGRpcXl5eXBjIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2OTMzNDg5OCwiZXhwIjoyMDg0OTEwODk4fQ.y8RP8fpO--FYiizOZ7NCsJEKZz_rVBoB2TUdFrfEMwk";
+const botToken = process.env.TELEGRAM_BOT_TOKEN || "7774596180:AAFDvn2k-z7KFE1QLKpW5EAaM6N-JOL80kY";
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
