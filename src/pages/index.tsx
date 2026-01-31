@@ -12,6 +12,7 @@ import { XPTiersScreen } from "@/components/screens/XPTiersScreen";
 import { RewardsNFTsScreen } from "@/components/screens/RewardsNFTsScreen";
 import { TasksReferralsScreen } from "@/components/screens/TasksReferralsScreen";
 import { signInWithTelegram } from "@/services/authService";
+import { TelegramDebugPanel } from "@/components/TelegramDebugPanel";
 
 type TabKey = "tap" | "boost" | "build" | "convert" | "xp" | "rewards" | "tasks";
 
@@ -148,7 +149,11 @@ export default function Home() {
         <main className="pt-2">
           {renderScreen()}
         </main>
+        {/* Bottom Navigation */}
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+        
+        {/* Debug Panel - Only in development/testing */}
+        <TelegramDebugPanel />
       </div>
     </>
   );
