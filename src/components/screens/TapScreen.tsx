@@ -1,5 +1,5 @@
 import { useGameState } from "@/contexts/GameStateContext";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Zap, Clock, TrendingUp } from "lucide-react";
@@ -275,88 +275,73 @@ export function TapScreen() {
 
   return (
     <div className="p-3 space-y-2 max-w-2xl mx-auto pb-24">
-      {/* Ultra-Compact Stats - Single Row with Taps Left + Energy Right */}
-      <Card className="p-2">
-        <div className="grid grid-cols-2 gap-3">
+      {/* Ultra-Compact Stats - Single Row */}
+      <Card className="p-1.5">
+        <div className="grid grid-cols-2 gap-2">
           {/* Left: Lifetime Taps */}
-          <div>
-            <div className="flex items-center gap-1.5 mb-1">
-              <TrendingUp className="h-3.5 w-3.5 text-orange-500" />
-              <span className="font-semibold text-xs">Taps</span>
+          <div className="flex items-center gap-1.5">
+            <TrendingUp className="h-3 w-3 text-orange-500" />
+            <div>
+              <span className="text-[10px] text-muted-foreground">Taps</span>
+              <div className="text-sm font-bold text-orange-500">
+                {totalTaps.toLocaleString()}
+              </div>
             </div>
-            <div className="text-lg font-bold text-orange-500">
-              {totalTaps.toLocaleString()}
-            </div>
-            {totalTaps > 0 && (
-              <p className="text-[9px] text-muted-foreground mt-0.5">
-                Next: {(Math.ceil(totalTaps / 100) * 100).toLocaleString()} 🎉
-              </p>
-            )}
           </div>
 
           {/* Right: Energy */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-1.5">
-                <Zap className={`h-3.5 w-3.5 text-yellow-500 ${isEnergyFull ? 'animate-pulse' : ''}`} />
-                <span className="font-semibold text-xs">Energy</span>
+          <div className="flex items-center gap-1.5">
+            <Zap className={`h-3 w-3 text-yellow-500 ${isEnergyFull ? 'animate-pulse' : ''}`} />
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-[10px] text-muted-foreground">Energy</span>
+                {isEnergyFull && (
+                  <span className="text-[8px] text-green-500 font-semibold">⚡FULL</span>
+                )}
               </div>
-              {isEnergyFull && (
-                <span className="text-[9px] text-green-500 font-semibold">⚡ FULL</span>
-              )}
+              <div className="text-xs font-bold mb-0.5">
+                {Math.floor(energy)}/{displayMaxEnergy}
+              </div>
+              <div className="w-full bg-muted rounded-full h-1 relative overflow-hidden">
+                <div
+                  className={`h-1 rounded-full transition-all duration-300 ${
+                    isEnergyFull 
+                      ? 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 animate-pulse shadow-lg shadow-yellow-500/50' 
+                      : 'bg-yellow-500'
+                  }`}
+                  style={{ width: `${(energy / displayMaxEnergy) * 100}%` }}
+                />
+              </div>
             </div>
-            <div className="text-base font-bold mb-1">
-              {Math.floor(energy)} / {displayMaxEnergy}
-            </div>
-            <div className="w-full bg-muted rounded-full h-1.5 relative overflow-hidden">
-              <div
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  isEnergyFull 
-                    ? 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 animate-pulse shadow-lg shadow-yellow-500/50' 
-                    : 'bg-yellow-500'
-                }`}
-                style={{ width: `${(energy / displayMaxEnergy) * 100}%` }}
-              />
-              {isEnergyFull && (
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
-              )}
-            </div>
-            <p className="text-[9px] text-muted-foreground mt-0.5">
-              +{recoveryRate.toFixed(2)}/s
-            </p>
           </div>
         </div>
       </Card>
 
       {/* Ultra-Compact QuickCharge */}
-      <Card className="p-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Zap className="h-3.5 w-3.5 text-blue-500" />
-            <div>
-              <span className="font-semibold text-xs">QuickCharge</span>
-              <span className="text-[9px] text-muted-foreground ml-1.5">{quickChargeUses}/5</span>
-            </div>
-          </div>
-          <Button
-            onClick={handleQuickCharge}
-            disabled={!canQuickCharge}
-            size="sm"
-            className="h-7 text-xs px-3"
-            variant={canQuickCharge ? "default" : "secondary"}
-          >
-            {quickChargeCooldown > 0 ? (
-              <><Clock className="mr-1 h-3 w-3" />{formatCooldown(quickChargeCooldown)}</>
-            ) : energy >= displayMaxEnergy * 0.5 ? (
-              "Need < 50%"
-            ) : quickChargeUses <= 0 ? (
-              "No uses"
-            ) : (
-              "Use"
-            )}
-          </Button>
+      <div className="flex items-center justify-between gap-2 px-1">
+        <div className="flex items-center gap-1.5">
+          <Zap className="h-3 w-3 text-blue-500" />
+          <span className="text-xs font-semibold">QuickCharge</span>
+          <span className="text-[10px] text-muted-foreground">{quickChargeUses}/5</span>
         </div>
-      </Card>
+        <Button
+          onClick={handleQuickCharge}
+          disabled={!canQuickCharge}
+          size="sm"
+          className="h-6 text-[10px] px-2"
+          variant={canQuickCharge ? "default" : "secondary"}
+        >
+          {quickChargeCooldown > 0 ? (
+            <><Clock className="mr-1 h-2.5 w-2.5" />{formatCooldown(quickChargeCooldown)}</>
+          ) : energy >= displayMaxEnergy * 0.5 ? (
+            "Need < 50%"
+          ) : quickChargeUses <= 0 ? (
+            "No uses"
+          ) : (
+            "Use"
+          )}
+        </Button>
+      </div>
 
       {/* Bunny Character Tap Area - NFT Ready */}
       <div className="relative flex flex-col items-center justify-center py-4">
@@ -373,7 +358,7 @@ export function TapScreen() {
           </div>
         </div>
 
-        {/* Bunny Character Button */}
+        {/* Bunny Character Button - Using Transparent PNG */}
         <button
           onClick={handleTap}
           disabled={energy < energyCost}
@@ -384,10 +369,10 @@ export function TapScreen() {
             filter: bunnyGlow ? 'drop-shadow(0 0 20px rgba(251, 191, 36, 0.8))' : 'none'
           }}
         >
-          {/* Bunny Character Image */}
+          {/* Bunny Character Image - Transparent */}
           <div className="relative w-64 h-64">
             <img 
-              src="/bunny-character-1.png" 
+              src="/bunny-character-transparent.png" 
               alt="Bunny Character"
               className="w-full h-full object-contain"
               style={{

@@ -17,7 +17,7 @@ type TabKey = "tap" | "boost" | "build" | "convert" | "xp" | "rewards" | "tasks"
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabKey>("tap");
   const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
-  const [showWelcome, setShowWelcome] = useState<boolean>(false);
+  const [showWelcome, setShowWelcome] = useState<boolean>(true);
 
   useEffect(() => {
     // Check if running in Telegram
@@ -28,18 +28,6 @@ export default function Home() {
       if (isTg) {
         // Expand to full height
         window.Telegram?.WebApp?.expand();
-        
-        // Check if should show welcome screen
-        const hideWelcome = localStorage.getItem("bunergy_hide_welcome");
-        const lastShown = localStorage.getItem("bunergy_welcome_last_shown");
-        const today = new Date().toDateString();
-        
-        // Show welcome if:
-        // 1. User hasn't checked "don't show again"
-        // 2. AND (first time OR not shown today)
-        if (hideWelcome !== "true" && lastShown !== today) {
-          setShowWelcome(true);
-        }
       }
     };
 
@@ -78,13 +66,13 @@ export default function Home() {
     );
   }
 
-  // Show welcome screen for new/returning users
+  // ALWAYS show loading screen on app start
   if (showWelcome) {
     return (
       <>
         <SEO 
           title="Welcome to Bunergy"
-          description="Get started with Bunergy - Tap, Build, Earn!"
+          description="Tap, Build, Earn & Compete - Remember to come back every 4 hours!"
         />
         <WelcomeScreen onComplete={handleWelcomeComplete} />
       </>

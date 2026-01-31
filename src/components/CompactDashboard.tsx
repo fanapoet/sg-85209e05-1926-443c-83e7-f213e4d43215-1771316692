@@ -119,9 +119,8 @@ export function CompactDashboard() {
   const tierBonus = getTierBonus(tier);
 
   const getUserDisplayName = () => {
-    // Priority: Telegram username/first_name > full_name from metadata > email > "User"
+    // Priority: first_name + last_name > full_name > email > "User"
     if (telegramUser) {
-      if (telegramUser.username) return `@${telegramUser.username}`;
       if (telegramUser.first_name) {
         return telegramUser.last_name 
           ? `${telegramUser.first_name} ${telegramUser.last_name}`
@@ -162,8 +161,8 @@ export function CompactDashboard() {
   return (
     <>
       <div className="bg-card border-b border-border shadow-md sticky top-0 z-50">
-        <div className="p-3 space-y-2">
-          {/* Top Row: Left (BZ, BB) | Center (Logo) | Right (Tier, Avatar) */}
+        <div className="p-2.5 space-y-1">
+          {/* Top Row: Left (BZ, BB) | Center (Smaller Logo) | Right (Tier, Avatar) */}
           <div className="flex items-center justify-between">
             {/* Left: BZ & BB */}
             <div className="flex flex-col gap-1 min-w-[80px]">
@@ -177,14 +176,14 @@ export function CompactDashboard() {
               </div>
             </div>
             
-            {/* Center: Bunergy Logo */}
+            {/* Center: Smaller Bunergy Logo */}
             <div className="flex items-center justify-center flex-1">
-              <div className="relative w-16 h-16 flex items-center justify-center">
+              <div className="relative w-12 h-12 flex items-center justify-center">
                 <Image 
                   src="/bunergy-icon.png" 
                   alt="Bunergy" 
-                  width={64} 
-                  height={64}
+                  width={48} 
+                  height={48}
                   className="object-contain drop-shadow-lg"
                   priority
                 />
@@ -205,8 +204,8 @@ export function CompactDashboard() {
             </div>
           </div>
           
-          {/* Bottom Row: Stats - NO GAP ABOVE, LARGER FONT */}
-          <div className="flex items-center justify-between gap-3 text-xs">
+          {/* Bottom Row: Stats - Larger Font, No Gap */}
+          <div className="flex items-center justify-between gap-3 text-sm">
             {/* XP */}
             <div className="flex items-center gap-1">
               <span className="text-muted-foreground font-semibold">XP:</span>
@@ -275,7 +274,7 @@ export function CompactDashboard() {
                 <h3 className="font-semibold text-lg">
                   {getUserDisplayName()}
                 </h3>
-                {telegramUser?.username && (
+                {telegramUser && (
                   <p className="text-sm text-muted-foreground">
                     Telegram User
                   </p>
