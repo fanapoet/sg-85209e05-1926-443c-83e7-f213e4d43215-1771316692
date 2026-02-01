@@ -1,134 +1,141 @@
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
+import { useGameState } from "@/contexts/GameStateContext";
+import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
 
-/**
- * Debug Panel to diagnose Telegram WebApp integration
- * Shows real-time status of Telegram data and auth
- */
-export function TelegramDebugPanel() {
-  const [debugInfo, setDebugInfo] = useState<any>(null);
-  const [isVisible, setIsVisible] = useState(false);
+interface DebugLog {
+  timestamp: string;
+  message: string;
+  type: "info" | "success" | "error";
+}
 
+export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
+  const gameState = useGameState();
+  const [logs, setLogs] = useState<DebugLog[]>([]);
+
+  // Intercept console.log for sync-related messages
   useEffect(() => {
-    const checkTelegramData = async () => {
-      const tg = (window as any).Telegram?.WebApp;
-      
-      const info = {
-        // Telegram WebApp Status
-        telegramAvailable: !!tg,
-        telegramVersion: tg?.version || "N/A",
-        platform: tg?.platform || "N/A",
-        
-        // Telegram User Data
-        telegramUser: tg?.initDataUnsafe?.user || null,
-        telegramUserId: tg?.initDataUnsafe?.user?.id || "NOT FOUND",
-        telegramUsername: tg?.initDataUnsafe?.user?.username || "N/A",
-        telegramFirstName: tg?.initDataUnsafe?.user?.first_name || "N/A",
-        
-        // Profile Check
-        profileExists: false,
-        profileData: null,
-      };
+    const originalLog = console.log;
+    const originalError = console.error;
 
-      // Check if profile exists by telegram_id
-      if (info.telegramUserId !== "NOT FOUND") {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("id, telegram_id, display_name, username, bz_balance, bb_balance, total_taps, tier, referral_code")
-          .eq("telegram_id", info.telegramUserId)
-          .maybeSingle();
-
-        if (profile) {
-          info.profileExists = true;
-          info.profileData = profile;
-        }
+    console.log = (...args: any[]) => {
+      const message = args.join(" ");
+      if (message.includes("[MANUAL SYNC]") || message.includes("[AUTO-SYNC]") || 
+          message.includes("[Tap]") || message.includes("[Sync]") || 
+          message.includes("[BOOSTER]")) {
+        setLogs(prev => [...prev.slice(-20), {
+          timestamp: new Date().toLocaleTimeString(),
+          message,
+          type: "info"
+        }]);
       }
-
-      setDebugInfo(info);
+      originalLog.apply(console, args);
     };
 
-    checkTelegramData();
-    
-    // Refresh every 5 seconds
-    const interval = setInterval(checkTelegramData, 5000);
-    return () => clearInterval(interval);
+    console.error = (...args: any[]) => {
+      const message = args.join(" ");
+      if (message.includes("Sync") || message.includes("sync")) {
+        setLogs(prev => [...prev.slice(-20), {
+          timestamp: new Date().toLocaleTimeString(),
+          message,
+          type: "error"
+        }]);
+      }
+      originalError.apply(console, args);
+    };
+
+    return () => {
+      console.log = originalLog;
+      console.error = originalError;
+    };
   }, []);
 
-  if (!debugInfo) return null;
+  const testSync = async () => {
+    setLogs(prev => [...prev, {
+      timestamp: new Date().toLocaleTimeString(),
+      message: "🔵 Test Sync: Manually calling gameState.manualSync()",
+      type: "info"
+    }]);
+    
+    try {
+      await gameState.manualSync();
+      setLogs(prev => [...prev, {
+        timestamp: new Date().toLocaleTimeString(),
+        message: "✅ Test Sync: manualSync() completed",
+        type: "success"
+      }]);
+    } catch (error: any) {
+      setLogs(prev => [...prev, {
+        timestamp: new Date().toLocaleTimeString(),
+        message: `❌ Test Sync Error: ${error.message}`,
+        type: "error"
+      }]);
+    }
+  };
 
   return (
-    <>
-      {/* Toggle Button - Fixed bottom-left */}
-      <button
-        onClick={() => setIsVisible(!isVisible)}
-        className="fixed bottom-20 left-4 z-[9999] bg-purple-600 text-white px-3 py-2 rounded-lg shadow-lg text-xs font-bold"
-      >
-        {isVisible ? "Hide Debug" : "Show Debug"}
-      </button>
+    <div className="fixed inset-0 bg-black/90 z-50 overflow-auto text-white p-4">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold">🔍 Sync Debug Panel</h2>
+        <Button variant="ghost" size="sm" onClick={onClose}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
 
-      {/* Debug Panel - Only show when visible */}
-      {isVisible && (
-        <div className="fixed bottom-32 left-4 z-[9999] bg-black/95 text-white p-4 rounded-lg shadow-2xl max-w-md max-h-96 overflow-y-auto text-xs font-mono">
-          <h3 className="text-sm font-bold mb-3 text-yellow-400">🔍 Telegram Debug Panel</h3>
-          
-          {/* Telegram WebApp Status */}
-          <div className="mb-3">
-            <div className="text-green-400 font-bold mb-1">📱 Telegram WebApp:</div>
-            <div>Available: {debugInfo.telegramAvailable ? "✅ YES" : "❌ NO"}</div>
-            <div>Version: {debugInfo.telegramVersion}</div>
-            <div>Platform: {debugInfo.platform}</div>
-          </div>
-
-          {/* Telegram User Data */}
-          <div className="mb-3">
-            <div className="text-blue-400 font-bold mb-1">👤 Telegram User:</div>
-            <div>User ID: <span className={debugInfo.telegramUserId === "NOT FOUND" ? "text-red-500" : "text-green-400"}>{debugInfo.telegramUserId}</span></div>
-            <div>Username: {debugInfo.telegramUsername}</div>
-            <div>First Name: {debugInfo.telegramFirstName}</div>
-            {debugInfo.telegramUser && (
-              <pre className="mt-1 text-[10px] bg-gray-900 p-1 rounded overflow-x-auto">
-                {JSON.stringify(debugInfo.telegramUser, null, 2)}
-              </pre>
-            )}
-          </div>
-
-          {/* Profile Status */}
-          <div className="mb-3">
-            <div className="text-purple-400 font-bold mb-1">💾 Database Profile:</div>
-            <div>Exists: {debugInfo.profileExists ? "✅ YES" : "❌ NO"}</div>
-            {debugInfo.profileData && (
-              <div className="mt-1">
-                <div>Profile ID: <span className="text-green-400">{debugInfo.profileData.id}</span></div>
-                <div>Telegram ID: <span className={debugInfo.profileData.telegram_id ? "text-green-400" : "text-red-500"}>{debugInfo.profileData.telegram_id || "NULL ❌"}</span></div>
-                <div>Display Name: {debugInfo.profileData.display_name || "NULL"}</div>
-                <div>Username: {debugInfo.profileData.username || "NULL"}</div>
-                <div>Referral Code: <span className="text-yellow-400">{debugInfo.profileData.referral_code || "NULL"}</span></div>
-                <div>BZ Balance: <span className="text-green-400">{debugInfo.profileData.bz_balance}</span></div>
-                <div>BB Balance: <span className="text-blue-400">{Number(debugInfo.profileData.bb_balance).toFixed(6)}</span></div>
-                <div>Total Taps: {debugInfo.profileData.total_taps}</div>
-                <div>Tier: <span className="text-orange-400">{debugInfo.profileData.tier}</span></div>
-              </div>
-            )}
-          </div>
-
-          {/* Status Summary */}
-          <div className="pt-3 border-t border-gray-700">
-            <div className="font-bold text-yellow-300">Status Summary:</div>
-            {debugInfo.telegramUserId === "NOT FOUND" && (
-              <div className="text-red-400 mt-1">❌ Telegram user data NOT found! Open in Telegram app.</div>
-            )}
-            {!debugInfo.profileExists && debugInfo.telegramUserId !== "NOT FOUND" && (
-              <div className="text-red-400 mt-1">❌ Profile NOT created in database!</div>
-            )}
-            {debugInfo.profileData && !debugInfo.profileData.telegram_id && (
-              <div className="text-red-400 mt-1">❌ Profile exists but telegram_id is NULL!</div>
-            )}
-            {debugInfo.profileData && debugInfo.profileData.telegram_id && (
-              <div className="text-green-400 mt-1">✅ Everything working correctly!</div>
-            )}
-          </div>
+      {/* Sync Status */}
+      <div className="bg-purple-900 p-4 rounded-lg mb-4">
+        <h3 className="font-bold mb-2">📊 Sync Status</h3>
+        <div className="text-sm space-y-1">
+          <div>Is Syncing: <span className={gameState.isSyncing ? "text-yellow-400" : "text-green-400"}>{gameState.isSyncing ? "YES" : "NO"}</span></div>
+          <div>Last Sync: <span className="text-blue-400">
+            {gameState.lastSyncTime === 0 ? "NEVER" : new Date(gameState.lastSyncTime).toLocaleTimeString()}
+          </span></div>
+          <div>Online: <span className={gameState.isOnline ? "text-green-400" : "text-red-400"}>{gameState.isOnline ? "YES" : "NO"}</span></div>
+          <div>Sync Error Count: <span className="text-orange-400">{gameState.syncErrorCount}</span></div>
         </div>
-      )}
-    </>
+      </div>
+
+      {/* Game State */}
+      <div className="bg-purple-900 p-4 rounded-lg mb-4">
+        <h3 className="font-bold mb-2">🎮 Current Game State</h3>
+        <div className="text-xs space-y-1 font-mono">
+          <div>BZ: {gameState.bz.toLocaleString()}</div>
+          <div>BB: {gameState.bb.toFixed(6)}</div>
+          <div>XP: {gameState.xp.toLocaleString()}</div>
+          <div>Tier: {gameState.tier}</div>
+          <div>Total Taps: {gameState.totalTaps.toLocaleString()}</div>
+          <div>Energy: {Math.floor(gameState.energy)} / {gameState.maxEnergy}</div>
+          <div>Boosters: Income={gameState.boosters.incomePerTap}, Energy={gameState.boosters.energyPerTap}, Capacity={gameState.boosters.energyCapacity}, Recovery={gameState.boosters.recoveryRate}</div>
+        </div>
+      </div>
+
+      {/* Manual Test Button */}
+      <Button 
+        onClick={testSync} 
+        className="w-full mb-4 bg-green-600 hover:bg-green-700"
+        disabled={gameState.isSyncing}
+      >
+        {gameState.isSyncing ? "Syncing..." : "🧪 Test Manual Sync Now"}
+      </Button>
+
+      {/* Sync Logs */}
+      <div className="bg-purple-900 p-4 rounded-lg">
+        <h3 className="font-bold mb-2">📝 Sync Logs (Last 20)</h3>
+        <div className="text-xs space-y-2 max-h-96 overflow-auto font-mono">
+          {logs.length === 0 ? (
+            <div className="text-gray-400">No logs yet... Click "Test Manual Sync" or wait for auto-sync</div>
+          ) : (
+            logs.map((log, i) => (
+              <div key={i} className={`p-2 rounded ${
+                log.type === "error" ? "bg-red-900/50" : 
+                log.type === "success" ? "bg-green-900/50" : "bg-gray-800/50"
+              }`}>
+                <span className="text-gray-400">[{log.timestamp}]</span> {log.message}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

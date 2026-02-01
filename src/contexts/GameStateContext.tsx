@@ -246,23 +246,17 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
   // Manual Sync Function
   const manualSync = async () => {
-    console.log("🔘 [MANUAL SYNC] Button clicked by user");
-    console.log("🔘 [MANUAL SYNC] Current state:", {
-      bz,
-      bb,
-      energy,
-      xp,
-      tier,
-      boosters
-    });
+    console.log("🔘 [MANUAL SYNC] ========== FUNCTION CALLED ==========");
+    console.log("🔘 [MANUAL SYNC] Step 1: Preparing game state...");
     
     setIsSyncing(true);
     try {
       const fullState = getFullStateForSync();
-      console.log("🔘 [MANUAL SYNC] Calling syncPlayerState with:", fullState);
+      console.log("🔘 [MANUAL SYNC] Step 2: Full state prepared:", fullState);
+      console.log("🔘 [MANUAL SYNC] Step 3: Calling syncPlayerState...");
       
       const result = await syncPlayerState(fullState);
-      console.log("🔘 [MANUAL SYNC] Result:", result);
+      console.log("🔘 [MANUAL SYNC] Step 4: syncPlayerState returned:", result);
       
       if (result.success) {
         setLastSyncTime(Date.now());

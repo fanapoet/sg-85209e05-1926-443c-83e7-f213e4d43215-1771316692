@@ -40,20 +40,31 @@ export function getSyncStatus() {
  */
 export async function loadPlayerState() {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      console.error("❌ [Sync] No authenticated user");
+    console.log("🔵 [loadPlayerState] Getting Telegram user...");
+    
+    // Get Telegram user ID
+    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+    
+    if (!tgUser) {
+      console.error("❌ [Sync] No Telegram user data");
       return null;
     }
+    
+    console.log("🔵 [loadPlayerState] Telegram user ID:", tgUser.id);
 
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
-      .eq("id", user.id)
-      .single();
+      .eq("telegram_id", tgUser.id)
+      .maybeSingle();
 
     if (error) {
       console.error("❌ [Sync] Load error:", error);
+      return null;
+    }
+
+    if (!data) {
+      console.error("❌ [Sync] Profile not found for telegram_id:", tgUser.id);
       return null;
     }
 
@@ -175,11 +186,40 @@ export async function syncPlayerState(gameState: Partial<{
   buildEndTime: number;
   nftsOwned: string[];
 }>): Promise<{ success: boolean; error?: string }> {
+  console.log("🔵 [syncPlayerState] ========== FUNCTION ENTERED ==========");
+  console.log("🔵 [syncPlayerState] Received gameState:", gameState);
+  
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return { success: false, error: "No authenticated user" };
+    console.log("🔵 [syncPlayerState] Getting Telegram user...");
+    
+    // Get Telegram user ID (same as initializeUser)
+    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+    
+    if (!tgUser) {
+      console.error("❌ [syncPlayerState] No Telegram user data");
+      return { success: false, error: "No Telegram user data" };
     }
+    
+    console.log("🔵 [syncPlayerState] Telegram user ID:", tgUser.id);
+    
+    // Find user profile by telegram_id (same as initializeUser)
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", tgUser.id)
+      .maybeSingle();
+    
+    if (profileError) {
+      console.error("❌ [syncPlayerState] Profile lookup error:", profileError);
+      return { success: false, error: profileError.message };
+    }
+    
+    if (!profile) {
+      console.error("❌ [syncPlayerState] Profile not found for telegram_id:", tgUser.id);
+      return { success: false, error: "Profile not found" };
+    }
+    
+    console.log("🔵 [syncPlayerState] Found profile UUID:", profile.id);
 
     // Build update object with only provided fields
     const updates: any = {
@@ -219,17 +259,20 @@ export async function syncPlayerState(gameState: Partial<{
     if (gameState.buildEndTime !== undefined) updates.build_end_time = new Date(gameState.buildEndTime).toISOString();
     if (gameState.nftsOwned !== undefined) updates.nfts_owned = gameState.nftsOwned;
 
+    console.log("🔵 [syncPlayerState] Built updates object:", updates);
+    console.log("🔵 [syncPlayerState] Executing database update for profile:", profile.id);
+
     const { error } = await supabase
       .from("profiles")
       .update(updates)
-      .eq("id", user.id);
+      .eq("id", profile.id);
 
     if (error) {
       console.error("❌ [Sync] Player state sync failed:", error);
       return { success: false, error: error.message };
     }
 
-    console.log("✅ [Sync] Player state synced");
+    console.log("✅ [Sync] Player state synced successfully!");
     return { success: true };
   } catch (error: any) {
     console.error("❌ [Sync] Sync exception:", error);

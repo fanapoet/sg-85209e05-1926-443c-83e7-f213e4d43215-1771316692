@@ -12,6 +12,7 @@ import { XPTiersScreen } from "@/components/screens/XPTiersScreen";
 import { RewardsNFTsScreen } from "@/components/screens/RewardsNFTsScreen";
 import { TasksReferralsScreen } from "@/components/screens/TasksReferralsScreen";
 import { TelegramDebugPanel } from "@/components/TelegramDebugPanel";
+import { Button } from "@/components/ui/button";
 
 type TabKey = "tap" | "boost" | "build" | "convert" | "xp" | "rewards" | "tasks";
 
@@ -20,6 +21,7 @@ export default function Home() {
   const [isInTelegram, setIsInTelegram] = useState<boolean | null>(null);
   const [showWelcome, setShowWelcome] = useState<boolean>(true);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
+  const [showDebug, setShowDebug] = useState(false);
 
   useEffect(() => {
     // Check if running in Telegram
@@ -151,8 +153,17 @@ export default function Home() {
         {/* Bottom Navigation */}
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
         
-        {/* Debug Panel - Only in development/testing */}
-        <TelegramDebugPanel />
+        {/* Show Debug Button (Fixed Position) */}
+        <Button
+          onClick={() => setShowDebug(true)}
+          className="fixed bottom-20 left-4 z-40 bg-purple-600 hover:bg-purple-700"
+          size="sm"
+        >
+          Show Debug
+        </Button>
+
+        {/* Debug Panel */}
+        {showDebug && <TelegramDebugPanel onClose={() => setShowDebug(false)} />}
       </div>
     </>
   );

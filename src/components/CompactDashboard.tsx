@@ -71,7 +71,11 @@ export function CompactDashboard() {
           <Button
             size="sm"
             variant={isOnline ? "default" : "destructive"}
-            onClick={manualSync}
+            onClick={() => {
+              console.log("🔴 [UI] SYNC BUTTON CLICKED!");
+              alert("Sync button clicked! Check if manualSync runs...");
+              manualSync();
+            }}
             disabled={isSyncing}
             className="h-8 px-3 text-xs"
           >
