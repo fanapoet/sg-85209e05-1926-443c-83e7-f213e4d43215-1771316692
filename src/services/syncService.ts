@@ -420,11 +420,11 @@ export async function purchaseNFT(
     };
 
     if (currency === "BZ") {
-      updates.bz_balance = (profile.bz_balance as number) - cost;
+      updates.bz_balance = Number(profile.bz_balance) - cost;
     } else {
       // Use Number() to safely handle both string and number types from Supabase
       const currentBB = Number(profile.bb_balance);
-      updates.bb_balance = (currentBB - cost).toFixed(6);
+      updates.bb_balance = Number((currentBB - cost).toFixed(6));
     }
 
     const { error: updateError } = await supabase
