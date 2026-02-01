@@ -45,11 +45,11 @@ export async function syncInitialGameState(
     boosterCapacity: number;
     boosterRecovery: number;
     quickChargeUsesRemaining: number;
-    quickChargeCooldownUntil: number | null; // ✅ Ensure this is number | null, NOT string | null
+    quickChargeCooldownUntil: number | null;
     totalTaps: number;
     todayTaps: number;
     idleBzPerHour: number;
-    buildParts?: Array<{ partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }>; // ✅ Ensure buildEndTime is number | null
+    buildParts?: Array<{ partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }>;
   }
 ): Promise<{ success: boolean; error?: string }> {
   console.log("🚀 [CRITICAL] Syncing initial game state for NEW USER...");
@@ -242,7 +242,7 @@ export async function syncPlayerState(gameState: {
 
 export async function syncBuildParts(
   userId: string,
-  buildParts: Array<{ partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }> // ✅ Ensure number | null
+  buildParts: Array<{ partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }>
 ): Promise<{ success: boolean; error?: string }> {
   try {
     console.log("🏗️ [Sync] Syncing build parts for user:", userId);
@@ -467,7 +467,7 @@ export function startAutoSync(
     boosterCapacity: number;
     boosterRecovery: number;
     quickChargeUsesRemaining: number;
-    quickChargeCooldownUntil: number | null; // ✅ Ensure number | null, NOT string | null
+    quickChargeCooldownUntil: number | null;
     totalTaps: number;
     todayTaps: number;
     idleBzPerHour: number;
@@ -482,12 +482,11 @@ export function startAutoSync(
 
   autoSyncInterval = setInterval(() => {
     const state = getGameState();
-    // Ensure all values are properly typed before sync - EXPLICIT CASTING
     const syncState = {
       bzBalance: Number(state.bzBalance),
       bbBalance: Number(state.bbBalance),
       xp: Number(state.xp),
-      tier: String(state.tier),
+      tier: state.tier,
       currentEnergy: Number(state.currentEnergy),
       maxEnergy: Number(state.maxEnergy),
       energyRecoveryRate: Number(state.energyRecoveryRate),
@@ -502,6 +501,7 @@ export function startAutoSync(
       todayTaps: Number(state.todayTaps),
       idleBzPerHour: Number(state.idleBzPerHour)
     };
+    console.log("🔄 [Sync] Periodic sync triggered");
     syncPlayerState(syncState).catch(console.error);
   }, intervalMs);
 

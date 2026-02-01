@@ -190,19 +190,19 @@ export async function initializeUser() {
       console.log("🚀 Triggering initial game state sync...");
       
       const initialGameState = {
-        bzBalance: newProfile.bz_balance,
-        bbBalance: newProfile.bb_balance,
-        xp: newProfile.xp,
-        tier: newProfile.tier,
-        currentEnergy: newProfile.current_energy,
-        maxEnergy: newProfile.max_energy,
-        energyRecoveryRate: newProfile.energy_recovery_rate,
-        boosterIncomeTap: newProfile.booster_income_per_tap,
-        boosterEnergyTap: newProfile.booster_energy_per_tap,
-        boosterCapacity: newProfile.booster_energy_capacity,
-        boosterRecovery: newProfile.booster_recovery_rate,
-        quickChargeUsesRemaining: newProfile.quickcharge_uses_remaining,
-        quickChargeCooldownUntil: null,
+        bzBalance: 5000,
+        bbBalance: 0,
+        xp: 0,
+        tier: "Bronze",
+        currentEnergy: 1500,
+        maxEnergy: 1500,
+        energyRecoveryRate: 0.3,
+        boosterIncomeTap: 1,
+        boosterEnergyTap: 1,
+        boosterCapacity: 1,
+        boosterRecovery: 1,
+        quickChargeUsesRemaining: 5,
+        quickChargeCooldownUntil: null as number | null, // ✅ Explicitly type as number | null
         totalTaps: 0,
         todayTaps: 0,
         idleBzPerHour: 0

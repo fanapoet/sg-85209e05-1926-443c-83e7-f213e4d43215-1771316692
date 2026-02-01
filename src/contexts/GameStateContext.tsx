@@ -122,7 +122,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   // Helper to get full state for sync
   const getFullStateForSync = () => {
     const boosters = safeGetItem("boosters", { incomePerTap: 1, energyPerTap: 1, energyCapacity: 1, recoveryRate: 1 });
-    const quickCharge = safeGetItem("quickCharge", { usesRemaining: 5, cooldownEndTime: null });
     
     return {
       bzBalance: bz,
@@ -131,14 +130,14 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       tier: tier as string,
       currentEnergy: energy,
       maxEnergy: maxEnergy,
-      energyRecoveryRate: 0.3 * (1 + (boosters.recoveryRate - 1) * 0.1), // Recalculate based on formula
+      energyRecoveryRate: 0.3 * (1 + (boosters.recoveryRate - 1) * 0.1),
       lastEnergyUpdate: Date.now(),
       boosterIncomeTap: boosters.incomePerTap,
       boosterEnergyTap: boosters.energyPerTap,
       boosterCapacity: boosters.energyCapacity,
       boosterRecovery: boosters.recoveryRate,
       quickChargeUsesRemaining: quickChargeUsesRemaining,
-      quickChargeCooldownUntil: quickChargeCooldownUntil,
+      quickChargeCooldownUntil: quickChargeCooldownUntil, // ✅ Already typed as number | null in state
       totalTaps: totalTaps,
       todayTaps: todayTaps,
       idleBzPerHour: bzPerHour

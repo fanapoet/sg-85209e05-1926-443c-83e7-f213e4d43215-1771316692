@@ -616,7 +616,7 @@ export function BuildScreen() {
 
       // Sync build part
       const nextLevel = state.level + 1;
-      const endTime = now + upgradeTime;
+      const endTime = state.upgradeEndTime || Date.now() + upgradeTime;
       
       syncBuildParts("user_id_placeholder", [{
         partId: part.key,
