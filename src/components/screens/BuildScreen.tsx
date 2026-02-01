@@ -408,9 +408,21 @@ export function BuildScreen() {
   };
 
   const getUpgradeCost = (part: Part, currentLevel: number): number => {
-    return Math.floor(
-      part.baseCost * Math.pow(1.2, currentLevel) * (1 + 0.10 * part.stage)
-    );
+    const baseCost = part.baseCost;
+    const exponential = Math.pow(1.2, currentLevel);
+    const stageFactor = 1 + (0.10 * part.stage);
+    const rawCost = baseCost * exponential * stageFactor;
+    const finalCost = Math.floor(rawCost);
+    
+    console.log(`💰 [COST DEBUG] ${part.name} (${part.key})`);
+    console.log(`   Current Level: ${currentLevel} → Next Level: ${currentLevel + 1}`);
+    console.log(`   Base Cost: ${baseCost}`);
+    console.log(`   Exponential (1.2^${currentLevel}): ${exponential.toFixed(4)}`);
+    console.log(`   Stage Factor (1 + 0.10×${part.stage}): ${stageFactor}`);
+    console.log(`   Raw Cost: ${baseCost} × ${exponential.toFixed(4)} × ${stageFactor} = ${rawCost.toFixed(2)}`);
+    console.log(`   Final Cost (floored): ${finalCost}`);
+    
+    return finalCost;
   };
 
   const getPartYield = (part: Part, level: number): number => {
