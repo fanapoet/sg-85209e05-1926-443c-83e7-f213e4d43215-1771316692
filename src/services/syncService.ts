@@ -191,10 +191,10 @@ export async function syncPlayerState(gameState: {
     if (gameState.maxEnergy !== undefined) updates.max_energy = Number(gameState.maxEnergy);
     if (gameState.energyRecoveryRate !== undefined) updates.energy_recovery_rate = Number(gameState.energyRecoveryRate);
     if (gameState.lastEnergyUpdate !== undefined) updates.last_energy_update = new Date(gameState.lastEnergyUpdate).toISOString();
-    if (gameState.boosterIncomeTap !== undefined) updates.booster_income_per_tap = Number(gameState.boosterIncomeTap);
-    if (gameState.boosterEnergyTap !== undefined) updates.booster_energy_per_tap = Number(gameState.boosterEnergyTap);
-    if (gameState.boosterCapacity !== undefined) updates.booster_energy_capacity = Number(gameState.boosterCapacity);
-    if (gameState.boosterRecovery !== undefined) updates.booster_recovery_rate = Number(gameState.boosterRecovery);
+    if (gameState.boosterIncomeTap !== undefined) updates.booster_income_per_tap = gameState.boosterIncomeTap;
+    if (gameState.boosterEnergyTap !== undefined) updates.booster_energy_per_tap = gameState.boosterEnergyTap;
+    if (gameState.boosterCapacity !== undefined) updates.booster_energy_capacity = gameState.boosterCapacity;
+    if (gameState.boosterRecovery !== undefined) updates.booster_recovery_rate = gameState.boosterRecovery;
     if (gameState.quickChargeUsesRemaining !== undefined) updates.quickcharge_uses_remaining = Number(gameState.quickChargeUsesRemaining);
     if (gameState.quickChargeCooldownUntil !== undefined) {
       updates.quickcharge_cooldown_until = gameState.quickChargeCooldownUntil ? new Date(gameState.quickChargeCooldownUntil).toISOString() : null;
@@ -420,11 +420,10 @@ export async function purchaseNFT(
     };
 
     if (currency === "BZ") {
-      updates.bz_balance = Number(profile.bz_balance) - cost;
+      updates.bz_balance = (profile.bz_balance as any) - cost;
     } else {
-      // Use Number() to safely handle both string and number types from Supabase
-      const currentBB = Number(profile.bb_balance);
-      updates.bb_balance = Number((currentBB - cost).toFixed(6));
+      const currentBB = profile.bb_balance as any;
+      updates.bb_balance = parseFloat((currentBB - cost).toFixed(6));
     }
 
     const { error: updateError } = await supabase
@@ -482,8 +481,26 @@ export function startAutoSync(
 
   autoSyncInterval = setInterval(() => {
     const state = getGameState();
-    // console.log("⏰ [Sync] Periodic sync triggered");
-    syncPlayerState(state).catch(console.error);
+    // Ensure all values are properly typed before sync
+    const syncState = {
+      ...state,
+      bzBalance: Number(state.bzBalance),
+      bbBalance: Number(state.bbBalance),
+      xp: Number(state.xp),
+      currentEnergy: Number(state.currentEnergy),
+      maxEnergy: Number(state.maxEnergy),
+      energyRecoveryRate: Number(state.energyRecoveryRate),
+      lastEnergyUpdate: Number(state.lastEnergyUpdate),
+      boosterIncomeTap: Number(state.boosterIncomeTap),
+      boosterEnergyTap: Number(state.boosterEnergyTap),
+      boosterCapacity: Number(state.boosterCapacity),
+      boosterRecovery: Number(state.boosterRecovery),
+      quickChargeUsesRemaining: Number(state.quickChargeUsesRemaining),
+      totalTaps: Number(state.totalTaps),
+      todayTaps: Number(state.todayTaps),
+      idleBzPerHour: Number(state.idleBzPerHour)
+    };
+    syncPlayerState(syncState).catch(console.error);
   }, intervalMs);
 
   return () => {
