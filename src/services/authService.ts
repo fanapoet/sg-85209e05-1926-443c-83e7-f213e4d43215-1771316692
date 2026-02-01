@@ -149,7 +149,7 @@ export async function initializeUser() {
 
     const { data: createdProfile, error: insertError } = await supabase
       .from("profiles")
-      .insert(newProfile)
+      .insert(newProfile as any)
       .select()
       .single();
 

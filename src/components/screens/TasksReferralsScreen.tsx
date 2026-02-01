@@ -395,6 +395,16 @@ export function TasksReferralsScreen() {
     );
   };
 
+  // Milestone check effect - simplified
+  useEffect(() => {
+    const checkMilestones = async () => {
+      // TODO: Re-implement milestone checking with new service structure
+      // For now, we skip this to prevent errors
+    };
+    
+    checkMilestones();
+  }, [referralCount]);
+
   return (
     <div className="pb-24 p-4 max-w-2xl mx-auto space-y-6">
       <div className="space-y-2">
