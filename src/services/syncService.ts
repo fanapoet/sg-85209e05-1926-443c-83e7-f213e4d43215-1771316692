@@ -39,24 +39,33 @@ export function checkOnlineStatus(): boolean {
 }
 
 /**
- * Get current user's profile by auth ID (not telegram_id)
- * This ensures we always work with the authenticated user
+ * Get current user's profile by telegram_id from Telegram WebApp
+ * This ensures we always work with the authenticated Telegram user
  */
 async function getCurrentUserProfile() {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    console.log("❌ No authenticated user");
+  // Get telegram_id from Telegram WebApp
+  const tgUser = typeof window !== "undefined" && (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+  
+  if (!tgUser?.id) {
+    console.log("❌ No Telegram user ID available");
     return null;
   }
+
+  console.log("🔍 Looking up profile for Telegram ID:", tgUser.id);
 
   const { data: profile, error } = await supabase
     .from("profiles")
     .select("*")
-    .eq("id", user.id)
-    .single();
+    .eq("telegram_id", tgUser.id)
+    .maybeSingle();
 
   if (error) {
     console.error("❌ Failed to get profile:", error);
+    return null;
+  }
+
+  if (!profile) {
+    console.log("❌ No profile found for Telegram ID:", tgUser.id);
     return null;
   }
 
@@ -178,6 +187,11 @@ export async function syncTapData(tapData: {
     const profile = await getCurrentUserProfile();
     if (!profile) return { success: false, error: "Not authenticated" };
 
+    console.log("🔄 Syncing tap data:", {
+      totalTaps: tapData.totalTaps,
+      currentDB: profile.total_taps,
+    });
+
     const updateData = {
       total_taps: Math.max(tapData.totalTaps, Number(profile.total_taps || 0)),
       taps_today: Math.max(tapData.tapsToday, Number((profile as any).taps_today || 0)),
@@ -196,7 +210,7 @@ export async function syncTapData(tapData: {
     }
 
     lastSync.taps = Date.now();
-    console.log("✅ Tap data synced:", { totalTaps: tapData.totalTaps });
+    console.log("✅ Tap data synced successfully! New total:", updateData.total_taps);
     return { success: true };
   } catch (error) {
     console.error("❌ Tap sync error:", error);
@@ -238,7 +252,7 @@ export async function syncBoosters(boosters: {
     }
 
     lastSync.boosters = Date.now();
-    console.log("✅ Boosters synced");
+    console.log("✅ Boosters synced successfully!");
     return { success: true };
   } catch (error) {
     console.error("❌ Booster sync error:", error);
@@ -258,13 +272,13 @@ export async function syncBuildPart(partId: string, partData: {
   try {
     if (!checkOnlineStatus()) return { success: false, error: "Offline" };
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "Not authenticated" };
+    const profile = await getCurrentUserProfile();
+    if (!profile) return { success: false, error: "Not authenticated" };
 
     const { data: existing } = await supabase
       .from("user_build_parts")
       .select("id, current_level")
-      .eq("user_id", user.id)
+      .eq("user_id", profile.id)
       .eq("part_id", partId)
       .maybeSingle();
 
@@ -294,7 +308,7 @@ export async function syncBuildPart(partId: string, partData: {
       const { error } = await supabase
         .from("user_build_parts")
         .insert({
-          user_id: user.id,
+          user_id: profile.id,
           part_id: partId,
           ...payload,
         });
@@ -325,8 +339,8 @@ export async function syncQuickCharge(quickCharge: {
   try {
     if (!checkOnlineStatus()) return { success: false, error: "Offline" };
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "Not authenticated" };
+    const profile = await getCurrentUserProfile();
+    if (!profile) return { success: false, error: "Not authenticated" };
 
     const { error } = await supabase
       .from("profiles")
@@ -338,7 +352,7 @@ export async function syncQuickCharge(quickCharge: {
         quickcharge_last_reset: new Date(quickCharge.lastReset).toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq("id", user.id);
+      .eq("id", profile.id);
 
     if (error) {
       console.error("❌ QuickCharge sync error:", error);
@@ -346,7 +360,7 @@ export async function syncQuickCharge(quickCharge: {
     }
 
     lastSync.quickCharge = Date.now();
-    console.log("✅ QuickCharge synced");
+    console.log("✅ QuickCharge synced successfully!");
     return { success: true };
   } catch (error) {
     console.error("❌ QuickCharge sync error:", error);
@@ -405,13 +419,13 @@ export async function loadPlayerState() {
  */
 export async function loadBuildParts() {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "Not authenticated" };
+    const profile = await getCurrentUserProfile();
+    if (!profile) return { success: false, error: "Not authenticated" };
 
     const { data, error } = await supabase
       .from("user_build_parts")
       .select("*")
-      .eq("user_id", user.id);
+      .eq("user_id", profile.id);
 
     if (error) {
       console.error("❌ Load build parts error:", error);
@@ -440,13 +454,13 @@ export async function recordConversion(conversion: {
   try {
     if (!checkOnlineStatus()) return { success: false, error: "Offline" };
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "Not authenticated" };
+    const profile = await getCurrentUserProfile();
+    if (!profile) return { success: false, error: "Not authenticated" };
 
     const { error } = await supabase
       .from("conversion_history")
       .insert({
-        user_id: user.id,
+        user_id: profile.id,
         conversion_type: conversion.type,
         amount_in: conversion.amountIn,
         amount_out: conversion.amountOut,
@@ -476,13 +490,13 @@ export async function purchaseNFT(nftId: string, priceBB: number) {
   try {
     if (!checkOnlineStatus()) return { success: false, error: "Offline" };
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "Not authenticated" };
+    const profile = await getCurrentUserProfile();
+    if (!profile) return { success: false, error: "Not authenticated" };
 
     const { data: existing } = await supabase
       .from("user_nfts")
       .select("id")
-      .eq("user_id", user.id)
+      .eq("user_id", profile.id)
       .eq("nft_id", nftId)
       .maybeSingle();
 
@@ -493,7 +507,7 @@ export async function purchaseNFT(nftId: string, priceBB: number) {
     const { error } = await supabase
       .from("user_nfts")
       .insert({
-        user_id: user.id,
+        user_id: profile.id,
         nft_id: nftId,
         price_paid_bb: priceBB,
       });
@@ -516,13 +530,13 @@ export async function purchaseNFT(nftId: string, priceBB: number) {
  */
 export async function loadOwnedNFTs() {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return { success: false, error: "Not authenticated" };
+    const profile = await getCurrentUserProfile();
+    if (!profile) return { success: false, error: "Not authenticated" };
 
     const { data, error } = await supabase
       .from("user_nfts")
       .select("nft_id, purchased_at")
-      .eq("user_id", user.id);
+      .eq("user_id", profile.id);
 
     if (error) {
       console.error("❌ Load NFTs error:", error);

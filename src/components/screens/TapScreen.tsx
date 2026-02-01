@@ -393,9 +393,9 @@ export function TapScreen() {
 
           {/* Bunergy Logo - Centered in Circle */}
           <img
-            src="/bunergy-logo.png"
+            src="/bunergy-icon.png"
             alt="Bunergy Logo"
-            className="w-56 h-56 object-contain pointer-events-none select-none relative z-10"
+            className="w-24 h-24 object-contain pointer-events-none select-none relative z-10"
             draggable={false}
             style={{
               filter: isDarkTheme ? 'drop-shadow(0 4px 12px rgba(168, 85, 247, 0.4))' : 'drop-shadow(0 4px 12px rgba(236, 72, 153, 0.3))'
