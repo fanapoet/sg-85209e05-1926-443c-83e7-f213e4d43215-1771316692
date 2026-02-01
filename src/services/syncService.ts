@@ -56,25 +56,25 @@ export async function syncInitialGameState(
   console.log("📊 [Sync] Full game state to sync:", gameState);
 
   try {
-    // Build the complete update object with ALL fields
+    // Build the complete update object with ALL fields - cast everything explicitly
     const updates: any = {
-      bz_balance: gameState.bzBalance,
-      bb_balance: gameState.bbBalance,
-      xp: gameState.xp,
-      tier: gameState.tier,
-      current_energy: gameState.currentEnergy,
-      max_energy: gameState.maxEnergy,
-      energy_recovery_rate: gameState.energyRecoveryRate,
+      bz_balance: Number(gameState.bzBalance),
+      bb_balance: Number(gameState.bbBalance),
+      xp: Number(gameState.xp),
+      tier: String(gameState.tier),
+      current_energy: Number(gameState.currentEnergy),
+      max_energy: Number(gameState.maxEnergy),
+      energy_recovery_rate: Number(gameState.energyRecoveryRate),
       last_energy_update: new Date().toISOString(),
-      booster_income_per_tap: gameState.boosterIncomeTap,
-      booster_energy_per_tap: gameState.boosterEnergyTap,
-      booster_energy_capacity: gameState.boosterCapacity,
-      booster_recovery_rate: gameState.boosterRecovery,
-      quickcharge_uses_remaining: gameState.quickChargeUsesRemaining,
-      quickcharge_cooldown_until: gameState.quickChargeCooldownUntil ? new Date(gameState.quickChargeCooldownUntil).toISOString() : null,
-      total_taps: gameState.totalTaps,
-      taps_today: gameState.todayTaps,
-      idle_bz_per_hour: gameState.idleBzPerHour,
+      booster_income_per_tap: Number(gameState.boosterIncomeTap),
+      booster_energy_per_tap: Number(gameState.boosterEnergyTap),
+      booster_energy_capacity: Number(gameState.boosterCapacity),
+      booster_recovery_rate: Number(gameState.boosterRecovery),
+      quickcharge_uses_remaining: Number(gameState.quickChargeUsesRemaining),
+      quickcharge_cooldown_until: gameState.quickChargeCooldownUntil ? new Date(Number(gameState.quickChargeCooldownUntil)).toISOString() : null,
+      total_taps: Number(gameState.totalTaps),
+      taps_today: Number(gameState.todayTaps),
+      idle_bz_per_hour: Number(gameState.idleBzPerHour),
       last_sync_at: new Date().toISOString(),
       sync_version: 1,
       updated_at: new Date().toISOString()
@@ -148,16 +148,12 @@ export async function syncPlayerState(gameState: {
     return { success: false, error: "Offline" };
   }
 
-  // Allow immediate sync calls even if one is in progress, but maybe denounce?
-  // For now, simple lock is fine, but we might want to queue.
   if (isSyncing) {
-    // console.warn("⚠️ [Sync] Already syncing - skipping");
-    // return { success: false, error: "Already syncing" };
+    // Allow concurrent syncs to queue if needed
   }
 
   try {
     isSyncing = true;
-    // console.log("🔄 [Sync] Syncing player state...", gameState);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -177,7 +173,7 @@ export async function syncPlayerState(gameState: {
       return { success: false, error: "Profile not found" };
     }
 
-    // Build update object with only provided fields
+    // Build update object with only provided fields - EXPLICIT TYPE CASTING
     const updates: any = {
       updated_at: new Date().toISOString(),
       last_sync_at: new Date().toISOString()
@@ -186,36 +182,36 @@ export async function syncPlayerState(gameState: {
     if (gameState.bzBalance !== undefined) updates.bz_balance = Number(gameState.bzBalance);
     if (gameState.bbBalance !== undefined) updates.bb_balance = Number(gameState.bbBalance);
     if (gameState.xp !== undefined) updates.xp = Number(gameState.xp);
-    if (gameState.tier !== undefined) updates.tier = gameState.tier;
+    if (gameState.tier !== undefined) updates.tier = String(gameState.tier);
     if (gameState.currentEnergy !== undefined) updates.current_energy = Number(gameState.currentEnergy);
     if (gameState.maxEnergy !== undefined) updates.max_energy = Number(gameState.maxEnergy);
     if (gameState.energyRecoveryRate !== undefined) updates.energy_recovery_rate = Number(gameState.energyRecoveryRate);
-    if (gameState.lastEnergyUpdate !== undefined) updates.last_energy_update = new Date(gameState.lastEnergyUpdate).toISOString();
-    if (gameState.boosterIncomeTap !== undefined) updates.booster_income_per_tap = gameState.boosterIncomeTap;
-    if (gameState.boosterEnergyTap !== undefined) updates.booster_energy_per_tap = gameState.boosterEnergyTap;
-    if (gameState.boosterCapacity !== undefined) updates.booster_energy_capacity = gameState.boosterCapacity;
-    if (gameState.boosterRecovery !== undefined) updates.booster_recovery_rate = gameState.boosterRecovery;
+    if (gameState.lastEnergyUpdate !== undefined) updates.last_energy_update = new Date(Number(gameState.lastEnergyUpdate)).toISOString();
+    if (gameState.boosterIncomeTap !== undefined) updates.booster_income_per_tap = Number(gameState.boosterIncomeTap);
+    if (gameState.boosterEnergyTap !== undefined) updates.booster_energy_per_tap = Number(gameState.boosterEnergyTap);
+    if (gameState.boosterCapacity !== undefined) updates.booster_energy_capacity = Number(gameState.boosterCapacity);
+    if (gameState.boosterRecovery !== undefined) updates.booster_recovery_rate = Number(gameState.boosterRecovery);
     if (gameState.quickChargeUsesRemaining !== undefined) updates.quickcharge_uses_remaining = Number(gameState.quickChargeUsesRemaining);
     if (gameState.quickChargeCooldownUntil !== undefined) {
-      updates.quickcharge_cooldown_until = gameState.quickChargeCooldownUntil ? new Date(gameState.quickChargeCooldownUntil).toISOString() : null;
+      updates.quickcharge_cooldown_until = gameState.quickChargeCooldownUntil ? new Date(Number(gameState.quickChargeCooldownUntil)).toISOString() : null;
     }
-    if (gameState.quickChargeLastReset !== undefined) updates.quickcharge_last_reset = new Date(gameState.quickChargeLastReset).toISOString();
+    if (gameState.quickChargeLastReset !== undefined) updates.quickcharge_last_reset = new Date(Number(gameState.quickChargeLastReset)).toISOString();
     if (gameState.totalTaps !== undefined) updates.total_taps = Number(gameState.totalTaps);
     if (gameState.todayTaps !== undefined) updates.taps_today = Number(gameState.todayTaps);
-    if (gameState.dailyTapsResetAt !== undefined) updates.daily_taps_reset_at = new Date(gameState.dailyTapsResetAt).toISOString();
-    if (gameState.lastClaimTimestamp !== undefined) updates.last_claim_timestamp = new Date(gameState.lastClaimTimestamp).toISOString();
+    if (gameState.dailyTapsResetAt !== undefined) updates.daily_taps_reset_at = new Date(Number(gameState.dailyTapsResetAt)).toISOString();
+    if (gameState.lastClaimTimestamp !== undefined) updates.last_claim_timestamp = new Date(Number(gameState.lastClaimTimestamp)).toISOString();
     if (gameState.activeBuildPartId !== undefined) updates.active_build_part_id = gameState.activeBuildPartId;
     if (gameState.activeBuildEndTime !== undefined) {
-      updates.active_build_end_time = gameState.activeBuildEndTime ? new Date(gameState.activeBuildEndTime).toISOString() : null;
+      updates.active_build_end_time = gameState.activeBuildEndTime ? new Date(Number(gameState.activeBuildEndTime)).toISOString() : null;
     }
     if (gameState.totalReferrals !== undefined) updates.total_referrals = Number(gameState.totalReferrals);
     if (gameState.dailyRewardStreak !== undefined) updates.daily_reward_streak = Number(gameState.dailyRewardStreak);
     if (gameState.dailyRewardLastClaim !== undefined) {
-      updates.daily_reward_last_claim = gameState.dailyRewardLastClaim ? new Date(gameState.dailyRewardLastClaim).toISOString() : null;
+      updates.daily_reward_last_claim = gameState.dailyRewardLastClaim ? new Date(Number(gameState.dailyRewardLastClaim)).toISOString() : null;
     }
     if (gameState.nftsOwned !== undefined) updates.nfts_owned = gameState.nftsOwned;
     if (gameState.idleBzPerHour !== undefined) updates.idle_bz_per_hour = Number(gameState.idleBzPerHour);
-    if (gameState.lastIdleClaimAt !== undefined) updates.last_idle_claim_at = new Date(gameState.lastIdleClaimAt).toISOString();
+    if (gameState.lastIdleClaimAt !== undefined) updates.last_idle_claim_at = new Date(Number(gameState.lastIdleClaimAt)).toISOString();
 
     const { error } = await supabase
       .from("profiles")
@@ -227,7 +223,6 @@ export async function syncPlayerState(gameState: {
       return { success: false, error: error.message };
     }
 
-    // console.log("✅ [Sync] Player state synced successfully");
     lastSyncTime = Date.now();
     return { success: true };
 
@@ -254,9 +249,9 @@ export async function syncBuildParts(
     const partsToUpsert: BuildPartInsert[] = buildParts.map(part => ({
       user_id: userId,
       part_id: part.partId,
-      level: part.level,
-      is_building: part.isBuilding,
-      build_end_time: part.buildEndTime ? new Date(part.buildEndTime).toISOString() : null,
+      level: Number(part.level),
+      is_building: Boolean(part.isBuilding),
+      build_end_time: part.buildEndTime ? new Date(Number(part.buildEndTime)).toISOString() : null,
       updated_at: new Date().toISOString()
     }));
 
@@ -287,12 +282,6 @@ export async function syncBuildPart(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   
-  // Need to get internal user ID (profile ID) not auth ID, but syncBuildParts takes profile ID?
-  // Wait, syncBuildParts implementation above uses userId directly in insert. 
-  // We need to resolve auth.uid() -> profiles.id usually.
-  // But wait, user_build_parts.user_id references profiles.id? 
-  // Let's check profile.
-  
   const { data: profile } = await supabase
       .from("profiles")
       .select("id")
@@ -303,8 +292,8 @@ export async function syncBuildPart(
 
   return syncBuildParts(profile.id, [{
     partId: partKey,
-    level: data.level,
-    isBuilding: data.isBuilding,
+    level: Number(data.level),
+    isBuilding: Boolean(data.isBuilding),
     buildEndTime: data.buildEndTime || data.buildEndsAt || null
   }]);
 }
@@ -328,7 +317,7 @@ export async function loadPlayerState(telegramId?: string | number): Promise<Pro
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
-      .eq("telegram_id", tid)
+      .eq("telegram_id", String(tid))
       .single();
 
     if (error) {
@@ -366,8 +355,13 @@ export async function syncTapData(gameState: {
   // Debounce for 2 seconds
   return new Promise((resolve) => {
     tapSyncTimeout = setTimeout(async () => {
-      // console.log("🎯 [Sync] Debounced tap sync triggered");
-      const result = await syncPlayerState(gameState);
+      const result = await syncPlayerState({
+        bzBalance: Number(gameState.bzBalance),
+        currentEnergy: Number(gameState.currentEnergy),
+        lastEnergyUpdate: Number(gameState.lastEnergyUpdate),
+        totalTaps: Number(gameState.totalTaps),
+        todayTaps: Number(gameState.todayTaps)
+      });
       resolve(result);
     }, 2000);
   });
@@ -404,7 +398,7 @@ export async function purchaseNFT(
         user_id: userId,
         nft_id: nftId,
         purchased_at: new Date().toISOString(),
-        price_paid_bb: currency === 'BB' ? cost : 0
+        price_paid_bb: currency === 'BB' ? Number(cost) : 0
       } as any);
 
     if (nftError) {
@@ -420,11 +414,13 @@ export async function purchaseNFT(
     };
 
     if (currency === "BZ") {
-      updates.bz_balance = (profile.bz_balance as any) - cost;
+      const currentBZ = Number(profile.bz_balance);
+      updates.bz_balance = currentBZ - Number(cost);
     } else {
-      const currentBB = profile.bb_balance as any;
-      // Store as number, not string from .toFixed()
-      updates.bb_balance = Number((currentBB - cost).toFixed(6));
+      const currentBB = Number(profile.bb_balance);
+      // Calculate with precision, store as number
+      const newBalance = currentBB - Number(cost);
+      updates.bb_balance = Math.round(newBalance * 1000000) / 1000000; // 6 decimal precision
     }
 
     const { error: updateError } = await supabase
@@ -482,12 +478,12 @@ export function startAutoSync(
 
   autoSyncInterval = setInterval(() => {
     const state = getGameState();
-    // Ensure all values are properly typed before sync
+    // Ensure all values are properly typed before sync - EXPLICIT CASTING
     const syncState = {
-      ...state,
       bzBalance: Number(state.bzBalance),
       bbBalance: Number(state.bbBalance),
       xp: Number(state.xp),
+      tier: String(state.tier),
       currentEnergy: Number(state.currentEnergy),
       maxEnergy: Number(state.maxEnergy),
       energyRecoveryRate: Number(state.energyRecoveryRate),
