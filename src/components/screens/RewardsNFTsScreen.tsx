@@ -193,7 +193,12 @@ export function RewardsNFTsScreen() {
       if (!boosters) return false;
       
       const data = JSON.parse(boosters);
-      return (data.energyCapacity >= 10 && data.recoveryRate >= 10);
+      // Check Energy per Tap, Energy Capacity, and Recovery Rate are at max level (10)
+      return (
+        data.energyPerTap >= 10 && 
+        data.energyCapacity >= 10 && 
+        data.recoveryRate >= 10
+      );
     } catch {
       return false;
     }
@@ -296,21 +301,19 @@ export function RewardsNFTsScreen() {
       localStorage.setItem("dailyStreak", newStreak.toString());
       localStorage.setItem("lastClaimDate", today);
 
-      // Sync player state to database
-      setTimeout(() => {
-        import("@/services/syncService").then(({ syncPlayerState }) => {
-          syncPlayerState({
-            bzBalance: gameState.bz,
-            bbBalance: gameState.bb,
-            xp: gameState.xp,
-            tier: gameState.tier,
-            currentEnergy: gameState.energy,
-            maxEnergy: gameState.maxEnergy,
-            totalTaps: gameState.totalTaps,
-            lastClaimTimestamp: gameState.lastClaimTimestamp,
-          }).catch(console.error);
-        });
-      }, 500);
+      // Sync player state to database immediately after claim
+      import("@/services/syncService").then(({ syncPlayerState }) => {
+        syncPlayerState({
+          bzBalance: gameState.bz,
+          bbBalance: gameState.bb,
+          xp: gameState.xp,
+          tier: gameState.tier,
+          currentEnergy: gameState.energy,
+          maxEnergy: gameState.maxEnergy,
+          totalTaps: gameState.totalTaps,
+          lastClaimTimestamp: gameState.lastClaimTimestamp,
+        }).catch(console.error);
+      });
     } catch (error) {
       console.error("Error claiming daily reward:", error);
     }

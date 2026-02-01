@@ -268,6 +268,10 @@ export function XPTiersScreen() {
                 <div className="w-2 h-2 rounded-full bg-blue-600" />
                 <span>BB→BZ conversion limit: {currentTierInfo.bonus > 0 ? `${currentTierInfo.bonus}% of BB balance` : "Locked"}</span>
               </div>
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-blue-600" />
+                <span>BZ→BB conversion bonus: +{currentTierInfo.bonus}% extra BB output</span>
+              </div>
             </div>
           </div>
         </div>
