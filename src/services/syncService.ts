@@ -71,7 +71,9 @@ export async function syncInitialGameState(
       booster_energy_capacity: Number(gameState.boosterCapacity),
       booster_recovery_rate: Number(gameState.boosterRecovery),
       quickcharge_uses_remaining: Number(gameState.quickChargeUsesRemaining),
-      quickcharge_cooldown_until: gameState.quickChargeCooldownUntil ? new Date(Number(gameState.quickChargeCooldownUntil)).toISOString() : null,
+      quickcharge_cooldown_until: gameState.quickChargeCooldownUntil 
+        ? new Date(gameState.quickChargeCooldownUntil as number).toISOString() 
+        : null,
       total_taps: Number(gameState.totalTaps),
       taps_today: Number(gameState.todayTaps),
       idle_bz_per_hour: Number(gameState.idleBzPerHour),
@@ -251,7 +253,9 @@ export async function syncBuildParts(
       part_id: part.partId,
       level: Number(part.level),
       is_building: Boolean(part.isBuilding),
-      build_end_time: part.buildEndTime ? new Date(Number(part.buildEndTime)).toISOString() : null,
+      build_end_time: part.buildEndTime 
+        ? new Date(part.buildEndTime as number).toISOString() 
+        : null,
       updated_at: new Date().toISOString()
     }));
 
@@ -493,7 +497,9 @@ export function startAutoSync(
       boosterCapacity: Number(state.boosterCapacity),
       boosterRecovery: Number(state.boosterRecovery),
       quickChargeUsesRemaining: Number(state.quickChargeUsesRemaining),
-      quickChargeCooldownUntil: state.quickChargeCooldownUntil !== null ? Number(state.quickChargeCooldownUntil) : null,
+      quickChargeCooldownUntil: state.quickChargeCooldownUntil !== null 
+        ? (state.quickChargeCooldownUntil as number) 
+        : null,
       totalTaps: Number(state.totalTaps),
       todayTaps: Number(state.todayTaps),
       idleBzPerHour: Number(state.idleBzPerHour)
