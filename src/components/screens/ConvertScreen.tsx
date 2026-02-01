@@ -19,7 +19,7 @@ interface Transaction {
   bonus?: number;
 }
 
-const ANCHOR_RATE = 1000000; // 1,000,000 BZ = 1.000000 BB
+const ANCHOR_RATE = 1000000;
 
 export function ConvertScreen() {
   const { bz, bb, tier, addBZ, subtractBZ, addBB, subtractBB, incrementConversions } = useGameState();
@@ -27,16 +27,19 @@ export function ConvertScreen() {
   const [inputAmount, setInputAmount] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  // Load transaction history
   useEffect(() => {
     const saved = localStorage.getItem("conversionHistory");
     if (saved) {
-      setTransactions(JSON.parse(saved));
+      try {
+        setTransactions(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to load conversion history:", e);
+      }
     }
   }, []);
 
   const saveTransaction = (tx: Transaction) => {
-    const updated = [tx, ...transactions].slice(0, 20); // Keep last 20
+    const updated = [tx, ...transactions].slice(0, 20);
     setTransactions(updated);
     localStorage.setItem("conversionHistory", JSON.stringify(updated));
   };
@@ -51,44 +54,82 @@ export function ConvertScreen() {
   };
 
   const tierPercent = getTierPercent();
-  const tierMultiplier = 1 + (tierPercent / 100);
 
   const calculatePreview = () => {
     const amount = parseFloat(inputAmount) || 0;
-    if (amount <= 0) return { output: 0, burned: 0, valid: false, error: "" };
+    if (amount <= 0) return { output: 0, burned: 0, bonus: 0, valid: false, error: "" };
 
     if (conversionType === "bz-to-bb") {
-      // BZ → BB: Apply tier bonus to output
-      const baseOutput = amount / ANCHOR_RATE;
-      const output = baseOutput * tierMultiplier;
-      const bonus = baseOutput * (tierPercent / 100);
-      return { 
-        output, 
-        burned: 0, 
-        bonus,
-        valid: bz >= amount, 
-        error: bz < amount ? "Insufficient BZ" : "" 
-      };
-    } else {
-      // BB → BZ: Limited by tier%, with burn
-      const maxConversion = bb * (tierPercent / 100);
-      
-      if (tierPercent === 0) {
-        return { output: 0, burned: 0, bonus: 0, valid: false, error: "Bronze tier cannot convert BB to BZ" };
-      }
-      
-      if (amount > maxConversion) {
-        return { output: 0, burned: 0, bonus: 0, valid: false, error: `Max ${maxConversion.toFixed(6)} BB (${tierPercent}% of balance)` };
-      }
-      
-      if (amount > bb) {
-        return { output: 0, burned: 0, bonus: 0, valid: false, error: "Insufficient BB" };
+      if (bz < amount) {
+        return { output: 0, burned: 0, bonus: 0, valid: false, error: "Insufficient BZ" };
       }
 
-      const burned = amount / (tierPercent / 100 * 2);
+      const baseOutput = amount / ANCHOR_RATE;
+      const bonusOutput = baseOutput * (tierPercent / 100);
+      const totalOutput = baseOutput + bonusOutput;
+
+      return {
+        output: totalOutput,
+        burned: 0,
+        bonus: bonusOutput,
+        valid: true,
+        error: ""
+      };
+    } else {
+      if (tierPercent === 0) {
+        return { 
+          output: 0, 
+          burned: 0, 
+          bonus: 0, 
+          valid: false, 
+          error: "Bronze tier cannot convert BB to BZ. Reach Silver tier to unlock." 
+        };
+      }
+
+      const maxConversion = bb * (tierPercent / 100);
+
+      if (amount > maxConversion) {
+        return { 
+          output: 0, 
+          burned: 0, 
+          bonus: 0, 
+          valid: false, 
+          error: `Max ${maxConversion.toFixed(6)} BB (${tierPercent}% of your balance)` 
+        };
+      }
+
+      if (amount > bb) {
+        return { 
+          output: 0, 
+          burned: 0, 
+          bonus: 0, 
+          valid: false, 
+          error: "Insufficient BB" 
+        };
+      }
+
+      const burned = amount / ((tierPercent / 100) * 2);
+      const totalCost = amount + burned;
+
+      if (totalCost > bb) {
+        return {
+          output: 0,
+          burned: 0,
+          bonus: 0,
+          valid: false,
+          error: `Need ${totalCost.toFixed(6)} BB total (${amount.toFixed(6)} convert + ${burned.toFixed(6)} burn)`
+        };
+      }
+
       const output = amount * ANCHOR_RATE;
-      
-      return { output, burned, bonus: 0, valid: true, error: "" };
+
+      return { 
+        output, 
+        burned, 
+        bonus: 0, 
+        valid: true, 
+        error: "" 
+      };
     }
   };
 
@@ -101,18 +142,20 @@ export function ConvertScreen() {
     if (conversionType === "bz-to-bb") {
       if (subtractBZ(amount)) {
         addBB(preview.output);
-        incrementConversions(amount); // Track for tasks/challenges
+        incrementConversions(amount);
         saveTransaction({
           id: Date.now().toString(),
           timestamp: Date.now(),
           type: "bz-to-bb",
           input: amount,
-          output: preview.output
+          output: preview.output,
+          bonus: preview.bonus
         });
         setInputAmount("");
       }
     } else {
-      if (subtractBB(amount + preview.burned)) {
+      const totalCost = amount + preview.burned;
+      if (subtractBB(totalCost)) {
         addBZ(preview.output);
         saveTransaction({
           id: Date.now().toString(),
@@ -151,7 +194,6 @@ export function ConvertScreen() {
 
   return (
     <div className="p-6 space-y-4 max-w-2xl mx-auto pb-24">
-      {/* Header */}
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">Convert</h1>
         <p className="text-sm text-muted-foreground">
@@ -159,7 +201,6 @@ export function ConvertScreen() {
         </p>
       </div>
 
-      {/* Balances */}
       <Card className="p-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -173,7 +214,6 @@ export function ConvertScreen() {
         </div>
       </Card>
 
-      {/* Conversion Type Toggle */}
       <Card className="p-4">
         <div className="flex gap-2">
           <Button
@@ -201,7 +241,6 @@ export function ConvertScreen() {
         </div>
       </Card>
 
-      {/* Conversion Form */}
       <Card className="p-4 space-y-4">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -217,6 +256,16 @@ export function ConvertScreen() {
             onChange={(e) => setInputAmount(e.target.value)}
             className="text-lg"
           />
+          {conversionType === "bz-to-bb" && tierPercent > 0 && (
+            <p className="text-xs text-green-600 dark:text-green-400">
+              Tier bonus: +{tierPercent}% extra BB on conversion
+            </p>
+          )}
+          {conversionType === "bz-to-bb" && tierPercent === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Bronze tier: No conversion bonus (standard 1:1 rate)
+            </p>
+          )}
           {conversionType === "bb-to-bz" && tierPercent > 0 && (
             <p className="text-xs text-muted-foreground">
               Max: {formatBB(bb * (tierPercent / 100))} BB ({tierPercent}% of your balance)
@@ -229,8 +278,7 @@ export function ConvertScreen() {
           )}
         </div>
 
-        {/* Preview */}
-        {parseFloat(inputAmount) > 0 && (
+        {parseFloat(inputAmount) > 0 && preview.valid && (
           <div className="space-y-3 p-3 bg-muted rounded-lg">
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">You will receive:</span>
@@ -242,36 +290,50 @@ export function ConvertScreen() {
               </span>
             </div>
             
-            {conversionType === "bz-to-bb" && preview.bonus && preview.bonus > 0 && (
-              <div className="flex items-center justify-between text-sm border-t pt-2">
-                <span className="text-muted-foreground">Base conversion:</span>
-                <span className="font-medium">
-                  {formatBB(preview.output - preview.bonus)} BB
-                </span>
-              </div>
-            )}
-
-            {conversionType === "bz-to-bb" && preview.bonus && preview.bonus > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-green-600 dark:text-green-400">Tier bonus (+{tierPercent}%):</span>
-                <span className="font-bold text-green-600 dark:text-green-400">
-                  +{formatBB(preview.bonus)} BB
-                </span>
-              </div>
+            {conversionType === "bz-to-bb" && preview.bonus > 0 && (
+              <>
+                <div className="flex items-center justify-between text-sm border-t pt-2">
+                  <span className="text-muted-foreground">Base conversion:</span>
+                  <span className="font-medium">
+                    {formatBB(preview.output - preview.bonus)} BB
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-green-600 dark:text-green-400">Tier bonus (+{tierPercent}%):</span>
+                  <span className="font-bold text-green-600 dark:text-green-400">
+                    +{formatBB(preview.bonus)} BB
+                  </span>
+                </div>
+              </>
             )}
             
             {conversionType === "bb-to-bz" && preview.burned > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Burned:</span>
-                <span className="font-medium text-red-600 dark:text-red-400">
-                  {formatBB(preview.burned)} BB
-                </span>
-              </div>
+              <>
+                <div className="flex items-center justify-between text-sm border-t pt-2">
+                  <span className="text-muted-foreground">Conversion amount:</span>
+                  <span className="font-medium">
+                    {formatBB(parseFloat(inputAmount))} BB
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-red-600 dark:text-red-400">Burned:</span>
+                  <span className="font-medium text-red-600 dark:text-red-400">
+                    {formatBB(preview.burned)} BB
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm border-t pt-2 font-semibold">
+                  <span className="text-muted-foreground">Total cost:</span>
+                  <span>
+                    {formatBB(parseFloat(inputAmount) + preview.burned)} BB
+                  </span>
+                </div>
+              </>
             )}
 
             {conversionType === "bb-to-bz" && preview.valid && (
               <div className="text-xs text-muted-foreground border-t pt-2">
-                <p>Burn formula: converted_amount ÷ (tier% × 2)</p>
+                <p className="font-semibold mb-1">Burn formula:</p>
+                <p>burned = converted_amount ÷ (tier% × 2)</p>
                 <p className="mt-1">
                   = {formatBB(parseFloat(inputAmount))} ÷ ({tierPercent}% × 2) = {formatBB(preview.burned)} BB burned
                 </p>
@@ -280,7 +342,6 @@ export function ConvertScreen() {
           </div>
         )}
 
-        {/* Error */}
         {preview.error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -288,7 +349,6 @@ export function ConvertScreen() {
           </Alert>
         )}
 
-        {/* Convert Button */}
         <Button
           onClick={handleConvert}
           disabled={!preview.valid || parseFloat(inputAmount) <= 0}
@@ -299,22 +359,25 @@ export function ConvertScreen() {
           Convert
         </Button>
 
-        {/* Tier Bonus Info */}
-        {conversionType === "bb-to-bz" && (
-          <div className="text-xs text-muted-foreground space-y-1 border-t pt-3">
-            <p className="font-semibold">Tier Conversion Limits:</p>
+        <div className="text-xs text-muted-foreground space-y-2 border-t pt-3">
+          <p className="font-semibold">Tier Conversion Rules:</p>
+          <div className="space-y-1">
+            <p><span className="font-medium">BZ → BB:</span> Bonus output (+{tierPercent}% for {tier})</p>
+            <p><span className="font-medium">BB → BZ:</span> {tierPercent === 0 ? "Locked (Silver+ only)" : `Max ${tierPercent}% of balance, with burn penalty`}</p>
+          </div>
+          <div className="border-t pt-2 mt-2">
+            <p className="font-semibold mb-1">Tier Limits (BB → BZ):</p>
             <div className="grid grid-cols-2 gap-1">
-              <span>Bronze: 0%</span>
+              <span>Bronze: 0% (locked)</span>
               <span>Silver: 5%</span>
               <span>Gold: 15%</span>
               <span>Platinum: 25%</span>
               <span>Diamond: 40%</span>
             </div>
           </div>
-        )}
+        </div>
       </Card>
 
-      {/* Transaction History */}
       {transactions.length > 0 && (
         <Card className="p-4">
           <h3 className="font-semibold mb-3 flex items-center gap-2">
@@ -341,6 +404,11 @@ export function ConvertScreen() {
                       }
                     </span>
                   </div>
+                  {tx.bonus && tx.bonus > 0 && (
+                    <p className="text-xs text-green-600 dark:text-green-400 ml-5">
+                      Bonus: +{formatBB(tx.bonus)} BB
+                    </p>
+                  )}
                   {tx.burned && tx.burned > 0 && (
                     <p className="text-xs text-red-600 dark:text-red-400 ml-5">
                       Burned: {formatBB(tx.burned)} BB
