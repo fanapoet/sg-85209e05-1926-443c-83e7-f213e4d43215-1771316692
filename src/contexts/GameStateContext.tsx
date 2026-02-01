@@ -223,6 +223,23 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const recoveryMultiplier = 1 + (boosters.recoveryRate - 1) * 0.1;
     const currentRecoveryRate = baseRecovery * recoveryMultiplier;
 
+    // Collect build parts data from localStorage
+    let buildPartsData: Array<{ partId: string; level: number; isBuilding: boolean; buildEndsAt: number | null }> = [];
+    try {
+      const savedParts = localStorage.getItem("buildParts");
+      if (savedParts) {
+        const parts = JSON.parse(savedParts);
+        buildPartsData = Object.entries(parts).map(([key, value]: [string, any]) => ({
+          partId: key,
+          level: value.level || 0,
+          isBuilding: value.isBuilding || false,
+          buildEndsAt: value.buildEndsAt || null
+        }));
+      }
+    } catch (e) {
+      console.error("❌ [GameState] Failed to read build parts for sync:", e);
+    }
+
     return {
       bzBalance: bz,
       bbBalance: bb,
@@ -240,7 +257,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       quickChargeCooldownUntil: quickChargeCooldownUntil,
       totalTaps: totalTaps,
       todayTaps: todayTaps,
-      idleBzPerHour: bzPerHour
+      idleBzPerHour: bzPerHour,
+      buildParts: buildPartsData
     };
   }, [bz, bb, xp, tier, energy, maxEnergy, boosters, quickChargeUsesRemaining, quickChargeCooldownUntil, totalTaps, todayTaps, bzPerHour]);
 
@@ -300,6 +318,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       const stopAutoSync = startAutoSync(() => {
         const state = stateRef.current(); // Use ref to get latest state without resetting timer
         console.log("⏰ [AUTO-SYNC] 30-second timer fired, syncing state");
+        console.log("📦 [AUTO-SYNC] State includes build parts:", state.buildParts?.length || 0);
         return state;
       }, 30000);
       

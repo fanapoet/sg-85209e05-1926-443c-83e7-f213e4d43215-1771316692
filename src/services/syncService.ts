@@ -189,6 +189,7 @@ export async function syncPlayerState(gameState: Partial<{
   buildStartTime: number;
   buildEndTime: number;
   nftsOwned: string[];
+  buildParts: Array<{ partId: string; level: number; isBuilding: boolean; buildEndsAt: number | null }>;
 }>): Promise<{ success: boolean; error?: string }> {
   console.log("🔵 [syncPlayerState] ========== FUNCTION ENTERED ==========");
   console.log("🔵 [syncPlayerState] Received gameState:", gameState);
@@ -276,6 +277,18 @@ export async function syncPlayerState(gameState: Partial<{
     }
 
     console.log("✅ [Sync] Player state synced successfully!");
+
+    // Sync build parts if provided
+    if (gameState.buildParts && gameState.buildParts.length > 0) {
+      console.log("🔧 [Sync] Syncing build parts:", gameState.buildParts.length);
+      const buildSyncResult = await syncBuildParts(profile.id, gameState.buildParts);
+      if (buildSyncResult.success) {
+        console.log("✅ [Sync] Build parts synced successfully!");
+      } else {
+        console.error("❌ [Sync] Build parts sync failed:", buildSyncResult.error);
+      }
+    }
+
     return { success: true };
   } catch (error: any) {
     console.error("❌ [Sync] Sync exception:", error);
@@ -526,6 +539,10 @@ export function startAutoSync(
   autoSyncInterval = setInterval(() => {
     const state = getGameState();
     
+    console.log("⏰ [AUTO-SYNC] ========== PERIODIC SYNC TRIGGERED ==========");
+    console.log("⏰ [AUTO-SYNC] Time:", new Date().toLocaleTimeString());
+    console.log("⏰ [AUTO-SYNC] Build parts to sync:", state.buildParts?.length || 0);
+    
     // Convert cooldown to safe timestamp
     const cooldownTimestamp = toTimestamp(state.quickChargeCooldownUntil);
     
@@ -546,11 +563,22 @@ export function startAutoSync(
       quickChargeCooldownUntil: cooldownTimestamp,
       totalTaps: state.totalTaps,
       todayTaps: state.todayTaps,
-      idleBzPerHour: state.idleBzPerHour
+      idleBzPerHour: state.idleBzPerHour,
+      buildParts: state.buildParts
     };
     
-    console.log("🔄 [Sync] Periodic sync triggered");
-    syncPlayerState(syncState).catch(console.error);
+    console.log("🔄 [AUTO-SYNC] Calling syncPlayerState...");
+    syncPlayerState(syncState)
+      .then(result => {
+        if (result.success) {
+          console.log("✅ [AUTO-SYNC] Sync completed successfully!");
+        } else {
+          console.error("❌ [AUTO-SYNC] Sync failed:", result.error);
+        }
+      })
+      .catch(err => {
+        console.error("❌ [AUTO-SYNC] Sync exception:", err);
+      });
   }, intervalMs);
 
   // Return cleanup function

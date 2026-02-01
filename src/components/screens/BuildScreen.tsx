@@ -642,6 +642,11 @@ export function BuildScreen() {
     // Check if another build is active
     if (idleState.activeBuildKey !== null && idleState.activeBuildKey !== part.key) {
       console.log("❌ [BuildScreen] Another build is active:", idleState.activeBuildKey);
+      toast({
+        title: "Build in Progress",
+        description: "Complete the current build before starting another.",
+        variant: "destructive"
+      });
       return;
     }
 
