@@ -110,7 +110,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
   // QuickCharge State
   const [quickChargeUsesRemaining, setQuickChargeUsesRemaining] = useState(() => safeGetItem("bunergy_qc_uses", 5));
-  const [quickChargeCooldownUntil, setQuickChargeCooldownUntil] = useState<number | null>(() => safeGetItem("bunergy_qc_cooldown", null));
+  const [quickChargeCooldownUntil, setQuickChargeCooldownUntil] = useState<number | null>(() => {
+    const saved = safeGetItem("bunergy_qc_cooldown", null);
+    return saved !== null ? Number(saved) : null;
+  });
 
   // Sync State
   const [isSyncing, setIsSyncing] = useState(false);
@@ -137,7 +140,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       boosterCapacity: boosters.energyCapacity,
       boosterRecovery: boosters.recoveryRate,
       quickChargeUsesRemaining: quickChargeUsesRemaining,
-      quickChargeCooldownUntil: quickChargeCooldownUntil, // ✅ Already typed as number | null in state
+      quickChargeCooldownUntil: typeof quickChargeCooldownUntil === 'string' ? Number(quickChargeCooldownUntil) : quickChargeCooldownUntil,
       totalTaps: totalTaps,
       todayTaps: todayTaps,
       idleBzPerHour: bzPerHour

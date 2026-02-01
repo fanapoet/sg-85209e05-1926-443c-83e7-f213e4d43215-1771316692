@@ -272,13 +272,16 @@ export function BuildScreen() {
         }
 
         // Sync completed build to database
-        import("@/services/syncService").then(({ syncBuildPart }) => {
-          syncBuildPart(key, {
-            level: state.level,
-            isBuilding: false,
-            buildStartedAt: undefined,
-            buildEndsAt: undefined,
-          }).catch(console.error);
+        import("@/services/syncService").then(async ({ syncBuildPart }) => {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            syncBuildPart(user.id, {
+              partId: key,
+              level: state.level,
+              isBuilding: false,
+              buildEndTime: null,
+            }).catch(console.error);
+          }
         });
 
         // Sync player state (BB spent, XP gained)
@@ -547,13 +550,16 @@ export function BuildScreen() {
     }, 3000);
 
     // Sync speed-up completed build to database
-    import("@/services/syncService").then(({ syncBuildPart }) => {
-      syncBuildPart(partKey, {
-        level: newLevel,
-        isBuilding: false,
-        buildStartedAt: undefined,
-        buildEndsAt: undefined,
-      }).catch(console.error);
+    import("@/services/syncService").then(async ({ syncBuildPart }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        syncBuildPart(user.id, {
+          partId: partKey,
+          level: newLevel,
+          isBuilding: false,
+          buildEndTime: null,
+        }).catch(console.error);
+      }
     });
   };
 
@@ -616,21 +622,19 @@ export function BuildScreen() {
 
       // Sync build part
       const nextLevel = state.level + 1;
-      const endTime = state.upgradeEndTime || Date.now() + upgradeTime;
+      const endTime = Date.now() + upgradeTime;
       
-      syncBuildParts("user_id_placeholder", [{
-        partId: part.key,
-        level: nextLevel,
-        isBuilding: true,
-        buildEndTime: endTime
-      }]).catch(err => {
-         // Fallback to syncBuildPart if needed or just log
-         console.warn("Using syncBuildPart singular fallback");
-         syncBuildPart(part.key, {
-            level: nextLevel,
-            isBuilding: true,
-            buildEndTime: endTime
-         });
+      // Sync to database
+      import("@/services/syncService").then(async ({ syncBuildPart }) => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          syncBuildPart(user.id, {
+             partId: part.key,
+             level: nextLevel,
+             isBuilding: true,
+             buildEndTime: endTime
+          });
+        }
       });
     }
   };
