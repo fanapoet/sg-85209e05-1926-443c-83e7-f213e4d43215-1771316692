@@ -96,6 +96,7 @@ export async function initializeUser() {
     const now = new Date().toISOString();
 
     const newProfile = {
+      id: crypto.randomUUID(), // Generate UUID for id field
       telegram_id: tgUser.id,
       telegram_username: tgUser.username || null,
       telegram_first_name: tgUser.first_name || null,
