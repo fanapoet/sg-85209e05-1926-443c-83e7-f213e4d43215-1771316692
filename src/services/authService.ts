@@ -90,13 +90,23 @@ export async function initializeUser() {
 
     // Step 3: Create new user with ALL Telegram data
     console.log("🆕 Creating new user for Telegram ID:", tgUser.id);
+    console.log("📝 User data:", {
+      id: tgUser.id,
+      username: tgUser.username,
+      first_name: tgUser.first_name,
+      last_name: tgUser.last_name,
+    });
     
     const displayName = tgUser.username || tgUser.first_name || `User${tgUser.id}`;
     const referralCode = generateReferralCode(tgUser.id);
     const now = new Date().toISOString();
+    const newId = crypto.randomUUID();
+
+    console.log("🔑 Generated UUID:", newId);
+    console.log("🎫 Generated Referral Code:", referralCode);
 
     const newProfile = {
-      id: crypto.randomUUID(), // Generate UUID for id field
+      id: newId,
       telegram_id: tgUser.id,
       telegram_username: tgUser.username || null,
       telegram_first_name: tgUser.first_name || null,
@@ -142,7 +152,8 @@ export async function initializeUser() {
       updated_at: now,
     };
 
-    console.log("📝 Creating profile:", {
+    console.log("📝 About to insert profile with data:", {
+      id: newProfile.id,
       telegram_id: newProfile.telegram_id,
       display_name: newProfile.display_name,
       referral_code: newProfile.referral_code,
@@ -156,7 +167,11 @@ export async function initializeUser() {
 
     if (insertError) {
       console.error("❌ Profile creation failed:", insertError);
-      console.error("Full error:", JSON.stringify(insertError, null, 2));
+      console.error("❌ Full error details:", JSON.stringify(insertError, null, 2));
+      console.error("❌ Error code:", insertError.code);
+      console.error("❌ Error message:", insertError.message);
+      console.error("❌ Error hint:", insertError.hint);
+      console.error("❌ Error details:", insertError.details);
       return {
         success: false,
         error: `Failed to create profile: ${insertError.message}`,
@@ -164,7 +179,7 @@ export async function initializeUser() {
     }
 
     console.log("✅ User created successfully!");
-    console.log("Profile data:", createdProfile);
+    console.log("✅ Profile data:", createdProfile);
 
     return {
       success: true,

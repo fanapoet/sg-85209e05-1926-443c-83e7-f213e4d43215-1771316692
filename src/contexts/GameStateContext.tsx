@@ -168,24 +168,46 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeState = async () => {
       try {
-        console.log("🚀 Initializing Bunergy...");
+        console.log("🚀 [GameState] Initializing Bunergy...");
         
         // Step 1: Initialize user (creates or retrieves profile)
+        console.log("🔐 [GameState] Calling initializeUser()...");
         const authResult = await initializeUser();
         
+        console.log("🔐 [GameState] Auth result:", {
+          success: authResult.success,
+          isNewUser: authResult.isNewUser,
+          hasProfile: !!authResult.profile,
+          error: authResult.error,
+        });
+        
         if (!authResult.success) {
-          console.error("❌ User initialization failed:", authResult.error);
+          console.error("❌ [GameState] User initialization failed:", authResult.error);
           setIsInitialized(true);
           return;
         }
         
-        console.log("✅ User initialized:", authResult.profile?.telegram_id);
+        console.log("✅ [GameState] User initialized:", authResult.profile?.telegram_id);
 
         // Step 2: Load player state from database
+        console.log("📊 [GameState] Loading player state...");
         const result = await loadPlayerState();
+        
+        console.log("📊 [GameState] Load result:", {
+          success: result.success,
+          hasData: !!result.data,
+          error: result.error,
+        });
         
         if (result.success && result.data) {
           const serverData = result.data;
+          
+          console.log("📊 [GameState] Server data loaded:", {
+            bz: serverData.bz,
+            bb: serverData.bb,
+            xp: serverData.xp,
+            totalTaps: serverData.totalTaps,
+          });
           
           // Merge server data (take max values - never decrease)
           setBz(Math.max(bz, serverData.bz));
@@ -216,12 +238,15 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           };
           safeSetItem("quickCharge", mergedQC);
           
-          console.log("✅ State loaded and merged successfully");
+          console.log("✅ [GameState] State loaded and merged successfully");
           setLastSyncTime(Date.now());
+        } else {
+          console.warn("⚠️ [GameState] No server data loaded, using local state");
         }
       } catch (error) {
-        console.error("❌ Initialization error:", error);
+        console.error("❌ [GameState] Initialization error:", error);
       } finally {
+        console.log("✅ [GameState] Initialization complete, setting isInitialized = true");
         setIsInitialized(true);
       }
     };

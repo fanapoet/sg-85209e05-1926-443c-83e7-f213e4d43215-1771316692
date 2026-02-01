@@ -370,12 +370,12 @@ export function TapScreen() {
             filter: bunnyGlow ? 'drop-shadow(0 0 20px rgba(251, 191, 36, 0.8))' : 'none'
           }}
         >
-          {/* Theme-Aware Background Circle - LARGE SIZE (400px) */}
+          {/* Theme-Aware Background Circle - MEDIUM SIZE (280px) */}
           <div 
             className="absolute inset-0 rounded-full backdrop-blur-lg border-2 transition-all duration-300"
             style={{
-              width: '400px',
-              height: '400px',
+              width: '280px',
+              height: '280px',
               left: '50%',
               top: '50%',
               transform: 'translate(-50%, -50%)',
@@ -391,12 +391,15 @@ export function TapScreen() {
             }}
           />
 
-          {/* Bunny Character Image - New Transparent One */}
+          {/* Bunergy Logo - Centered in Circle */}
           <img
-            src="/bunny-character-new.png?v=2"
-            alt="Bunny Character"
-            className="w-80 h-80 object-contain pointer-events-none select-none relative z-10"
+            src="/bunergy-logo.png"
+            alt="Bunergy Logo"
+            className="w-56 h-56 object-contain pointer-events-none select-none relative z-10"
             draggable={false}
+            style={{
+              filter: isDarkTheme ? 'drop-shadow(0 4px 12px rgba(168, 85, 247, 0.4))' : 'drop-shadow(0 4px 12px rgba(236, 72, 153, 0.3))'
+            }}
           />
             
           {/* Glow effect on tap */}
