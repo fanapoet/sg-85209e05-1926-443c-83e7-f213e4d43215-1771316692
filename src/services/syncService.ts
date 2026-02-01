@@ -391,45 +391,38 @@ export async function syncBuildParts(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     console.log(`🔧 [Sync] Syncing ${parts.length} build parts to database...`);
+    console.log(`🔧 [Sync] User ID for sync: ${userId}`);
     console.log(`🔧 [Sync] Sample part data:`, parts[0]);
 
+    // Check current auth session
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    console.log(`🔐 [Sync] Auth session check:`, sessionError ? `ERROR: ${sessionError.message}` : `✅ Session active, user: ${sessionData?.session?.user?.id}`);
+
     // Prepare data for upsert
-    const upsertData = parts.map(part => {
-      const buildStartTime = part.isBuilding && part.buildEndsAt 
-        ? new Date(part.buildEndsAt - 1000 * 60 * 60).toISOString() 
-        : null;
-      const buildEndTime = part.buildEndsAt 
-        ? new Date(part.buildEndsAt).toISOString() 
-        : null;
+    const upsertData = parts.map(part => ({
+      user_id: userId,
+      part_id: part.partId,
+      level: part.level,
+      is_building: part.isBuilding,
+      build_end_time: part.buildEndsAt ? new Date(part.buildEndsAt).toISOString() : null,
+    }));
 
-      console.log(`🔧 [Sync] Part ${part.partId}: level=${part.level}, building=${part.isBuilding}, endsAt=${buildEndTime}`);
-
-      return {
-        user_id: userId,
-        part_id: part.partId,
-        current_level: part.level,
-        is_building: part.isBuilding,
-        build_started_at: buildStartTime,
-        build_ends_at: buildEndTime,
-        last_upgraded_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-    });
-
-    console.log(`🔧 [Sync] Prepared ${upsertData.length} records for upsert`);
-    console.log(`🔧 [Sync] Sample upsert record:`, upsertData[0]);
+    console.log("🔧 [Sync] Sample upsert record:", upsertData[0]);
+    console.log("🔧 [Sync] Prepared", upsertData.length, "records for upsert");
 
     // Use upsert to insert or update
     const { data, error } = await supabase
       .from("user_build_parts")
       .upsert(upsertData, {
-        onConflict: "user_id,part_id", // Unique constraint
-        ignoreDuplicates: false // Update on conflict
+        onConflict: "user_id,part_id",
+        ignoreDuplicates: false
       });
 
     if (error) {
       console.error("❌ [Sync] Build parts upsert failed:", error);
       console.error("❌ [Sync] Error details:", JSON.stringify(error, null, 2));
+      console.error("❌ [Sync] Error code:", error.code);
+      console.error("❌ [Sync] Error message:", error.message);
       return { success: false, error: error.message };
     }
 
