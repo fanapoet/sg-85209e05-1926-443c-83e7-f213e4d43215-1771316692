@@ -21,6 +21,7 @@ interface Boosters {
 }
 
 interface GameState {
+  telegramId: number | null;
   bz: number;
   bb: number;
   energy: number;
@@ -99,6 +100,9 @@ const safeSetItem = (key: string, value: any) => {
 export function GameStateProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const mountedRef = useRef(false);
+
+  // User Identity
+  const [telegramId, setTelegramId] = useState<number | null>(null);
 
   // Core Currency & Stats
   const [bz, setBz] = useState(() => safeGetItem("bunergy_bz", 5000));
@@ -182,8 +186,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       console.log("🚀 [GameState] Initializing...");
       const authResult = await initializeUser();
       
-      if (authResult.success) {
-        console.log("✅ [GameState] User initialized");
+      if (authResult.success && authResult.profile) {
+        console.log("✅ [GameState] User initialized:", authResult.profile.telegram_id);
+        setTelegramId(authResult.profile.telegram_id);
+        
         const serverData = await loadPlayerState();
         
         if (serverData) {
@@ -498,6 +504,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
   return (
     <GameStateContext.Provider value={{
+      telegramId,
       bz, bb, energy, maxEnergy, bzPerHour, tier, xp, referralCount,
       totalTaps, todayTaps, totalTapIncome, totalUpgrades, totalConversions,
       hasClaimedIdleToday, lastClaimTimestamp,
