@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { signInWithTelegram } from "@/services/authService";
+import { initializeUser, getCurrentTelegramUser } from "@/services/authService";
 import { 
   syncPlayerState, 
   syncBoosters, 
@@ -168,33 +168,26 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const initializeState = async () => {
       try {
-        // Step 1: Check if user is authenticated
-        console.log("🔐 Checking authentication...");
-        const { data: { session } } = await supabase.auth.getSession();
+        console.log("🚀 Initializing Bunergy...");
         
-        if (!session) {
-          console.log("❌ No session found, attempting Telegram auth...");
-          const authResult = await signInWithTelegram();
-          
-          if (!authResult.success) {
-            console.error("❌ Telegram auth failed:", authResult.error);
-            setIsInitialized(true);
-            return;
-          }
-          
-          console.log("✅ Telegram auth successful!", authResult);
-        } else {
-          console.log("✅ Existing session found:", session.user.id);
+        // Step 1: Initialize user (creates or retrieves profile)
+        const authResult = await initializeUser();
+        
+        if (!authResult.success) {
+          console.error("❌ User initialization failed:", authResult.error);
+          setIsInitialized(true);
+          return;
         }
+        
+        console.log("✅ User initialized:", authResult.profile?.telegram_id);
 
-        // Step 2: Load player state from Supabase
-        console.log("🔄 Loading player state from Supabase...");
+        // Step 2: Load player state from database
         const result = await loadPlayerState();
         
         if (result.success && result.data) {
           const serverData = result.data;
           
-          // Merge server data with local (local wins if newer)
+          // Merge server data (take max values - never decrease)
           setBz(Math.max(bz, serverData.bz));
           setBb(Math.max(bb, serverData.bb));
           setXp(Math.max(xp, serverData.xp));
@@ -223,11 +216,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           };
           safeSetItem("quickCharge", mergedQC);
           
-          console.log("✅ State loaded from Supabase and merged with local");
+          console.log("✅ State loaded and merged successfully");
           setLastSyncTime(Date.now());
         }
       } catch (error) {
-        console.error("❌ Failed to initialize state:", error);
+        console.error("❌ Initialization error:", error);
       } finally {
         setIsInitialized(true);
       }

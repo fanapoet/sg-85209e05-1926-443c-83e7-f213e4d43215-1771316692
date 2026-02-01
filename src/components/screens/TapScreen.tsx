@@ -402,17 +402,13 @@ export function TapScreen() {
             }}
           />
 
-          {/* Bunny Character Image - Transparent PNG */}
-          <div className="relative w-64 h-64">
-            <img 
-              src="/bunny-character-transparent.png" 
-              alt="Bunny Character"
-              className="w-full h-full object-contain relative z-10"
-              style={{
-                imageRendering: 'crisp-edges',
-                filter: 'none'
-              }}
-            />
+          {/* Bunny Character Image */}
+          <img
+            src="/bunny-character-new.png"
+            alt="Bunny Character"
+            className="w-80 h-80 object-contain pointer-events-none select-none"
+            draggable={false}
+          />
             
             {/* Glow effect on tap */}
             {bunnyGlow && (
