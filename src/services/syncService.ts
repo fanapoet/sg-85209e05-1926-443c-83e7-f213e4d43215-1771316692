@@ -525,6 +525,7 @@ export function startAutoSync(
     totalTaps: number;
     todayTaps: number;
     idleBzPerHour: number;
+    buildParts?: Array<{ partId: string; level: number; isBuilding: boolean; buildEndsAt: number | null }>;
   },
   intervalMs: number = 30000
 ) {
