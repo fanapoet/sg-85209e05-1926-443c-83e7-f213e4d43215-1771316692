@@ -391,7 +391,7 @@ export function RewardsNFTsScreen() {
   }
 
   return (
-    <div className="p-6 space-y-4 max-w-2xl mx-auto pb-24">
+    <div className="p-6 space-y-6 max-w-2xl mx-auto pb-24">
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">Rewards & NFTs</h1>
         <p className="text-sm text-muted-foreground">
@@ -477,24 +477,24 @@ export function RewardsNFTsScreen() {
               return (
                 <div key={challenge.key} className="p-3 bg-muted rounded-lg">
                   <div className="flex items-start gap-3 mb-3">
-                    <div className={`p-2 rounded-lg ${challenge.claimed ? "bg-green-500/10" : "bg-primary/10"}`}>
+                    <div className={`p-2 rounded-lg flex-shrink-0 ${challenge.claimed ? "bg-green-500/10" : "bg-primary/10"}`}>
                       <Icon className={`h-5 w-5 ${challenge.claimed ? "text-green-500" : "text-primary"}`} />
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h4 className="font-semibold">{challenge.name}</h4>
                         {challenge.claimed && (
-                          <Badge variant="default" className="bg-green-600">
+                          <Badge variant="default" className="bg-green-600 flex-shrink-0">
                             <Check className="h-3 w-3 mr-1" />
                             Claimed
                           </Badge>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-muted-foreground mb-2">
                         {challenge.description}
                       </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <TrendingUp className="h-3 w-3 text-green-600" />
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="h-3 w-3 text-green-600 flex-shrink-0" />
                         <span className="text-xs font-medium">
                           +{challenge.reward.type === "BB" ? challenge.reward.amount.toFixed(3) : challenge.reward.amount.toLocaleString()} {challenge.reward.type}
                         </span>
@@ -553,14 +553,14 @@ export function RewardsNFTsScreen() {
             </Badge>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-6">
             {nfts.map((nft) => {
               const Icon = getIconComponent(nft.icon);
 
               return (
                 <Card
                   key={nft.key}
-                  className={`p-4 ${
+                  className={`p-5 ${
                     nft.owned
                       ? "border-green-500 bg-green-50 dark:bg-green-950"
                       : !nft.requirementMet
@@ -568,16 +568,16 @@ export function RewardsNFTsScreen() {
                       : ""
                   }`}
                 >
-                  <div className="flex items-start gap-3">
-                    <div className={`p-3 rounded-lg ${nft.owned ? "bg-green-500/20" : "bg-primary/10"}`}>
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className={`p-3 rounded-lg flex-shrink-0 ${nft.owned ? "bg-green-500/20" : "bg-primary/10"}`}>
                       <Icon className={`h-6 w-6 ${nft.owned ? "text-green-600" : "text-primary"}`} />
                     </div>
 
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-semibold">{nft.name}</h4>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <h4 className="font-semibold text-base">{nft.name}</h4>
                         {nft.owned && (
-                          <Badge variant="default" className="bg-green-600">
+                          <Badge variant="default" className="bg-green-600 flex-shrink-0">
                             <Check className="h-3 w-3 mr-1" />
                             Owned
                           </Badge>
@@ -590,7 +590,7 @@ export function RewardsNFTsScreen() {
 
                       {/* Progress Display */}
                       {!nft.owned && (
-                        <div className="mb-3 space-y-2">
+                        <div className="mb-4 space-y-2">
                           <div className="flex items-center justify-between text-xs">
                             <span className="text-muted-foreground">Progress</span>
                             <span className={nft.requirementMet ? "text-green-600 font-semibold" : "font-medium"}>
@@ -618,18 +618,18 @@ export function RewardsNFTsScreen() {
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center justify-between mb-4">
                         <div className="flex items-center gap-2 text-sm">
                           {nft.requirementMet ? (
-                            <Check className="h-4 w-4 text-green-600" />
+                            <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
                           ) : (
-                            <Lock className="h-4 w-4 text-orange-600" />
+                            <Lock className="h-4 w-4 text-orange-600 flex-shrink-0" />
                           )}
                           <span className={nft.requirementMet ? "text-green-600 font-medium" : "text-orange-600"}>
                             {nft.requirement}
                           </span>
                         </div>
-                        <Badge variant="outline">
+                        <Badge variant="outline" className="flex-shrink-0">
                           {nft.price === 0 ? "Free" : `${nft.price.toFixed(3)} BB`}
                         </Badge>
                       </div>
