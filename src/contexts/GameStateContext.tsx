@@ -6,7 +6,6 @@ import {
   syncTapData, 
   loadPlayerState, 
   startAutoSync, 
-  stopAutoSync,
   getSyncStatus, 
   checkOnlineStatus 
 } from "@/services/syncService";
@@ -140,7 +139,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [lastSyncTime, setLastSyncTime] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
   const [syncErrorCount, setSyncErrorCount] = useState(0);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   // Derived State
   const getTier = (xpValue: number): Tier => {
@@ -177,6 +176,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   // Initialization
   useEffect(() => {
     mountedRef.current = true;
+    setMounted(true);
     
     const init = async () => {
       console.log("🚀 [GameState] Initializing...");
@@ -187,7 +187,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         const serverData = await loadPlayerState();
         
         if (serverData) {
-          console.log("📊 [GameState] Loaded server data");
+          console.log("📊 [GameState] Loaded server data:", serverData);
           setBz(Math.max(bz, Number(serverData.bz_balance)));
           setBb(Math.max(bb, Number(serverData.bb_balance)));
           setXp(Math.max(xp, Number(serverData.xp)));
@@ -207,18 +207,18 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           setQuickChargeCooldownUntil(serverData.quickcharge_cooldown_until ? new Date(serverData.quickcharge_cooldown_until).getTime() : null);
         }
       }
-      setIsInitialized(true);
     };
 
     init();
     
-    return () => { mountedRef.current = false; };
+    return () => { 
+      mountedRef.current = false;
+      setMounted(false);
+    };
   }, []);
 
-  // Sync Helper using Refs/Callbacks to avoid closure staleness if needed, 
-  // but here we just construct it fresh.
-  const getFullState = useCallback(() => {
-    // Calculate recovery rate
+  // Helper to get full state for sync (defined BEFORE it's used)
+  const getFullStateForSync = useCallback(() => {
     const baseRecovery = 0.3;
     const recoveryMultiplier = 1 + (boosters.recoveryRate - 1) * 0.1;
     const currentRecoveryRate = baseRecovery * recoveryMultiplier;
@@ -244,25 +244,82 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     };
   }, [bz, bb, xp, tier, energy, maxEnergy, boosters, quickChargeUsesRemaining, quickChargeCooldownUntil, totalTaps, todayTaps, bzPerHour]);
 
-  // Auto-Sync Setup
-  useEffect(() => {
-    if (!isInitialized) return;
+  // Manual Sync Function
+  const manualSync = async () => {
+    console.log("🔘 [MANUAL SYNC] Button clicked by user");
+    console.log("🔘 [MANUAL SYNC] Current state:", {
+      bz,
+      bb,
+      energy,
+      xp,
+      tier,
+      boosters
+    });
     
-    console.log("🔄 [AutoSync] Starting...");
-    const stop = startAutoSync(getFullState, 30000);
+    setIsSyncing(true);
+    try {
+      const fullState = getFullStateForSync();
+      console.log("🔘 [MANUAL SYNC] Calling syncPlayerState with:", fullState);
+      
+      const result = await syncPlayerState(fullState);
+      console.log("🔘 [MANUAL SYNC] Result:", result);
+      
+      if (result.success) {
+        setLastSyncTime(Date.now());
+        console.log("✅ [MANUAL SYNC] SUCCESS - Data saved to database");
+        toast({ 
+          title: "✅ Sync Successful", 
+          description: "Game progress saved to server." 
+        });
+      } else {
+        console.error("❌ [MANUAL SYNC] FAILED:", result.error);
+        toast({ 
+          title: "❌ Sync Failed", 
+          description: result.error || "Could not save progress.", 
+          variant: "destructive" 
+        });
+      }
+    } catch (error) {
+      console.error("❌ [MANUAL SYNC] EXCEPTION:", error);
+      toast({ 
+        title: "❌ Sync Error", 
+        description: "Unexpected error during sync.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsSyncing(false);
+      console.log("🔘 [MANUAL SYNC] Finished");
+    }
+  };
+
+  // Start automatic periodic sync (every 30 seconds)
+  useEffect(() => {
+    if (!mounted) return;
+    
+    console.log("🚀 [AUTO-SYNC] Starting automatic sync every 30 seconds");
+    
+    const stopAutoSync = startAutoSync(() => {
+      const state = getFullStateForSync();
+      console.log("⏰ [AUTO-SYNC] 30-second timer fired, syncing state:", state);
+      return state;
+    }, 30000);
     
     return () => {
-      console.log("🛑 [AutoSync] Stopping...");
-      stop();
+      console.log("🛑 [AUTO-SYNC] Stopping automatic sync");
+      stopAutoSync();
     };
-  }, [isInitialized, getFullState]);
+  }, [mounted, getFullStateForSync]);
 
   // Online/Offline Monitor
   useEffect(() => {
     const handleStatusChange = () => {
       const online = checkOnlineStatus();
       setIsOnline(online);
-      if (online) manualSync();
+      console.log(`📡 [Network] Status changed: ${online ? "ONLINE" : "OFFLINE"}`);
+      if (online) {
+        console.log("📡 [Network] Reconnected - triggering manual sync");
+        manualSync();
+      }
     };
 
     window.addEventListener("online", handleStatusChange);
@@ -271,7 +328,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("online", handleStatusChange);
       window.removeEventListener("offline", handleStatusChange);
     };
-  }, [getFullState]);
+  }, []);
 
   // Energy Recovery Loop
   useEffect(() => {
@@ -297,23 +354,36 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     setMaxEnergyState(newMax);
   }, [boosters.energyCapacity]);
 
-  // Methods
-  const manualSync = async () => {
-    setIsSyncing(true);
-    try {
-      const state = getFullState();
-      console.log("🔄 [ManualSync] Syncing:", state);
-      await syncPlayerState(state);
-      setLastSyncTime(Date.now());
-      toast({ title: "Sync Successful", description: "Game progress saved to server." });
-    } catch (error) {
-      console.error("❌ [ManualSync] Failed:", error);
-      toast({ title: "Sync Failed", description: "Could not save progress.", variant: "destructive" });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+  // Debounced tap sync (2 second delay)
+  useEffect(() => {
+    if (!mounted) return;
+    
+    console.log("🔄 [Tap] Tap count updated:", totalTaps);
+    console.log("🔄 [Tap] Debounced sync will fire in 2s");
+    
+    const timer = setTimeout(() => {
+      console.log("🔄 [Tap] 2 seconds elapsed, syncing tap data...");
+      syncTapData({
+        bzBalance: bz,
+        currentEnergy: energy,
+        lastEnergyUpdate: Date.now(),
+        totalTaps: totalTaps,
+        todayTaps: todayTaps
+      }).then(result => {
+        if (result.success) {
+          console.log("✅ [Tap] Tap data synced successfully");
+        } else {
+          console.error("❌ [Tap] Tap sync failed:", result.error);
+        }
+      }).catch(err => {
+        console.error("❌ [Tap] Tap sync exception:", err);
+      });
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, [totalTaps, mounted]);
 
+  // Methods
   const addBZ = (amount: number) => setBz(p => p + amount);
   const subtractBZ = (amount: number) => {
     if (amount <= 0 || bz < amount) return false;
@@ -335,21 +405,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   
   const incrementTotalTaps = () => {
     setTotalTaps(p => p + 1);
-    // Debounced sync handled by syncService if needed, or we can just rely on auto-sync
-    // Ideally, for taps, we might want a debounced push
   };
 
   const incrementTaps = (count: number, income: number) => {
     setTodayTaps(p => p + count);
     setTotalTapIncome(p => p + income);
-    // Try to sync taps
-    syncTapData({
-      bzBalance: bz,
-      currentEnergy: energy,
-      lastEnergyUpdate: Date.now(),
-      totalTaps: totalTaps + count,
-      todayTaps: todayTaps + count
-    }).catch(console.error);
   };
 
   const incrementUpgrades = () => setTotalUpgrades(p => p + 1);
@@ -357,24 +417,44 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const markIdleClaimed = () => {
     setHasClaimedIdleToday(true);
     setLastClaimTimestamp(Date.now());
-    // Trigger immediate sync for claim
+    console.log("💰 [Idle] Idle reward claimed, triggering immediate sync");
     setTimeout(manualSync, 0);
   };
 
-  const upgradeBooster = (type: keyof Boosters) => {
+  const upgradeBooster = (boosterType: keyof Boosters) => {
+    console.log("⬆️ [BOOSTER] Upgrade requested:", boosterType);
+    
     setBoosters(prev => {
-      const next = { ...prev, [type]: prev[type] + 1 };
-      // Sync immediately after booster upgrade
+      const newBoosters = {
+        ...prev,
+        [boosterType]: prev[boosterType] + 1
+      };
+      console.log("⬆️ [BOOSTER] New booster values:", newBoosters);
+      
+      // Immediate sync after booster upgrade
       setTimeout(() => {
-        syncPlayerState(getFullState()).catch(console.error);
-      }, 0);
-      return next;
+        console.log("⬆️ [BOOSTER] Triggering immediate sync...");
+        syncPlayerState({
+          ...getFullStateForSync(),
+          boosterIncomeTap: newBoosters.incomePerTap,
+          boosterEnergyTap: newBoosters.energyPerTap,
+          boosterCapacity: newBoosters.energyCapacity,
+          boosterRecovery: newBoosters.recoveryRate
+        }).then(result => {
+          console.log("⬆️ [BOOSTER] Sync result:", result);
+        }).catch(err => {
+          console.error("❌ [BOOSTER] Sync failed:", err);
+        });
+      }, 100);
+      
+      return newBoosters;
     });
   };
 
   const useQuickCharge = () => {
     if (quickChargeUsesRemaining > 0) {
       const now = Date.now();
+      console.log("⚡ [QuickCharge] Used, triggering immediate sync");
       setQuickChargeUsesRemaining(p => p - 1);
       setEnergyState(maxEnergy);
       setQuickChargeCooldownUntil(now + 60 * 60 * 1000); // 1 hour
@@ -382,11 +462,15 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       // Sync immediately
       setTimeout(() => {
         syncPlayerState({
-          ...getFullState(),
+          ...getFullStateForSync(),
           quickChargeUsesRemaining: quickChargeUsesRemaining - 1,
           quickChargeCooldownUntil: now + 60 * 60 * 1000,
           currentEnergy: maxEnergy
-        }).catch(console.error);
+        }).then(result => {
+          console.log("⚡ [QuickCharge] Sync result:", result);
+        }).catch(err => {
+          console.error("❌ [QuickCharge] Sync failed:", err);
+        });
       }, 0);
     }
   };

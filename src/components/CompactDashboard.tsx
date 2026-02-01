@@ -1,350 +1,128 @@
 import { useGameState } from "@/contexts/GameStateContext";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Users, Zap, TrendingUp } from "lucide-react";
-import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
+import { Users, Zap, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import Image from "next/image";
-import { useToast } from "@/hooks/use-toast";
-
-const PRESET_AVATARS = [
-  "🐰", "🔥", "⚡", "💎", "🚀", "🎮", "🏆", "⭐",
-  "🌟", "💰", "🎯", "🔋", "⚙️", "🛠️", "🎨", "🌈"
-];
 
 export function CompactDashboard() {
-  const { bz, bb, energy, tier, referralCount, xp, bzPerHour, isOnline, isSyncing, lastSyncTime } = useGameState();
-  const { toast } = useToast();
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [selectedAvatar, setSelectedAvatar] = useState<string>("");
-  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
-  const [telegramUser, setTelegramUser] = useState<any>(null);
+  const { 
+    bz, bb, energy, maxEnergy, bzPerHour, tier, referralCount,
+    isSyncing, lastSyncTime, isOnline, manualSync
+  } = useGameState();
 
-  useEffect(() => {
-    loadUserProfile();
-    loadSelectedAvatar();
-    loadTelegramUser();
-  }, []);
+  const formatBZ = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  const formatBB = (value: number) => value.toFixed(6);
+  const formatRate = (value: number) => value.toFixed(1);
 
-  const loadUserProfile = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setUserProfile(user);
-      }
-    } catch (error) {
-      console.error("Error loading user profile:", error);
-    }
+  const tierColors: Record<string, string> = {
+    Bronze: "bg-orange-800",
+    Silver: "bg-gray-400",
+    Gold: "bg-yellow-500",
+    Platinum: "bg-cyan-400",
+    Diamond: "bg-purple-500"
   };
 
-  const loadSelectedAvatar = () => {
-    try {
-      const saved = localStorage.getItem("userAvatar");
-      if (saved) {
-        setSelectedAvatar(saved);
-      }
-    } catch (error) {
-      console.error("Error loading avatar:", error);
-    }
+  const tierBonus: Record<string, number> = {
+    Bronze: 0,
+    Silver: 5,
+    Gold: 15,
+    Platinum: 25,
+    Diamond: 40
   };
 
-  const loadTelegramUser = () => {
-    try {
-      if (typeof window !== "undefined" && window.Telegram?.WebApp) {
-        const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
-        if (tgUser) {
-          setTelegramUser(tgUser);
-        }
-      }
-    } catch (error) {
-      console.error("Error loading Telegram user:", error);
-    }
-  };
-
-  const handleAvatarSelect = (avatar: string) => {
-    setSelectedAvatar(avatar);
-    localStorage.setItem("userAvatar", avatar);
-    setShowAvatarPicker(false);
-  };
-
-  const getBoosterLevel = (key: string): number => {
-    try {
-      if (typeof window === "undefined") return 1;
-      const saved = localStorage.getItem("boosters");
-      if (!saved) return 1;
-      const data = JSON.parse(saved);
-      return data[key] || 1;
-    } catch {
-      return 1;
-    }
-  };
-
-  const capacityLevel = getBoosterLevel("energyCapacity");
-  const actualMaxEnergy = 1500 + (capacityLevel - 1) * 100;
-
-  const formatBZ = (value: number) => {
-    return Math.floor(value).toLocaleString("en-US");
-  };
-
-  const formatBB = (value: number) => {
-    return value.toFixed(6);
-  };
-
-  const formatRate = (value: number) => {
-    return value.toFixed(1);
-  };
-
-  const getTierBonus = (tierName: string): number => {
-    const bonuses: Record<string, number> = {
-      "Bronze": 0,
-      "Silver": 5,
-      "Gold": 15,
-      "Platinum": 25,
-      "Diamond": 40
-    };
-    return bonuses[tierName] || 0;
-  };
-
-  const getTierColor = (tierName: string): string => {
-    const colors: Record<string, string> = {
-      "Bronze": "bg-amber-700 text-white",
-      "Silver": "bg-slate-400 text-slate-900",
-      "Gold": "bg-yellow-500 text-yellow-900",
-      "Platinum": "bg-cyan-400 text-cyan-900",
-      "Diamond": "bg-blue-500 text-white"
-    };
-    return colors[tierName] || "bg-secondary text-secondary-foreground";
-  };
-
-  const tierBonus = getTierBonus(tier);
-
-  const getUserDisplayName = () => {
-    // Priority: first_name + last_name > full_name > email > "User"
-    if (telegramUser) {
-      if (telegramUser.first_name) {
-        return telegramUser.last_name 
-          ? `${telegramUser.first_name} ${telegramUser.last_name}`
-          : telegramUser.first_name;
-      }
-    }
-    if (userProfile?.user_metadata?.full_name) {
-      return userProfile.user_metadata.full_name;
-    }
-    if (userProfile?.email) {
-      return userProfile.email.split('@')[0];
-    }
-    return "User";
-  };
-
-  const getUserInitials = () => {
-    if (telegramUser?.first_name) {
-      const firstName = telegramUser.first_name[0];
-      const lastName = telegramUser.last_name?.[0] || "";
-      return (firstName + lastName).toUpperCase();
-    }
-    if (userProfile?.user_metadata?.full_name) {
-      return userProfile.user_metadata.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
-    }
-    if (userProfile?.email) {
-      return userProfile.email.slice(0, 2).toUpperCase();
-    }
-    return "U";
-  };
-
-  const getAvatarDisplay = () => {
-    if (selectedAvatar) {
-      return selectedAvatar;
-    }
-    return getUserInitials();
+  const energyPercent = (energy / maxEnergy) * 100;
+  const bonus = tierBonus[tier] || 0;
+  
+  const getTimeSinceSync = () => {
+    if (lastSyncTime === 0) return "Never";
+    const seconds = Math.floor((Date.now() - lastSyncTime) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
   };
 
   return (
-    <>
-      <div className="bg-card border-b border-border shadow-md sticky top-0 z-50">
-        <div className="p-2.5 space-y-1">
-          {/* Top Row: Left (BZ, BB) | Center (Smaller Logo) | Right (Tier, Avatar) */}
-          <div className="flex items-center justify-between">
-            {/* Left: BZ & BB */}
-            <div className="flex flex-col gap-1 min-w-[80px]">
-              <div className="text-xs">
-                <span className="font-bold text-sm text-foreground font-mono">{formatBZ(bz)}</span>
-                <span className="text-muted-foreground ml-1 text-[10px] font-semibold">BZ</span>
-              </div>
-              <div className="text-xs">
-                <span className="font-bold text-sm text-foreground font-mono">{formatBB(bb)}</span>
-                <span className="text-muted-foreground ml-1 text-[10px] font-semibold">BB</span>
-              </div>
+    <div className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 p-4 rounded-b-2xl shadow-lg border-b-2 border-purple-600">
+      {/* Top Row: Profile, Currencies & Sync */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-3">
+          <Avatar className="h-12 w-12 border-2 border-purple-400">
+            <AvatarFallback className="bg-gradient-to-br from-purple-600 to-pink-600 text-white font-bold">
+              B
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-yellow-300 font-bold text-lg">{formatBZ(bz)} BZ</span>
+              <Badge className={`${tierColors[tier]} text-white text-xs px-2 py-0.5`}>
+                {tier}
+              </Badge>
             </div>
-            
-            {/* Center: Smaller Bunergy Logo */}
-            <div className="flex items-center justify-center flex-1">
-              <div className="relative w-12 h-12 flex items-center justify-center">
-                <Image 
-                  src="/bunergy-icon.png" 
-                  alt="Bunergy" 
-                  width={48} 
-                  height={48}
-                  className="object-contain drop-shadow-lg"
-                  priority
-                />
-              </div>
-            </div>
-            
-            {/* Right: Tier & Avatar */}
-            <div className="flex flex-col items-end gap-1 min-w-[80px]">
-              <div className="flex items-center gap-1.5">
-                {/* Sync Status Indicator */}
-                <div className="flex items-center gap-1">
-                  {isSyncing ? (
-                    <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" title="Syncing..." />
-                  ) : !isOnline ? (
-                    <div className="h-2 w-2 rounded-full bg-orange-500" title="Offline - changes will sync later" />
-                  ) : (
-                    <div className="h-2 w-2 rounded-full bg-green-500" title="Synced" />
-                  )}
-                </div>
-                
-                <Badge variant="secondary" className={`text-[10px] font-bold px-1.5 py-0.5 ${getTierColor(tier)}`}>
-                  {tier}
-                </Badge>
-              </div>
-              <button 
-                onClick={() => setProfileOpen(true)}
-                className="h-8 w-8 rounded-full overflow-hidden border-2 border-primary/20 hover:border-primary/40 transition-colors flex items-center justify-center bg-primary/10 text-primary font-bold text-lg"
-              >
-                {getAvatarDisplay()}
-              </button>
+            <div className="text-purple-200 text-sm">
+              {formatBB(bb)} BB
             </div>
           </div>
-          
-          {/* Bottom Row: Stats - Larger Font, No Gap */}
-          <div className="flex items-center justify-between gap-3 text-sm">
-            {/* XP */}
-            <div className="flex items-center gap-1">
-              <span className="text-muted-foreground font-semibold">XP:</span>
-              <span className="font-mono font-bold text-foreground">{Math.floor(xp).toLocaleString()}</span>
-            </div>
-            
-            {/* Energy */}
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <Zap className="h-3.5 w-3.5 text-yellow-500" />
-              <span className="font-mono font-semibold">{Math.floor(energy)}/{actualMaxEnergy}</span>
-            </div>
-            
-            {/* BZ/h Rate */}
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <TrendingUp className="h-3.5 w-3.5" />
-              <span className="font-mono font-semibold">{formatRate(bzPerHour)}</span>
-              <span className="text-[10px]">BZ/h</span>
-            </div>
-            
-            {/* Tier Bonus */}
-            <div className="text-green-600 dark:text-green-400 font-bold">
-              +{tierBonus}%
-            </div>
+        </div>
+
+        {/* Sync Button & Status */}
+        <div className="flex flex-col items-end gap-1">
+          <Button
+            size="sm"
+            variant={isOnline ? "default" : "destructive"}
+            onClick={manualSync}
+            disabled={isSyncing}
+            className="h-8 px-3 text-xs"
+          >
+            <RefreshCw className={`h-3 w-3 mr-1 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing ? "Syncing..." : "Sync"}
+          </Button>
+          <div className="text-xs text-purple-300">
+            {isOnline ? `✓ ${getTimeSinceSync()}` : "⚠ Offline"}
           </div>
         </div>
       </div>
 
-      {/* Profile Dialog */}
-      <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Profile</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div className="flex flex-col items-center gap-3">
-              <button
-                onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-                className="h-20 w-20 rounded-full border-4 border-primary/20 hover:border-primary/40 transition-colors flex items-center justify-center bg-primary/10 text-primary font-bold text-4xl cursor-pointer"
-              >
-                {getAvatarDisplay()}
-              </button>
-              <button
-                onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-                className="text-xs text-primary hover:underline"
-              >
-                {showAvatarPicker ? "Close Picker" : "Change Avatar"}
-              </button>
-
-              {showAvatarPicker && (
-                <div className="grid grid-cols-8 gap-2 p-3 bg-muted rounded-lg w-full">
-                  {PRESET_AVATARS.map((avatar) => (
-                    <button
-                      key={avatar}
-                      onClick={() => handleAvatarSelect(avatar)}
-                      className={`h-10 w-10 rounded-full flex items-center justify-center text-2xl hover:bg-primary/20 transition-colors ${
-                        selectedAvatar === avatar ? "bg-primary/30 ring-2 ring-primary" : "bg-background"
-                      }`}
-                    >
-                      {avatar}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="text-center">
-                <h3 className="font-semibold text-lg">
-                  {getUserDisplayName()}
-                </h3>
-                {telegramUser && (
-                  <p className="text-sm text-muted-foreground">
-                    Telegram User
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-3 pt-4">
-              {userProfile?.id && (
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <span className="text-sm text-muted-foreground">User ID</span>
-                  <span className="text-xs font-mono">{userProfile.id.slice(0, 8)}...</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="text-sm text-muted-foreground">Current Tier</span>
-                <Badge className={getTierColor(tier)}>{tier}</Badge>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="text-sm text-muted-foreground">Total XP</span>
-                <span className="font-bold">{Math.floor(xp).toLocaleString()}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="text-sm text-muted-foreground">Total BZ</span>
-                <span className="font-bold">{formatBZ(bz)}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="text-sm text-muted-foreground">Total BB</span>
-                <span className="font-bold">{formatBB(bb)}</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="text-sm text-muted-foreground">Referrals</span>
-                <div className="flex items-center gap-1">
-                  <Users className="h-4 w-4" />
-                  <span className="font-bold">{referralCount}</span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <span className="text-sm text-muted-foreground">Idle Production</span>
-                <span className="font-bold">{formatRate(bzPerHour)} BZ/h</span>
-              </div>
-            </div>
-
-            <Button onClick={() => setProfileOpen(false)} className="w-full" size="lg">
-              Close
-            </Button>
+      {/* Energy Bar */}
+      <div className="mb-3">
+        <div className="flex justify-between items-center mb-1">
+          <div className="flex items-center gap-1">
+            <Zap className="h-4 w-4 text-yellow-400" />
+            <span className="text-white text-sm font-medium">Energy</span>
           </div>
-        </DialogContent>
-      </Dialog>
-    </>
+          <span className="text-white text-sm font-bold">
+            {Math.floor(energy)} / {maxEnergy}
+          </span>
+        </div>
+        <div className="h-2 bg-purple-950 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-yellow-400 to-orange-500 transition-all duration-300"
+            style={{ width: `${Math.min(energyPercent, 100)}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Stats Row */}
+      <div className="flex items-center justify-between text-xs">
+        <div className="flex items-center gap-4">
+          <div>
+            <span className="text-purple-300">BZ/h: </span>
+            <span className="text-white font-medium">
+              {formatRate(bzPerHour)} {bonus > 0 && <span className="text-green-400">(+{bonus}%)</span>}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Users className="h-3 w-3 text-purple-300" />
+            <span className="text-white font-medium">{referralCount}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Debug Info (remove in production) */}
+      <div className="mt-2 text-xs text-purple-400 opacity-75">
+        🔍 Debug: Sync every 30s | Last: {getTimeSinceSync()} | Online: {isOnline ? "Yes" : "No"}
+      </div>
+    </div>
   );
 }
