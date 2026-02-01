@@ -46,7 +46,6 @@ export function TapScreen() {
   const [mounted, setMounted] = useState(false);
   
   const [isOnCooldown, setIsOnCooldown] = useState(false);
-  const [lastTapTime, setLastTapTime] = useState(0);
   const [quickChargeUses, setQuickChargeUses] = useState(5);
   const [quickChargeCooldown, setQuickChargeCooldown] = useState(0);
   const [floatingNumbers, setFloatingNumbers] = useState<FloatingNumber[]>([]);
@@ -238,16 +237,6 @@ export function TapScreen() {
       createParticles(x, y);
     }
 
-    // Track referral earnings
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await recordReferralEarnings(user.id, tapReward, 0);
-      }
-    } catch (err) {
-      console.error("Error tracking referral earnings:", err);
-    }
-
     // Floating numbers
     setFloatingNumbers((prev) => [...prev, { 
       id: Date.now(), 
@@ -381,18 +370,18 @@ export function TapScreen() {
             filter: bunnyGlow ? 'drop-shadow(0 0 20px rgba(251, 191, 36, 0.8))' : 'none'
           }}
         >
-          {/* Theme-Aware Background Circle - BIGGER SIZE */}
+          {/* Theme-Aware Background Circle - LARGE SIZE (400px) */}
           <div 
             className="absolute inset-0 rounded-full backdrop-blur-lg border-2 transition-all duration-300"
             style={{
-              width: '320px',
-              height: '320px',
+              width: '400px',
+              height: '400px',
               left: '50%',
               top: '50%',
               transform: 'translate(-50%, -50%)',
               backgroundColor: isDarkTheme 
-                ? 'rgba(88, 28, 135, 0.3)' 
-                : 'rgba(249, 168, 212, 0.4)',
+                ? 'rgba(88, 28, 135, 0.25)' 
+                : 'rgba(249, 168, 212, 0.35)',
               borderColor: isDarkTheme 
                 ? 'rgba(168, 85, 247, 0.4)' 
                 : 'rgba(236, 72, 153, 0.5)',
@@ -402,19 +391,18 @@ export function TapScreen() {
             }}
           />
 
-          {/* Bunny Character Image */}
+          {/* Bunny Character Image - New Transparent One */}
           <img
-            src="/bunny-character-new.png"
+            src="/bunny-character-new.png?v=2"
             alt="Bunny Character"
-            className="w-80 h-80 object-contain pointer-events-none select-none"
+            className="w-80 h-80 object-contain pointer-events-none select-none relative z-10"
             draggable={false}
           />
             
-            {/* Glow effect on tap */}
-            {bunnyGlow && (
-              <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping" />
-            )}
-          </div>
+          {/* Glow effect on tap */}
+          {bunnyGlow && (
+            <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping z-10" />
+          )}
 
           {/* Character Level Badge */}
           <div className="absolute -top-2 -right-2 bg-gradient-to-br from-yellow-400 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg z-20">
