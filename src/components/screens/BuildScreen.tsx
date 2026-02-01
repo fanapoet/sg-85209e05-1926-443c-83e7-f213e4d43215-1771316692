@@ -375,7 +375,7 @@ export function BuildScreen() {
         try {
           const user = getCurrentTelegramUser();
           if (user) {
-            await recordReferralEarnings(user.id, 0, accrued.total);
+            await recordReferralEarnings(user.id, accrued.total, 'idle');
           }
         } catch (err) {
           console.error("Error tracking referral earnings:", err);
