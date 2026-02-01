@@ -128,8 +128,6 @@ export async function syncInitialGameState(
       total_taps: gameState.totalTaps,
       taps_today: gameState.todayTaps,
       idle_bz_per_hour: gameState.idleBzPerHour,
-      last_sync_timestamp: new Date().toISOString(),
-      sync_version: 1,
       updated_at: new Date().toISOString()
     };
 
@@ -223,8 +221,7 @@ export async function syncPlayerState(gameState: Partial<{
 
     // Build update object with only provided fields
     const updates: any = {
-      updated_at: new Date().toISOString(),
-      last_sync_timestamp: new Date().toISOString()
+      updated_at: new Date().toISOString()
     };
 
     if (gameState.bzBalance !== undefined) updates.bz_balance = gameState.bzBalance;
