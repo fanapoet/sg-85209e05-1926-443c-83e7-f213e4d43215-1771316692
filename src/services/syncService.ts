@@ -45,11 +45,11 @@ export async function syncInitialGameState(
     boosterCapacity: number;
     boosterRecovery: number;
     quickChargeUsesRemaining: number;
-    quickChargeCooldownUntil: number | null;
+    quickChargeCooldownUntil: number | null; // ✅ Ensure this is number | null, NOT string | null
     totalTaps: number;
     todayTaps: number;
     idleBzPerHour: number;
-    buildParts?: Array<{ partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }>;
+    buildParts?: Array<{ partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }>; // ✅ Ensure buildEndTime is number | null
   }
 ): Promise<{ success: boolean; error?: string }> {
   console.log("🚀 [CRITICAL] Syncing initial game state for NEW USER...");
@@ -242,7 +242,7 @@ export async function syncPlayerState(gameState: {
 
 export async function syncBuildParts(
   userId: string,
-  buildParts: Array<{ partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }>
+  buildParts: Array<{ partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }> // ✅ Ensure number | null
 ): Promise<{ success: boolean; error?: string }> {
   try {
     console.log("🏗️ [Sync] Syncing build parts for user:", userId);
@@ -467,7 +467,7 @@ export function startAutoSync(
     boosterCapacity: number;
     boosterRecovery: number;
     quickChargeUsesRemaining: number;
-    quickChargeCooldownUntil: number | null;
+    quickChargeCooldownUntil: number | null; // ✅ Ensure number | null, NOT string | null
     totalTaps: number;
     todayTaps: number;
     idleBzPerHour: number;
