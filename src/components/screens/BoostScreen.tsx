@@ -94,7 +94,7 @@ export function BoostScreen() {
     return true;
   };
 
-  const handleUpgrade = (booster: Booster) => {
+  const handleUpgrade = async (booster: Booster) => {
     const currentLevel = boosterLevels[booster.key];
     const cost = calculateCost(booster, currentLevel);
 
@@ -117,13 +117,17 @@ export function BoostScreen() {
       localStorage.setItem("boosters", JSON.stringify(newLevels));
 
       // Sync to DB immediately
-      syncPlayerState({
+      const syncResult = await syncPlayerState({
         boosterIncomeTap: newLevels.incomePerTap,
         boosterEnergyTap: newLevels.energyPerTap,
         boosterCapacity: newLevels.energyCapacity,
         boosterRecovery: newLevels.recoveryRate,
         bzBalance: bz - cost
       }).catch(console.error);
+
+      if (syncResult) {
+        console.log(`✅ [BoostScreen] Upgraded ${booster.name} to level ${newLevels[booster.key]}`);
+      }
     }
   };
 

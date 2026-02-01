@@ -143,7 +143,13 @@ export async function syncInitialGameState(
 
     // Sync build parts if provided
     if (gameState.buildParts && gameState.buildParts.length > 0) {
-      await syncBuildParts(userId, gameState.buildParts);
+      const partsToSync = gameState.buildParts.map(p => ({
+        partId: p.partId,
+        level: p.level,
+        isBuilding: p.isBuilding,
+        buildEndsAt: p.buildEndTime // Map legacy property
+      }));
+      await syncBuildParts(userId, partsToSync);
     }
 
     console.log("✅ [Sync] Initial state synced successfully");
@@ -299,102 +305,108 @@ export async function syncTapData(tapState: {
 /**
  * Load build parts from database
  */
-export async function loadBuildParts(): Promise<Array<{ partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }> | null> {
+export async function loadBuildParts(): Promise<Array<{
+  partId: string;
+  level: number;
+  isBuilding: boolean;
+  buildEndsAt: number | null;
+}> | null> {
   try {
-    console.log("🔧 [loadBuildParts] Getting Telegram user...");
-    
-    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
-    
-    if (!tgUser) {
-      console.error("❌ [loadBuildParts] No Telegram user data");
+    console.log("🔧 [Sync] Loading build parts from database...");
+
+    const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+    if (!tgUser?.id) {
+      console.warn("⚠️ [Sync] No Telegram user for build parts load");
       return null;
     }
-    
-    console.log("🔧 [loadBuildParts] Telegram user ID:", tgUser.id);
-    
-    // Find user profile by telegram_id
-    const { data: profile, error: profileError } = await supabase
+
+    // Get profile UUID
+    const { data: profile } = await supabase
       .from("profiles")
       .select("id")
       .eq("telegram_id", tgUser.id)
       .maybeSingle();
-    
-    if (profileError || !profile) {
-      console.error("❌ [loadBuildParts] Profile not found");
+
+    if (!profile?.id) {
+      console.warn("⚠️ [Sync] Profile not found for build parts load");
       return null;
     }
-    
-    console.log("🔧 [loadBuildParts] Loading parts for user:", profile.id);
-    
-    // Load all build parts for this user
+
+    // Load build parts
     const { data, error } = await supabase
       .from("user_build_parts")
-      .select("*")
+      .select("part_id, current_level, is_building, build_ends_at")
       .eq("user_id", profile.id);
-    
+
     if (error) {
-      console.error("❌ [loadBuildParts] Error:", error);
+      console.error("❌ [Sync] Build parts load failed:", error);
       return null;
     }
-    
+
+    // Return empty array if no parts found (not an error)
     if (!data || data.length === 0) {
-      console.log("📦 [loadBuildParts] No build parts found (new user)");
-      return [];
+      console.log("🔧 [Sync] No build parts found in database (fresh start)");
+      return []; // Return empty array, not null
     }
-    
-    // Convert to app format
-    const parts = data.map(row => ({
-      partId: row.part_id,
-      level: row.current_level,
-      isBuilding: row.is_building,
-      buildEndTime: row.build_ends_at ? new Date(row.build_ends_at).getTime() : null
+
+    console.log(`✅ [Sync] Loaded ${data.length} build parts from database`);
+
+    return data.map(part => ({
+      partId: part.part_id,
+      level: part.current_level,
+      isBuilding: part.is_building,
+      buildEndsAt: part.build_ends_at ? new Date(part.build_ends_at).getTime() : null
     }));
-    
-    console.log(`✅ [loadBuildParts] Loaded ${parts.length} parts from DB`);
-    return parts;
-  } catch (error) {
-    console.error("❌ [loadBuildParts] Exception:", error);
+
+  } catch (error: any) {
+    console.error("❌ [Sync] Build parts load exception:", error);
     return null;
   }
 }
 
 /**
- * Sync build parts (wrapper for convenience)
+ * Sync build parts to database (UPSERT - insert or update)
  */
 export async function syncBuildParts(
   userId: string,
-  buildParts: Array<{ partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }>
+  parts: Array<{
+    partId: string;
+    level: number;
+    isBuilding: boolean;
+    buildEndsAt: number | null;
+  }>
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log("🔧 [Sync] Syncing build parts:", buildParts);
+    console.log(`🔧 [Sync] Syncing ${parts.length} build parts to database...`);
 
-    for (const part of buildParts) {
-      // Convert buildEndTime to safe timestamp
-      const endTimestamp = toTimestamp(part.buildEndTime);
+    // Prepare data for upsert
+    const upsertData = parts.map(part => ({
+      user_id: userId,
+      part_id: part.partId,
+      current_level: part.level,
+      is_building: part.isBuilding,
+      build_started_at: part.isBuilding && part.buildEndsAt ? new Date(part.buildEndsAt - 1000 * 60 * 60).toISOString() : null,
+      build_ends_at: part.buildEndsAt ? new Date(part.buildEndsAt).toISOString() : null,
+      last_upgraded_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }));
 
-      const { error } = await supabase
-        .from("user_build_parts")
-        .upsert({
-          user_id: userId,
-          part_id: part.partId,
-          current_level: part.level,
-          is_building: part.isBuilding,
-          build_ends_at: endTimestamp 
-            ? new Date(endTimestamp).toISOString() 
-            : null,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: "user_id,part_id"
-        });
+    // Use upsert to insert or update
+    const { error } = await supabase
+      .from("user_build_parts")
+      .upsert(upsertData, {
+        onConflict: "user_id,part_id", // Unique constraint
+        ignoreDuplicates: false // Update on conflict
+      });
 
-      if (error) {
-        console.error(`❌ [Sync] Build part ${part.partId} sync failed:`, error);
-        return { success: false, error: error.message };
-      }
+    if (error) {
+      console.error("❌ [Sync] Build parts upsert failed:", error);
+      return { success: false, error: error.message };
     }
 
-    console.log("✅ [Sync] Build parts synced");
+    console.log(`✅ [Sync] ${parts.length} build parts synced successfully!`);
     return { success: true };
+
   } catch (error: any) {
     console.error("❌ [Sync] Build parts sync exception:", error);
     return { success: false, error: error.message };
@@ -406,7 +418,7 @@ export async function syncBuildParts(
  */
 export async function syncBuildPart(
   userId: string,
-  part: { partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }
+  part: { partId: string; level: number; isBuilding: boolean; buildEndsAt: number | null }
 ): Promise<{ success: boolean; error?: string }> {
   return syncBuildParts(userId, [part]);
 }

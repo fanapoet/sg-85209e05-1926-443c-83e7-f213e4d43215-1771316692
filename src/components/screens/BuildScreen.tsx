@@ -45,7 +45,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { recordReferralEarnings } from "@/services/referralService";
 import { getCurrentTelegramUser } from "@/services/authService";
-import { syncBuildParts, syncBuildPart, syncPlayerState } from "@/services/syncService";
+import { syncBuildParts, syncBuildPart, syncPlayerState, loadBuildParts } from "@/services/syncService";
 
 // Speed-Up Configuration
 const SPEEDUP_CONFIG = {
@@ -70,9 +70,8 @@ interface Part {
 
 interface PartState {
   level: number;
-  upgrading: boolean;
-  upgradeStartTime: number;
-  upgradeEndTime: number;
+  isBuilding: boolean;
+  buildEndsAt: number;
 }
 
 interface IdleState {
@@ -155,6 +154,8 @@ const allParts: Part[] = [
   { key: "s5p10", name: "Completion Badge", icon: Boxes, stage: 5, index: 10, baseCost: 27000, baseYield: 367 }
 ];
 
+const BUILD_DURATION = 10 * 1000; // 10 seconds for testing
+
 export function BuildScreen() {
   const { 
     bz, 
@@ -196,86 +197,46 @@ export function BuildScreen() {
   useEffect(() => {
     try {
       const savedParts = localStorage.getItem("buildParts");
-      const savedIdle = localStorage.getItem("idleState");
-
-      if (savedParts) {
-        const loaded = JSON.parse(savedParts);
-        setPartStates(loaded);
-      } else {
-        const initial: Record<PartKey, PartState> = {};
-        allParts.forEach(part => {
-          initial[part.key] = { level: 0, upgrading: false, upgradeStartTime: 0, upgradeEndTime: 0 };
-        });
-        setPartStates(initial);
-        localStorage.setItem("buildParts", JSON.stringify(initial));
-      }
-
-      if (savedIdle) {
-        setIdleState(JSON.parse(savedIdle));
-      } else {
-        const defaultIdle = { lastClaimTime: Date.now(), activeBuildKey: null };
-        setIdleState(defaultIdle);
-        localStorage.setItem("idleState", JSON.stringify(defaultIdle));
-      }
-
-      setIsLoaded(true);
+      const localParts = savedParts ? JSON.parse(savedParts) : {};
       
-      // 🚀 LOAD BUILD PARTS FROM SERVER AND MERGE
-      const loadServerBuildData = async () => {
-        console.log("🔧 [BuildScreen] Loading build parts from server...");
-        
-        const serverParts = await import("@/services/syncService").then(m => m.loadBuildParts());
-        
+      // Load from server and merge
+      loadBuildParts().then(serverParts => {
         if (serverParts && serverParts.length > 0) {
           console.log(`🔧 [BuildScreen] Loaded ${serverParts.length} parts from server`);
           
-          // Get current localStorage state
-          const currentParts = savedParts ? JSON.parse(savedParts) : {};
-          const mergedParts = { ...currentParts };
+          const merged = { ...localParts };
           
-          // Merge with Math.max logic (never decrease levels)
-          serverParts.forEach(serverPart => {
-            const current = mergedParts[serverPart.partId];
+          serverParts.forEach(sp => {
+            const local = merged[sp.partId] || { level: 0, isBuilding: false, buildEndsAt: 0 };
             
-            if (!current) {
-              // New part from server
-              mergedParts[serverPart.partId] = {
-                level: serverPart.level,
-                upgrading: serverPart.isBuilding,
-                upgradeStartTime: 0,
-                upgradeEndTime: serverPart.buildEndTime || 0
-              };
-            } else {
-              // Merge with Math.max (keep highest level)
-              const mergedLevel = Math.max(current.level, serverPart.level);
-              
-              console.log(`🔧 [BuildScreen] Part ${serverPart.partId}: Local=${current.level}, Server=${serverPart.level}, Merged=${mergedLevel}`);
-              
-              mergedParts[serverPart.partId] = {
-                level: mergedLevel,
-                upgrading: serverPart.isBuilding || current.upgrading,
-                upgradeStartTime: current.upgradeStartTime,
-                upgradeEndTime: serverPart.buildEndTime || current.upgradeEndTime
-              };
-            }
+            // Merge logic: always keep max level
+            const mergedLevel = Math.max(local.level, sp.level);
+            
+            // For building status, prefer server if it has an active build
+            // OR prefer local if it has a newer active build
+            // For now, simple merge: if server is building, take it
+            const isServerBuilding = sp.isBuilding && sp.buildEndsAt && sp.buildEndsAt > Date.now();
+            
+            merged[sp.partId] = {
+              level: mergedLevel,
+              isBuilding: isServerBuilding ? true : local.isBuilding,
+              buildEndsAt: isServerBuilding ? (sp.buildEndsAt || 0) : local.buildEndsAt
+            };
           });
           
-          // Update state and save
-          setPartStates(mergedParts);
-          localStorage.setItem("buildParts", JSON.stringify(mergedParts));
-          
-          console.log("✅ [BuildScreen] Build parts merged successfully");
-        } else {
-          console.log("📦 [BuildScreen] No server build parts found");
+          setPartStates(merged);
+        } else if (savedParts) {
+          setPartStates(localParts);
         }
-      };
+      });
       
-      loadServerBuildData().catch(console.error);
-    } catch (error) {
-      console.error("Failed to load build state:", error);
-      const initial: Record<PartKey, PartState> = {};
-      allParts.forEach(part => {
-        initial[part.key] = { level: 0, upgrading: false, upgradeStartTime: 0, upgradeEndTime: 0 };
+      setIsLoaded(true);
+    } catch (e) {
+      console.error("Failed to load build state:", e);
+      // Fallback to initial
+      const initial: Record<string, PartState> = {};
+      allParts.forEach(p => {
+        initial[p.key] = { level: 0, isBuilding: false, buildEndsAt: 0 };
       });
       setPartStates(initial);
       setIsLoaded(true);
@@ -301,11 +262,10 @@ export function BuildScreen() {
 
     Object.keys(newStates).forEach(key => {
       const state = newStates[key];
-      if (state.upgrading && now >= state.upgradeEndTime) {
+      if (state.isBuilding && now >= state.buildEndsAt) {
         state.level += 1;
-        state.upgrading = false;
-        state.upgradeStartTime = 0;
-        state.upgradeEndTime = 0;
+        state.isBuilding = false;
+        state.buildEndsAt = 0;
         updated = true;
 
         newCelebrations[key] = true;
@@ -449,9 +409,9 @@ export function BuildScreen() {
   };
 
   const canSpeedUp = (part: Part, state: PartState): boolean => {
-    if (!state.upgrading) return false;
+    if (!state.isBuilding) return false;
     if (part.stage < 1 || state.level < SPEEDUP_CONFIG.minLevel - 1) return false;
-    const timeRemaining = Math.max(0, state.upgradeEndTime - currentTime);
+    const timeRemaining = Math.max(0, state.buildEndsAt - currentTime);
     return timeRemaining > 0;
   };
 
@@ -510,7 +470,7 @@ export function BuildScreen() {
     const state = partStates[partKey];
     if (!part || !state) return;
 
-    const timeRemaining = Math.max(0, state.upgradeEndTime - currentTime);
+    const timeRemaining = Math.max(0, state.buildEndsAt - currentTime);
     const cost = getSpeedUpCost(timeRemaining);
 
     if (bb < cost.bb) {
@@ -546,80 +506,33 @@ export function BuildScreen() {
 
   const completeBuildInstantly = (partKey: string) => {
     const state = partStates[partKey];
-    if (!state) return;
+    if (!state.isBuilding) return;
 
-    const newLevel = state.level + 1;
-    let xpReward = 0;
-    if (newLevel <= 5) xpReward = 50;
-    else if (newLevel <= 10) xpReward = 100;
-    else xpReward = 200;
-
-    addXP(xpReward);
-    incrementUpgrades();
-
-    const newStates = {
-      ...partStates,
-      [partKey]: {
-        ...state,
-        level: newLevel,
-        upgrading: false,
-        upgradeStartTime: 0,
-        upgradeEndTime: 0
-      }
+    const newState = {
+      ...state,
+      level: state.level + 1,
+      isBuilding: false,
+      buildEndsAt: 0
     };
 
+    const newStates = { ...partStates, [partKey]: newState };
     setPartStates(newStates);
-    localStorage.setItem("buildParts", JSON.stringify(newStates));
-
-    if (idleState.activeBuildKey === partKey) {
-      const newIdleState = { ...idleState, activeBuildKey: null };
-      setIdleState(newIdleState);
-      localStorage.setItem("idleState", JSON.stringify(newIdleState));
-    }
-
-    setCompletionCelebrations(prev => ({ ...prev, [partKey]: true }));
-    setTimeout(() => {
-      setCompletionCelebrations(prev => {
-        const updated = { ...prev };
-        delete updated[partKey];
-        return updated;
-      });
-    }, 3000);
-
-    setUpgradeButtonMessage(prev => ({
-      ...prev,
-      [partKey]: `✅ +${xpReward} XP Earned!`
-    }));
-    setTimeout(() => {
-      setUpgradeButtonMessage(prev => {
-        const updated = { ...prev };
-        delete updated[partKey];
-        return updated;
-      });
-    }, 3000);
-
-    // 🚀 SYNC SPEED-UP COMPLETED BUILD TO DATABASE
+    
+    // Sync to DB
     const syncSpeedUpBuild = async () => {
-      console.log("🔧 [BuildScreen] Syncing speed-up completed build to DB:", partKey);
-      
-      const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
-      
+      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
       if (!tgUser) return;
       
-      const { data: profile } = await supabase.from("profiles").select("id").eq("telegram_id", tgUser.id).maybeSingle();
-      
-      if (!profile) return;
-      
-      const { syncBuildPart } = await import("@/services/syncService");
-      
-      await syncBuildPart(profile.id, {
-        partId: partKey,
-        level: newLevel,
-        isBuilding: false,
-        buildEndTime: null,
-      });
-      
-      console.log("✅ [BuildScreen] Speed-up build synced to DB");
+      const { data: profile } = await supabase.from("profiles").select("id").eq("telegram_id", tgUser.id).single();
+      if (profile) {
+        await syncBuildPart(profile.id, {
+          partId: partKey,
+          level: newState.level,
+          isBuilding: false,
+          buildEndsAt: 0
+        });
+        console.log("✅ [BuildScreen] Speed-up build synced to DB");
+      }
     };
     
     syncSpeedUpBuild().catch(console.error);
@@ -627,96 +540,33 @@ export function BuildScreen() {
 
   const handleUpgrade = (part: Part) => {
     const state = partStates[part.key];
-    if (!state) return;
-
-    const cost = getUpgradeCost(part, state.level);
-    if (bz < cost) return;
-
-    if (!canUpgradePart(part)) return;
-
-    if (idleState.activeBuildKey && idleState.activeBuildKey !== part.key) return;
-
-    const upgradeTime = getUpgradeTime(state.level);
-
-    if (subtractBZ(cost)) {
-      const newLevel = state.level + 1;
-      let xpReward = 0;
-      
-      if (newLevel <= 5) xpReward = 50;
-      else if (newLevel <= 10) xpReward = 100;
-      else xpReward = 200;
-
-      setUpgradeButtonMessage({
-        ...upgradeButtonMessage,
-        [part.key]: `✅ +${xpReward} XP Earned!`
-      });
-
-      setTimeout(() => {
-        setUpgradeButtonMessage(prev => {
-          const updated = { ...prev };
-          delete updated[part.key];
-          return updated;
-        });
-      }, 3000);
-
-      addXP(xpReward);
-      incrementUpgrades();
-      const now = Date.now();
-      const newStates = {
-        ...partStates,
-        [part.key]: {
-          ...state,
-          upgrading: upgradeTime > 0,
-          upgradeStartTime: now,
-          upgradeEndTime: now + upgradeTime,
-          level: upgradeTime === 0 ? state.level + 1 : state.level
-        }
+    if (state.isBuilding && state.buildEndsAt <= currentTime) {
+      const newState = {
+        ...state,
+        level: state.level + 1,
+        isBuilding: false,
+        buildEndsAt: 0
       };
 
+      const newStates = { ...partStates, [part.key]: newState };
       setPartStates(newStates);
-      localStorage.setItem("buildParts", JSON.stringify(newStates));
-
-      if (upgradeTime > 0) {
-        const newIdleState = { ...idleState, activeBuildKey: part.key };
-        setIdleState(newIdleState);
-        localStorage.setItem("idleState", JSON.stringify(newIdleState));
-      }
-
-      // 🚀 SYNC TO DATABASE
+      
+      // Sync to DB
       const syncBuildData = async () => {
-        console.log("🔧 [BuildScreen] Syncing upgraded part to DB:", part.key);
+        const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
+        if (!tgUser) return;
         
-        const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
-        
-        if (!tgUser) {
-          console.error("❌ [BuildScreen] No Telegram user for sync");
-          return;
-        }
-        
-        // Find user profile
-        const { data: profile } = await supabase.from("profiles").select("id").eq("telegram_id", tgUser.id).maybeSingle();
-        
-        if (!profile) {
-          console.error("❌ [BuildScreen] Profile not found for sync");
-          return;
-        }
-        
-        const { syncBuildPart } = await import("@/services/syncService");
-        
-        const nextLevel = upgradeTime === 0 ? state.level + 1 : state.level;
-        const endTime = upgradeTime > 0 ? now + upgradeTime : null;
-        
-        const result = await syncBuildPart(profile.id, {
-          partId: part.key,
-          level: nextLevel,
-          isBuilding: upgradeTime > 0,
-          buildEndTime: endTime
-        });
-        
-        if (result.success) {
-          console.log("✅ [BuildScreen] Part synced to DB");
-        } else {
-          console.error("❌ [BuildScreen] Part sync failed:", result.error);
+        const { data: profile } = await supabase.from("profiles").select("id").eq("telegram_id", tgUser.id).single();
+        if (profile) {
+          const result = await syncBuildPart(profile.id, {
+            partId: part.key,
+            level: newState.level,
+            isBuilding: false,
+            buildEndsAt: 0
+          });
+          
+          if (result.success) console.log("✅ [BuildScreen] Upgrade synced to DB");
+          else console.error("❌ [BuildScreen] Upgrade sync failed:", result.error);
         }
       };
       
@@ -757,7 +607,7 @@ export function BuildScreen() {
     const state = partStates[part.key];
     if (!state) return false;
     if (state.level >= 20) return false;
-    if (state.upgrading) return false;
+    if (state.isBuilding) return false;
     if (!isPartUnlocked(part)) return false;
     if (!isStageVisible(part.stage)) return false;
     if (!isStageUnlocked(part.stage)) return false;
@@ -888,14 +738,14 @@ export function BuildScreen() {
             <div className="space-y-2">
               {stageParts.map(part => {
                 const Icon = part.icon;
-                const state = partStates[part.key] || { level: 0, upgrading: false, upgradeStartTime: 0, upgradeEndTime: 0 };
+                const state = partStates[part.key] || { level: 0, isBuilding: false, buildEndsAt: 0 };
                 const partUnlocked = isPartUnlocked(part);
                 const cost = getUpgradeCost(part, state.level);
                 const currentYield = getPartYield(part, state.level);
                 const nextYield = getPartYield(part, state.level + 1);
                 const yieldDelta = nextYield - currentYield;
                 const upgradeTime = getUpgradeTime(state.level);
-                const timeRemaining = state.upgrading ? Math.max(0, state.upgradeEndTime - currentTime) : 0;
+                const timeRemaining = state.isBuilding ? Math.max(0, state.buildEndsAt - currentTime) : 0;
                 const canUpgrade = canUpgradePart(part);
                 const isActive = idleState.activeBuildKey === part.key;
                 const isCelebrating = completionCelebrations[part.key];
@@ -908,7 +758,7 @@ export function BuildScreen() {
                 } else if (!unlocked) {
                   statusText = "Stage Locked";
                   statusColor = "text-red-600";
-                } else if (state.upgrading) {
+                } else if (state.isBuilding) {
                   statusText = `Building... ${formatTime(timeRemaining)}`;
                   statusColor = "text-blue-600";
                 } else if (state.level >= 20) {
@@ -967,7 +817,7 @@ export function BuildScreen() {
                           <Badge variant="outline">{state.level === 20 ? "MAX" : `L${state.level}`}</Badge>
                         </div>
 
-                        {upgradeTime > 0 && state.level < 20 && !state.upgrading && (
+                        {upgradeTime > 0 && state.level < 20 && !state.isBuilding && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3" />
                             <span>Next build: {formatTime(upgradeTime)}</span>
@@ -978,7 +828,7 @@ export function BuildScreen() {
                           {statusText}
                         </div>
 
-                        {state.upgrading && timeRemaining > 0 && (
+                        {state.isBuilding && timeRemaining > 0 && (
                           <div className="space-y-1">
                             <Progress 
                               value={((upgradeTime - timeRemaining) / upgradeTime) * 100} 
@@ -1015,7 +865,7 @@ export function BuildScreen() {
                               <CheckCircle2 className="mr-2 h-4 w-4" />
                               Max Level Reached
                             </>
-                          ) : state.upgrading ? (
+                          ) : state.isBuilding ? (
                             "Building..."
                           ) : idleState.activeBuildKey && idleState.activeBuildKey !== part.key ? (
                             "Another Build Active"
@@ -1033,7 +883,7 @@ export function BuildScreen() {
                             size="sm"
                           >
                             <Zap className="mr-2 h-4 w-4" />
-                            Speed Up: {getSpeedUpCost(Math.max(0, state.upgradeEndTime - currentTime)).bb.toFixed(3)} BB or {getSpeedUpCost(Math.max(0, state.upgradeEndTime - currentTime)).stars} ⭐
+                            Speed Up: {getSpeedUpCost(Math.max(0, state.buildEndsAt - currentTime)).bb.toFixed(3)} BB or {getSpeedUpCost(Math.max(0, state.buildEndsAt - currentTime)).stars} ⭐
                           </Button>
                         )}
                       </div>
@@ -1052,7 +902,7 @@ export function BuildScreen() {
         const state = partStates[speedUpDialog.partKey];
         if (!part || !state) return null;
 
-        const timeRemaining = Math.max(0, state.upgradeEndTime - currentTime);
+        const timeRemaining = Math.max(0, state.buildEndsAt - currentTime);
         const cost = getSpeedUpCost(timeRemaining);
 
         return (
