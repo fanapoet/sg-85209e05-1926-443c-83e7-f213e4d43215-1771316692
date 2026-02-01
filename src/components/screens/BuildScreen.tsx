@@ -44,6 +44,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { recordReferralEarnings } from "@/services/referralService";
+import { getCurrentTelegramUser } from "@/services/authService";
 
 // Speed-Up Configuration
 const SPEEDUP_CONFIG = {
@@ -372,7 +373,7 @@ export function BuildScreen() {
 
       const trackEarnings = async () => {
         try {
-          const { data: { user } } = await supabase.auth.getUser();
+          const user = getCurrentTelegramUser();
           if (user) {
             await recordReferralEarnings(user.id, 0, accrued.total);
           }

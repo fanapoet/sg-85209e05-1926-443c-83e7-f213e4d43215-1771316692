@@ -11,7 +11,6 @@ import { ConvertScreen } from "@/components/screens/ConvertScreen";
 import { XPTiersScreen } from "@/components/screens/XPTiersScreen";
 import { RewardsNFTsScreen } from "@/components/screens/RewardsNFTsScreen";
 import { TasksReferralsScreen } from "@/components/screens/TasksReferralsScreen";
-import { signInWithTelegram } from "@/services/authService";
 import { TelegramDebugPanel } from "@/components/TelegramDebugPanel";
 
 type TabKey = "tap" | "boost" | "build" | "convert" | "xp" | "rewards" | "tasks";
@@ -40,16 +39,16 @@ export default function Home() {
           console.log("👤 Telegram user data:", tgUser);
           
           if (tgUser) {
-            const result = await signInWithTelegram(tgUser);
-            console.log("🔐 Auth result:", result);
+            // const result = await signInWithTelegram(tgUser);
+            // console.log("🔐 Auth result:", result);
             
-            if (result.success) {
-              console.log("✅ Authentication successful - sync will start automatically");
-              console.log("📊 User ID:", result.user?.id);
-              console.log("🆕 Is new user:", result.isNewUser);
-            } else {
-              console.error("❌ Authentication failed:", result.error);
-            }
+            // if (result.success) {
+            //   console.log("✅ Authentication successful - sync will start automatically");
+            //   console.log("📊 User ID:", result.user?.id);
+            //   console.log("🆕 Is new user:", result.isNewUser);
+            // } else {
+            //   console.error("❌ Authentication failed:", result.error);
+            // }
           } else {
             console.error("❌ No Telegram user data available");
           }

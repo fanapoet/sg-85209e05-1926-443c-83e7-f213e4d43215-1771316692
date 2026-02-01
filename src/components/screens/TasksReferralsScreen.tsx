@@ -5,11 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Trophy, Star, Loader2, Users, Gift, TrendingUp, Award, Copy, Share2 } from "lucide-react";
+import { CheckCircle2, Trophy, Star, Loader2, Users, Gift, TrendingUp, Award, Copy, Share2, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  getOrCreateProfile,
   getReferralStats,
   claimPendingEarnings,
   checkAndClaimMilestone,
@@ -20,6 +19,7 @@ import {
   findInviterByCode,
   type ReferralStats
 } from "@/services/referralService";
+import { getCurrentTelegramUser } from "@/services/authService";
 
 interface Task {
   id: string;
@@ -59,7 +59,7 @@ export function TasksReferralsScreen() {
   // Loading & Error states
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string>("");
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<number | null>(null);
 
   // Initialize user and referral code
   useEffect(() => {
@@ -69,36 +69,37 @@ export function TasksReferralsScreen() {
       setErrorMessage("");
 
       try {
-        // Get current authenticated user
-        const { data: { user } } = await supabase.auth.getUser();
+        const tgUser = getCurrentTelegramUser();
         
-        if (!user) {
-          throw new Error("Not authenticated. Please restart the app.");
+        if (!tgUser) {
+          throw new Error("No Telegram user found");
         }
         
-        console.log("✅ User authenticated:", user.id);
-        setUserId(user.id);
+        console.log("✅ User authenticated:", tgUser.id);
+        setUserId(tgUser.id);
 
-        // Get Profile & Referral Code
-        console.log("🔍 Fetching profile...");
-        const profile = await getOrCreateProfile(user.id);
-        
-        if (!profile.referralCode) {
-          throw new Error("Failed to load referral code.");
+        // Get Profile & Referral Code directly from profile in DB or auth service
+        // For now using local state/context if available, or just the referral code logic
+        // We know referral code is derived from ID
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+        let hash = tgUser.id;
+        let code = "";
+        for (let i = 0; i < 8; i++) {
+          code += chars[hash % chars.length];
+          hash = Math.floor(hash / chars.length);
         }
         
-        console.log("✅ Profile loaded:", profile);
-        setReferralCode(profile.referralCode);
-        setReferralLink(`https://t.me/bunergy_bot/BunBun?startapp=${profile.referralCode}`);
+        setReferralCode(code);
+        setReferralLink(`https://t.me/bunergy_bot/BunBun?startapp=${code}`);
 
         // Get Referral Stats
         console.log("🔍 Fetching stats...");
-        const stats = await getReferralStats(user.id);
+        const stats = await getReferralStats(tgUser.id);
         setReferralStats(stats);
         console.log("✅ Stats loaded:", stats);
         
         // Get Milestones
-        const milestones = await getClaimedMilestones(user.id);
+        const milestones = await getClaimedMilestones(tgUser.id);
         setClaimedMilestones(milestones);
         console.log("✅ Milestones loaded:", milestones);
 
@@ -115,12 +116,12 @@ export function TasksReferralsScreen() {
   }, []);
 
   // Handle incoming referral from URL start_param
-  const handleIncomingReferral = async (currentUserId: string) => {
+  const handleIncomingReferral = async (currentUserId: number) => {
     try {
       const alreadyReferred = await checkReferralExists(currentUserId);
       if (alreadyReferred) return;
 
-      const startParam = window.Telegram?.WebApp?.initDataUnsafe?.start_parameter;
+      const startParam = (window as any).Telegram?.WebApp?.initDataUnsafe?.start_parameter;
       if (!startParam || !startParam.toLowerCase().startsWith("ref")) return;
 
       console.log("🔗 Processing referral link:", startParam);
@@ -644,7 +645,7 @@ export function TasksReferralsScreen() {
                     {referralStats.referrals.map((ref) => (
                       <div key={ref.invitee_id} className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
                         <div>
-                          <p className="font-medium text-sm">User {ref.invitee_id.slice(0, 8)}...</p>
+                          <p className="font-medium text-sm">User {String(ref.invitee_id).slice(0, 8)}...</p>
                           <p className="text-xs text-muted-foreground">
                             Joined {new Date(ref.invited_at).toLocaleDateString()}
                           </p>

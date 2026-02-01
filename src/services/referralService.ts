@@ -264,3 +264,69 @@ export async function claimPendingEarnings(telegramId: number): Promise<{ succes
 
   return { success: true, amount: totalAmount };
 }
+
+/**
+ * Record earnings from a user's activity to credit their referrer
+ */
+export async function recordReferralEarnings(inviteeId: number, amount: number, type: 'tap' | 'idle'): Promise<void> {
+  // 1. Find who referred this user
+  const { data: referral } = await supabase
+    .from("referrals")
+    .select("inviter_id")
+    .eq("invitee_id", inviteeId as any)
+    .maybeSingle();
+
+  if (!referral) return;
+
+  // 2. Calculate 20% share
+  const share = Math.floor(amount * 0.2);
+  if (share <= 0) return;
+
+  // 3. Update or create earnings record
+  const { data: earning } = await supabase
+    .from("referral_earnings")
+    .select("id, total_pending, tap_earnings, idle_earnings")
+    .eq("inviter_id", referral.inviter_id as any)
+    .eq("invitee_id", inviteeId as any)
+    .eq("claimed", false)
+    .maybeSingle();
+
+  if (earning) {
+    await supabase
+      .from("referral_earnings")
+      .update({
+        total_pending: earning.total_pending + share,
+        tap_earnings: type === 'tap' ? earning.tap_earnings + share : earning.tap_earnings,
+        idle_earnings: type === 'idle' ? earning.idle_earnings + share : earning.idle_earnings,
+      } as any)
+      .eq("id", earning.id);
+  } else {
+    await supabase.from("referral_earnings").insert({
+      inviter_id: referral.inviter_id,
+      invitee_id: inviteeId,
+      total_pending: share,
+      tap_earnings: type === 'tap' ? share : 0,
+      idle_earnings: type === 'idle' ? share : 0,
+      claimed: false,
+      last_snapshot_tap: 0,
+      last_snapshot_idle: 0
+    } as any);
+  }
+}
+
+/**
+ * Check if user reached a referral milestone and claim it
+ */
+export async function checkAndClaimMilestone(userId: number, referralCount: number): Promise<{ milestone?: number, xpReward?: number }> {
+  // Placeholder implementation to satisfy types
+  // Real implementation would check database for claimed milestones
+  return {}; 
+}
+
+/**
+ * Get list of milestones already claimed by user
+ */
+export async function getClaimedMilestones(userId: number): Promise<number[]> {
+  // Placeholder implementation
+  return [];
+}
