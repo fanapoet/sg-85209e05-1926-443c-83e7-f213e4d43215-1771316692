@@ -382,6 +382,60 @@ export function RewardsNFTsScreen() {
   const canClaimDaily = lastClaimDate !== new Date().toDateString();
   const currentDayReward = dailyRewards[dailyStreak % 7];
 
+  // Helper function to get progress text for each NFT
+  const getProgressText = (nft: NFT): string => {
+    if (nft.owned) return "";
+    
+    switch (nft.key) {
+      case "early_adopter":
+        return "Always Available";
+      case "social_king":
+        return `${gameState?.referralCount || 0} / 20 referrals`;
+      case "builder_pro":
+        return isStage2Complete() ? "Stage 2 Complete ✓" : "Stage 2 Incomplete";
+      case "tap_legend":
+        return `${((gameState?.totalTapIncome || 0) / 1000000).toFixed(1)}M / 10M BZ`;
+      case "energy_master":
+        return areBoostersMaxed() ? "All Boosters Maxed ✓" : "Boosters Not Maxed";
+      case "golden_bunny":
+        return `${((gameState?.totalTaps || 0) / 1000000).toFixed(1)}M / 5M taps`;
+      case "diamond_crystal":
+        return `${((gameState?.xp || 0) / 1000).toFixed(0)}k / 500k XP`;
+      default:
+        return "";
+    }
+  };
+
+  // Helper function to get progress percentage
+  const getProgressPercent = (nft: NFT): number => {
+    if (nft.owned || nft.requirementMet) return 100;
+    
+    switch (nft.key) {
+      case "early_adopter":
+        return 100;
+      case "social_king":
+        return Math.min(((gameState?.referralCount || 0) / 20) * 100, 100);
+      case "builder_pro":
+        return isStage2Complete() ? 100 : 0;
+      case "tap_legend":
+        return Math.min(((gameState?.totalTapIncome || 0) / 10000000) * 100, 100);
+      case "energy_master":
+        return areBoostersMaxed() ? 100 : 0;
+      case "golden_bunny":
+        return Math.min(((gameState?.totalTaps || 0) / 5000000) * 100, 100);
+      case "diamond_crystal":
+        return Math.min(((gameState?.xp || 0) / 500000) * 100, 100);
+      default:
+        return 0;
+    }
+  };
+
+  // Helper to check if NFT should show progress bar
+  const shouldShowProgressBar = (nft: NFT): boolean => {
+    if (nft.owned) return false;
+    return ["social_king", "tap_legend", "golden_bunny", "diamond_crystal"].includes(nft.key);
+  };
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
@@ -553,14 +607,17 @@ export function RewardsNFTsScreen() {
             </Badge>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-8">
             {nfts.map((nft) => {
               const Icon = getIconComponent(nft.icon);
+              const progressText = getProgressText(nft);
+              const progressPercent = getProgressPercent(nft);
+              const showProgressBar = shouldShowProgressBar(nft);
 
               return (
                 <Card
                   key={nft.key}
-                  className={`p-5 ${
+                  className={`p-6 ${
                     nft.owned
                       ? "border-green-500 bg-green-50 dark:bg-green-950"
                       : !nft.requirementMet
@@ -568,6 +625,7 @@ export function RewardsNFTsScreen() {
                       : ""
                   }`}
                 >
+                  {/* Header: Icon + Title + Badge */}
                   <div className="flex items-start gap-4 mb-4">
                     <div className={`p-3 rounded-lg flex-shrink-0 ${nft.owned ? "bg-green-500/20" : "bg-primary/10"}`}>
                       <Icon className={`h-6 w-6 ${nft.owned ? "text-green-600" : "text-primary"}`} />
@@ -575,7 +633,7 @@ export function RewardsNFTsScreen() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <h4 className="font-semibold text-base">{nft.name}</h4>
+                        <h4 className="font-semibold text-lg">{nft.name}</h4>
                         {nft.owned && (
                           <Badge variant="default" className="bg-green-600 flex-shrink-0">
                             <Check className="h-3 w-3 mr-1" />
@@ -587,80 +645,67 @@ export function RewardsNFTsScreen() {
                       <p className="text-sm text-muted-foreground mb-3">
                         {nft.description}
                       </p>
-
-                      {/* Progress Display */}
-                      {!nft.owned && (
-                        <div className="mb-4 space-y-2">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-muted-foreground">Progress</span>
-                            <span className={nft.requirementMet ? "text-green-600 font-semibold" : "font-medium"}>
-                              {nft.key === "social_king" && `${gameState?.referralCount || 0} / 20 referrals`}
-                              {nft.key === "builder_pro" && (isStage2Complete() ? "Stage 2 Complete ✓" : "Stage 2 Incomplete")}
-                              {nft.key === "tap_legend" && `${((gameState?.totalTapIncome || 0) / 1000000).toFixed(1)}M / 10M BZ`}
-                              {nft.key === "energy_master" && (areBoostersMaxed() ? "All Boosters Maxed ✓" : "Boosters Not Maxed")}
-                              {nft.key === "golden_bunny" && `${((gameState?.totalTaps || 0) / 1000000).toFixed(1)}M / 5M taps`}
-                              {nft.key === "diamond_crystal" && `${((gameState?.xp || 0) / 1000).toFixed(0)}k / 500k XP`}
-                              {nft.key === "early_adopter" && "Always Available"}
-                            </span>
-                          </div>
-                          {nft.key === "social_king" && (
-                            <Progress value={Math.min(((gameState?.referralCount || 0) / 20) * 100, 100)} className="h-2" />
-                          )}
-                          {nft.key === "tap_legend" && (
-                            <Progress value={Math.min(((gameState?.totalTapIncome || 0) / 10000000) * 100, 100)} className="h-2" />
-                          )}
-                          {nft.key === "golden_bunny" && (
-                            <Progress value={Math.min(((gameState?.totalTaps || 0) / 5000000) * 100, 100)} className="h-2" />
-                          )}
-                          {nft.key === "diamond_crystal" && (
-                            <Progress value={Math.min(((gameState?.xp || 0) / 500000) * 100, 100)} className="h-2" />
-                          )}
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2 text-sm">
-                          {nft.requirementMet ? (
-                            <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
-                          ) : (
-                            <Lock className="h-4 w-4 text-orange-600 flex-shrink-0" />
-                          )}
-                          <span className={nft.requirementMet ? "text-green-600 font-medium" : "text-orange-600"}>
-                            {nft.requirement}
-                          </span>
-                        </div>
-                        <Badge variant="outline" className="flex-shrink-0">
-                          {nft.price === 0 ? "Free" : `${nft.price.toFixed(3)} BB`}
-                        </Badge>
-                      </div>
-
-                      <Button
-                        onClick={() => handlePurchaseNFT(nft)}
-                        disabled={nft.owned || !nft.requirementMet}
-                        className="w-full"
-                        size="sm"
-                        variant={nft.requirementMet && !nft.owned ? "default" : "secondary"}
-                      >
-                        {nft.owned ? (
-                          "Already Owned"
-                        ) : !nft.requirementMet ? (
-                          <>
-                            <Lock className="mr-2 h-4 w-4" />
-                            Locked
-                          </>
-                        ) : nft.price === 0 ? (
-                          <>
-                            <Gift className="mr-2 h-4 w-4" />
-                            Claim Free NFT
-                          </>
-                        ) : (
-                          <>
-                            Purchase for {nft.price.toFixed(3)} BB
-                          </>
-                        )}
-                      </Button>
                     </div>
                   </div>
+
+                  {/* Progress Section (only if not owned) */}
+                  {!nft.owned && progressText && (
+                    <div className="mb-4 space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Progress</span>
+                        <span className={nft.requirementMet ? "text-green-600 font-semibold" : "font-medium"}>
+                          {progressText}
+                        </span>
+                      </div>
+                      {showProgressBar && (
+                        <Progress value={progressPercent} className="h-2" />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Requirement & Price */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2 text-sm">
+                      {nft.requirementMet ? (
+                        <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
+                      ) : (
+                        <Lock className="h-4 w-4 text-orange-600 flex-shrink-0" />
+                      )}
+                      <span className={nft.requirementMet ? "text-green-600 font-medium" : "text-orange-600"}>
+                        {nft.requirement}
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="flex-shrink-0">
+                      {nft.price === 0 ? "Free" : `${nft.price.toFixed(3)} BB`}
+                    </Badge>
+                  </div>
+
+                  {/* Action Button */}
+                  <Button
+                    onClick={() => handlePurchaseNFT(nft)}
+                    disabled={nft.owned || !nft.requirementMet}
+                    className="w-full"
+                    size="sm"
+                    variant={nft.requirementMet && !nft.owned ? "default" : "secondary"}
+                  >
+                    {nft.owned ? (
+                      "Already Owned"
+                    ) : !nft.requirementMet ? (
+                      <>
+                        <Lock className="mr-2 h-4 w-4" />
+                        Locked
+                      </>
+                    ) : nft.price === 0 ? (
+                      <>
+                        <Gift className="mr-2 h-4 w-4" />
+                        Claim Free NFT
+                      </>
+                    ) : (
+                      <>
+                        Purchase for {nft.price.toFixed(3)} BB
+                      </>
+                    )}
+                  </Button>
                 </Card>
               );
             })}
