@@ -1021,7 +1021,10 @@ export function BuildScreen() {
                           ) : bz < cost ? (
                             `Need ${cost.toLocaleString()} BZ`
                           ) : (
-                            `Upgrade for ${cost.toLocaleString()} BZ`
+                            (() => {
+                              console.log(`🔘 [UI] Rendering button for ${part.key}: L${state.level}→L${state.level+1}, Cost: ${cost}`);
+                              return `Upgrade for ${cost.toLocaleString()} BZ`;
+                            })()
                           )}
                         </Button>
 
