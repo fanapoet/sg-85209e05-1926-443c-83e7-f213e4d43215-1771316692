@@ -72,7 +72,7 @@ export async function syncInitialGameState(
       booster_recovery_rate: Number(gameState.boosterRecovery),
       quickcharge_uses_remaining: Number(gameState.quickChargeUsesRemaining),
       quickcharge_cooldown_until: gameState.quickChargeCooldownUntil 
-        ? new Date(gameState.quickChargeCooldownUntil as number).toISOString() 
+        ? new Date(Number(gameState.quickChargeCooldownUntil)).toISOString() 
         : null,
       total_taps: Number(gameState.totalTaps),
       taps_today: Number(gameState.todayTaps),
@@ -254,7 +254,7 @@ export async function syncBuildParts(
       level: Number(part.level),
       is_building: Boolean(part.isBuilding),
       build_end_time: part.buildEndTime 
-        ? new Date(part.buildEndTime as number).toISOString() 
+        ? new Date(Number(part.buildEndTime)).toISOString() 
         : null,
       updated_at: new Date().toISOString()
     }));
@@ -498,7 +498,7 @@ export function startAutoSync(
       boosterRecovery: Number(state.boosterRecovery),
       quickChargeUsesRemaining: Number(state.quickChargeUsesRemaining),
       quickChargeCooldownUntil: state.quickChargeCooldownUntil !== null 
-        ? (state.quickChargeCooldownUntil as number) 
+        ? Number(state.quickChargeCooldownUntil) 
         : null,
       totalTaps: Number(state.totalTaps),
       todayTaps: Number(state.todayTaps),
