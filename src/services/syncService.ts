@@ -423,7 +423,8 @@ export async function purchaseNFT(
       updates.bz_balance = (profile.bz_balance as any) - cost;
     } else {
       const currentBB = profile.bb_balance as any;
-      updates.bb_balance = parseFloat((currentBB - cost).toFixed(6));
+      // Store as number, not string from .toFixed()
+      updates.bb_balance = Number((currentBB - cost).toFixed(6));
     }
 
     const { error: updateError } = await supabase
@@ -496,6 +497,7 @@ export function startAutoSync(
       boosterCapacity: Number(state.boosterCapacity),
       boosterRecovery: Number(state.boosterRecovery),
       quickChargeUsesRemaining: Number(state.quickChargeUsesRemaining),
+      quickChargeCooldownUntil: state.quickChargeCooldownUntil !== null ? Number(state.quickChargeCooldownUntil) : null,
       totalTaps: Number(state.totalTaps),
       todayTaps: Number(state.todayTaps),
       idleBzPerHour: Number(state.idleBzPerHour)
