@@ -286,6 +286,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // State Ref for Auto-Sync (Prevents timer reset on state change)
+  const stateRef = useRef(getFullStateForSync);
+  useEffect(() => { stateRef.current = getFullStateForSync; }, [getFullStateForSync]);
+
   // Start automatic periodic sync (every 30 seconds)
   useEffect(() => {
     if (!mounted) return;
@@ -294,7 +298,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     
     try {
       const stopAutoSync = startAutoSync(() => {
-        const state = getFullStateForSync();
+        const state = stateRef.current(); // Use ref to get latest state without resetting timer
         console.log("⏰ [AUTO-SYNC] 30-second timer fired, syncing state");
         return state;
       }, 30000);
@@ -306,7 +310,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error("❌ [AUTO-SYNC] Failed to start:", error);
     }
-  }, [mounted, getFullStateForSync]);
+  }, [mounted]); // Only run on mount/unmount
 
   // Online/Offline Monitor
   useEffect(() => {

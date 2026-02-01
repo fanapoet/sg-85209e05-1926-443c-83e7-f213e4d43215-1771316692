@@ -193,47 +193,45 @@ export function BuildScreen() {
     step: "choose" | "confirmBB";
   }>({ open: false, partKey: null, step: "choose" });
 
-  // Load persisted state ONCE on mount
+  // Initialize from localStorage FIRST (instant load)
   useEffect(() => {
+    console.log("🏗️ [BuildScreen] Initializing from localStorage...");
+    
     try {
+      // Load part states
       const savedParts = localStorage.getItem("buildParts");
-      const localParts = savedParts ? JSON.parse(savedParts) : {};
-      
-      // Load from server and merge
-      loadBuildParts().then(serverParts => {
-        if (serverParts && serverParts.length > 0) {
-          console.log(`🔧 [BuildScreen] Loaded ${serverParts.length} parts from server`);
-          
-          const merged = { ...localParts };
-          
-          serverParts.forEach(sp => {
-            const local = merged[sp.partId] || { level: 0, isBuilding: false, buildEndsAt: 0 };
-            
-            // Merge logic: always keep max level
-            const mergedLevel = Math.max(local.level, sp.level);
-            
-            // For building status, prefer server if it has an active build
-            // OR prefer local if it has a newer active build
-            // For now, simple merge: if server is building, take it
-            const isServerBuilding = sp.isBuilding && sp.buildEndsAt && sp.buildEndsAt > Date.now();
-            
-            merged[sp.partId] = {
-              level: mergedLevel,
-              isBuilding: isServerBuilding ? true : local.isBuilding,
-              buildEndsAt: isServerBuilding ? (sp.buildEndsAt || 0) : local.buildEndsAt
-            };
-          });
-          
-          setPartStates(merged);
-        } else if (savedParts) {
-          setPartStates(localParts);
-        }
-      });
-      
+      if (savedParts) {
+        const parsed = JSON.parse(savedParts);
+        console.log("✅ [BuildScreen] Loaded", Object.keys(parsed).length, "parts from localStorage");
+        setPartStates(parsed);
+      } else {
+        // Initialize fresh state
+        console.log("📝 [BuildScreen] No saved parts, initializing fresh state");
+        const initial: Record<string, PartState> = {};
+        allParts.forEach(p => {
+          initial[p.key] = { level: 0, isBuilding: false, buildEndsAt: 0 };
+        });
+        setPartStates(initial);
+        localStorage.setItem("buildParts", JSON.stringify(initial));
+      }
+
+      // Load idle state
+      const savedIdle = localStorage.getItem("idleState");
+      if (savedIdle) {
+        const parsed = JSON.parse(savedIdle);
+        console.log("✅ [BuildScreen] Loaded idleState:", parsed);
+        setIdleState(parsed);
+      } else {
+        const initial = { lastClaimTime: Date.now(), activeBuildKey: null };
+        setIdleState(initial);
+        localStorage.setItem("idleState", JSON.stringify(initial));
+      }
+
       setIsLoaded(true);
+      console.log("✅ [BuildScreen] Local state loaded successfully");
     } catch (e) {
-      console.error("Failed to load build state:", e);
-      // Fallback to initial
+      console.error("❌ [BuildScreen] Failed to load from localStorage:", e);
+      // Fallback to fresh state
       const initial: Record<string, PartState> = {};
       allParts.forEach(p => {
         initial[p.key] = { level: 0, isBuilding: false, buildEndsAt: 0 };
@@ -242,6 +240,75 @@ export function BuildScreen() {
       setIsLoaded(true);
     }
   }, []);
+
+  // AFTER local load, merge with server data (if available)
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const mergeServerData = async () => {
+      console.log("🔄 [BuildScreen] Merging with server data...");
+      
+      try {
+        const serverParts = await loadBuildParts();
+        
+        if (serverParts && serverParts.length > 0) {
+          console.log("📥 [BuildScreen] Server has", serverParts.length, "parts");
+          
+          setPartStates(current => {
+            const merged = { ...current };
+            
+            serverParts.forEach(sp => {
+              const local = merged[sp.partId] || { level: 0, isBuilding: false, buildEndsAt: 0 };
+              
+              // Use Math.max for level (never downgrade)
+              const mergedLevel = Math.max(local.level, sp.level);
+              
+              // For building status, prefer active builds
+              const isServerBuilding = sp.isBuilding && sp.buildEndsAt && sp.buildEndsAt > Date.now();
+              
+              merged[sp.partId] = {
+                level: mergedLevel,
+                isBuilding: isServerBuilding || local.isBuilding,
+                buildEndsAt: isServerBuilding ? (sp.buildEndsAt || 0) : local.buildEndsAt
+              };
+              
+              console.log(`🔄 [BuildScreen] ${sp.partId}: Local=${local.level}, Server=${sp.level}, Merged=${mergedLevel}`);
+            });
+            
+            // Save merged result
+            localStorage.setItem("buildParts", JSON.stringify(merged));
+            console.log("✅ [BuildScreen] Server data merged successfully");
+            
+            return merged;
+          });
+        } else {
+          console.log("📭 [BuildScreen] No server data to merge");
+        }
+      } catch (err) {
+        console.error("❌ [BuildScreen] Error merging server data:", err);
+      }
+    };
+
+    mergeServerData();
+  }, [isLoaded]);
+
+  // SAVE to localStorage whenever partStates changes
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    console.log("💾 [BuildScreen] Saving partStates to localStorage...");
+    localStorage.setItem("buildParts", JSON.stringify(partStates));
+    console.log("✅ [BuildScreen] partStates saved");
+  }, [partStates, isLoaded]);
+
+  // SAVE to localStorage whenever idleState changes
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    console.log("💾 [BuildScreen] Saving idleState to localStorage...");
+    localStorage.setItem("idleState", JSON.stringify(idleState));
+    console.log("✅ [BuildScreen] idleState saved");
+  }, [idleState, isLoaded]);
 
   // Clock tick
   useEffect(() => {
@@ -263,6 +330,8 @@ export function BuildScreen() {
     Object.keys(newStates).forEach(key => {
       const state = newStates[key];
       if (state.isBuilding && now >= state.buildEndsAt) {
+        console.log("🎉 [BuildScreen] Build completed:", key);
+        
         state.level += 1;
         state.isBuilding = false;
         state.buildEndsAt = 0;
@@ -277,46 +346,46 @@ export function BuildScreen() {
           });
         }, 3000);
 
+        // Clear active build if this was it
         if (idleState.activeBuildKey === key) {
-          const newIdleState = { ...idleState, activeBuildKey: null };
-          setIdleState(newIdleState);
-          localStorage.setItem("idleState", JSON.stringify(newIdleState));
+          setIdleState(prev => ({ ...prev, activeBuildKey: null }));
         }
 
-        // 🚀 SYNC COMPLETED BUILD TO DATABASE
-        const syncCompletedBuild = async () => {
-          console.log("🔧 [BuildScreen] Syncing completed build to DB:", key);
-          
-          const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
-          
-          if (!tgUser) return;
-          
-          const { data: profile } = await supabase.from("profiles").select("id").eq("telegram_id", tgUser.id).maybeSingle();
-          
-          if (!profile) return;
-          
-          const { syncBuildPart } = await import("@/services/syncService");
-          
-          await syncBuildPart(profile.id, {
-            partId: key,
-            level: state.level,
-            isBuilding: false,
-            buildEndsAt: 0,
-          });
-          
-          console.log("✅ [BuildScreen] Completed build synced to DB");
+        // Sync completed build to DB
+        const syncCompleted = async () => {
+          try {
+            const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+            if (!tgUser) return;
+            
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("id")
+              .eq("telegram_id", tgUser.id)
+              .maybeSingle();
+            
+            if (profile) {
+              await syncBuildPart(profile.id, {
+                partId: key,
+                level: state.level,
+                isBuilding: false,
+                buildEndsAt: 0,
+              });
+              console.log("✅ [BuildScreen] Completed build synced to DB");
+            }
+          } catch (err) {
+            console.error("❌ [BuildScreen] Error syncing completed build:", err);
+          }
         };
         
-        syncCompletedBuild().catch(console.error);
+        syncCompleted();
       }
     });
 
     if (updated) {
       setPartStates(newStates);
       setCompletionCelebrations(newCelebrations);
-      localStorage.setItem("buildParts", JSON.stringify(newStates));
     }
-  }, [currentTime, isLoaded]);
+  }, [currentTime, isLoaded, partStates, idleState]);
 
   // Update global bzPerHour
   useEffect(() => {
@@ -422,12 +491,9 @@ export function BuildScreen() {
       
       addBZ(accrued.total);
       
-      const newIdleState = { ...idleState, lastClaimTime: Date.now() };
-      setIdleState(newIdleState);
-      localStorage.setItem("idleState", JSON.stringify(newIdleState));
+      setIdleState(prev => ({ ...prev, lastClaimTime: Date.now() }));
       
       markIdleClaimed();
-      // Removed direct setLastClaimTimestamp call as it is handled by markIdleClaimed
       
       const trackEarnings = async () => {
         try {
@@ -496,7 +562,6 @@ export function BuildScreen() {
   };
 
   const handleStarsPayment = async () => {
-    // Temporarily disabled - Coming Soon
     toast({
       title: "Coming Soon! 🚀",
       description: "Telegram Stars payment will be available soon. Use BB payment for now!",
@@ -508,34 +573,47 @@ export function BuildScreen() {
     const state = partStates[partKey];
     if (!state.isBuilding) return;
 
-    const newState = {
-      ...state,
-      level: state.level + 1,
-      isBuilding: false,
-      buildEndsAt: 0
-    };
+    console.log("⚡ [BuildScreen] Speed-up instant completion:", partKey);
 
-    const newStates = { ...partStates, [partKey]: newState };
-    setPartStates(newStates);
+    setPartStates(prev => ({
+      ...prev,
+      [partKey]: {
+        level: state.level + 1,
+        isBuilding: false,
+        buildEndsAt: 0
+      }
+    }));
+
+    // Clear active build
+    setIdleState(prev => ({ ...prev, activeBuildKey: null }));
     
     // Sync to DB
-    const syncSpeedUpBuild = async () => {
-      const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-      if (!tgUser) return;
-      
-      const { data: profile } = await supabase.from("profiles").select("id").eq("telegram_id", tgUser.id).single();
-      if (profile) {
-        await syncBuildPart(profile.id, {
-          partId: partKey,
-          level: newState.level,
-          isBuilding: false,
-          buildEndsAt: 0
-        });
-        console.log("✅ [BuildScreen] Speed-up build synced to DB");
+    const syncSpeedUp = async () => {
+      try {
+        const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+        if (!tgUser) return;
+        
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("telegram_id", tgUser.id)
+          .maybeSingle();
+        
+        if (profile) {
+          await syncBuildPart(profile.id, {
+            partId: partKey,
+            level: state.level + 1,
+            isBuilding: false,
+            buildEndsAt: 0
+          });
+          console.log("✅ [BuildScreen] Speed-up synced to DB");
+        }
+      } catch (err) {
+        console.error("❌ [BuildScreen] Speed-up sync error:", err);
       }
     };
     
-    syncSpeedUpBuild().catch(console.error);
+    syncSpeedUp();
   };
 
   const handleUpgrade = (part: Part) => {
@@ -543,62 +621,91 @@ export function BuildScreen() {
     const cost = getUpgradeCost(part, state.level);
     const upgradeTime = getUpgradeTime(state.level);
 
-    console.log("🔨 [Build] Upgrade button clicked:", part.name);
-    console.log("🔨 [Build] Current state:", state);
-    console.log("🔨 [Build] Cost:", cost, "BZ | Time:", upgradeTime);
+    console.log("🔨 [BuildScreen] Upgrade clicked:", part.name);
+    console.log("   Current level:", state.level);
+    console.log("   Cost:", cost, "BZ");
+    console.log("   Time:", upgradeTime, "ms");
+    console.log("   Active build:", idleState.activeBuildKey);
 
     // Check if can afford
     if (bz < cost) {
-      console.log("❌ [Build] Cannot afford upgrade");
+      console.log("❌ [BuildScreen] Cannot afford");
       return;
     }
 
     // Check if already building
     if (state.isBuilding) {
-      console.log("❌ [Build] Already building");
+      console.log("❌ [BuildScreen] Already building this part");
       return;
     }
 
-    console.log("✅ [Build] Starting upgrade...");
-
-    // Deduct BZ locally first
-    if (subtractBZ(cost)) {
-      console.log("✅ [Build] BZ deducted");
-
-      // Start build timer locally
-      const endTime = Date.now() + upgradeTime;
-      const newState = {
-        ...state,
-        isBuilding: upgradeTime > 0,
-        buildEndsAt: upgradeTime > 0 ? endTime : 0,
-        level: upgradeTime === 0 ? state.level + 1 : state.level
-      };
-
-      const newStates = { ...partStates, [part.key]: newState };
-      setPartStates(newStates);
-      localStorage.setItem("buildParts", JSON.stringify(newStates));
-
-      // Track upgrade
-      incrementUpgrades();
-
-      // Set active build
-      if (upgradeTime > 0) {
-        const newIdleState = { ...idleState, activeBuildKey: part.key };
-        setIdleState(newIdleState);
-        localStorage.setItem("idleState", JSON.stringify(newIdleState));
-      }
-
-      console.log("✅ [Build] Local state updated");
-
-      // Sync to DB in background (non-blocking)
-      setTimeout(() => {
-        syncBuildPart(part.key, newState).catch(err => {
-          console.error("❌ [Build] Background sync failed:", err);
-        });
-      }, 100);
-    } else {
-      console.log("❌ [Build] Failed to deduct BZ");
+    // Check if another build is active
+    if (idleState.activeBuildKey !== null && idleState.activeBuildKey !== part.key) {
+      console.log("❌ [BuildScreen] Another build is active:", idleState.activeBuildKey);
+      return;
     }
+
+    console.log("✅ [BuildScreen] Starting upgrade...");
+
+    // Deduct BZ
+    if (!subtractBZ(cost)) {
+      console.log("❌ [BuildScreen] Failed to deduct BZ");
+      return;
+    }
+
+    console.log("✅ [BuildScreen] BZ deducted");
+
+    // Update part state
+    const endTime = Date.now() + upgradeTime;
+    setPartStates(prev => ({
+      ...prev,
+      [part.key]: {
+        level: upgradeTime === 0 ? state.level + 1 : state.level,
+        isBuilding: upgradeTime > 0,
+        buildEndsAt: upgradeTime > 0 ? endTime : 0
+      }
+    }));
+
+    // Set active build
+    if (upgradeTime > 0) {
+      setIdleState(prev => ({ ...prev, activeBuildKey: part.key }));
+      console.log("🏗️ [BuildScreen] Set active build:", part.key);
+    }
+
+    // Track upgrade
+    incrementUpgrades();
+
+    console.log("✅ [BuildScreen] Local state updated");
+
+    // Sync to DB in background
+    setTimeout(() => {
+      const syncUpgrade = async () => {
+        try {
+          const tgUser = (window as any).Telegram?.WebApp?.initDataUnsafe?.user;
+          if (!tgUser) return;
+          
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("telegram_id", tgUser.id)
+            .maybeSingle();
+          
+          if (profile) {
+            await syncBuildPart(profile.id, {
+              partId: part.key,
+              level: upgradeTime === 0 ? state.level + 1 : state.level,
+              isBuilding: upgradeTime > 0,
+              buildEndsAt: upgradeTime > 0 ? endTime : 0
+            });
+            console.log("✅ [BuildScreen] Upgrade synced to DB");
+          }
+        } catch (err) {
+          console.error("❌ [BuildScreen] Upgrade sync error:", err);
+        }
+      };
+      
+      syncUpgrade();
+    }, 100);
   };
 
   const isPartUnlocked = (part: Part): boolean => {
@@ -875,9 +982,7 @@ export function BuildScreen() {
                           size="sm"
                           variant={canUpgrade && state.level < 20 ? "default" : "secondary"}
                         >
-                          {upgradeButtonMessage[part.key] ? (
-                            upgradeButtonMessage[part.key]
-                          ) : !partUnlocked ? (
+                          {!partUnlocked ? (
                             <>
                               <Lock className="mr-2 h-4 w-4" />
                               Locked
