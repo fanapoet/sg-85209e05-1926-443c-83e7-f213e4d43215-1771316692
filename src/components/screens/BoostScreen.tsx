@@ -108,6 +108,16 @@ export function BoostScreen() {
         const newMaxEnergy = 1500 + (currentLevel + 1 - 1) * 100;
         setMaxEnergy(newMaxEnergy);
       }
+
+      // Sync boosters to database immediately after upgrade
+      import("@/services/syncService").then(({ syncBoosters }) => {
+        syncBoosters({
+          incomePerTap: newLevels.incomePerTap || 1,
+          energyPerTap: newLevels.energyPerTap || 1,
+          energyCapacity: newLevels.energyCapacity || 1,
+          recoveryRate: newLevels.recoveryRate || 1,
+        }).catch(console.error);
+      });
     }
   };
 

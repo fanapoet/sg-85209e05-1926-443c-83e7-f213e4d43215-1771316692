@@ -251,6 +251,16 @@ export function BuildScreen() {
           setIdleState(newIdleState);
           localStorage.setItem("idleState", JSON.stringify(newIdleState));
         }
+
+        // Sync completed build to database
+        import("@/services/syncService").then(({ syncBuildPart }) => {
+          syncBuildPart(key, {
+            level: state.level,
+            isBuilding: false,
+            buildStartedAt: undefined,
+            buildEndsAt: undefined,
+          }).catch(console.error);
+        });
       }
     });
 
@@ -499,6 +509,16 @@ export function BuildScreen() {
         return updated;
       });
     }, 3000);
+
+    // Sync speed-up completed build to database
+    import("@/services/syncService").then(({ syncBuildPart }) => {
+      syncBuildPart(partKey, {
+        level: newLevel,
+        isBuilding: false,
+        buildStartedAt: undefined,
+        buildEndsAt: undefined,
+      }).catch(console.error);
+    });
   };
 
   const handleUpgrade = (part: Part) => {
@@ -557,6 +577,16 @@ export function BuildScreen() {
         setIdleState(newIdleState);
         localStorage.setItem("idleState", JSON.stringify(newIdleState));
       }
+
+      // Sync build part to database
+      import("@/services/syncService").then(({ syncBuildPart }) => {
+        syncBuildPart(part.key, {
+          level: upgradeTime === 0 ? state.level + 1 : state.level,
+          isBuilding: upgradeTime > 0,
+          buildStartedAt: upgradeTime > 0 ? now : undefined,
+          buildEndsAt: upgradeTime > 0 ? now + upgradeTime : undefined,
+        }).catch(console.error);
+      });
     }
   };
 

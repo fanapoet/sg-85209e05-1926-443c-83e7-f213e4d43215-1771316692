@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import { useToast } from "@/hooks/use-toast";
 
 const PRESET_AVATARS = [
   "🐰", "🔥", "⚡", "💎", "🚀", "🎮", "🏆", "⭐",
@@ -13,7 +14,8 @@ const PRESET_AVATARS = [
 ];
 
 export function CompactDashboard() {
-  const { bz, bb, energy, tier, referralCount, xp, bzPerHour } = useGameState();
+  const { bz, bb, energy, tier, referralCount, xp, bzPerHour, isOnline, isSyncing, lastSyncTime } = useGameState();
+  const { toast } = useToast();
   const [profileOpen, setProfileOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [selectedAvatar, setSelectedAvatar] = useState<string>("");
@@ -192,9 +194,22 @@ export function CompactDashboard() {
             
             {/* Right: Tier & Avatar */}
             <div className="flex flex-col items-end gap-1 min-w-[80px]">
-              <Badge variant="secondary" className={`text-[10px] font-bold px-1.5 py-0.5 ${getTierColor(tier)}`}>
-                {tier}
-              </Badge>
+              <div className="flex items-center gap-1.5">
+                {/* Sync Status Indicator */}
+                <div className="flex items-center gap-1">
+                  {isSyncing ? (
+                    <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" title="Syncing..." />
+                  ) : !isOnline ? (
+                    <div className="h-2 w-2 rounded-full bg-orange-500" title="Offline - changes will sync later" />
+                  ) : (
+                    <div className="h-2 w-2 rounded-full bg-green-500" title="Synced" />
+                  )}
+                </div>
+                
+                <Badge variant="secondary" className={`text-[10px] font-bold px-1.5 py-0.5 ${getTierColor(tier)}`}>
+                  {tier}
+                </Badge>
+              </div>
               <button 
                 onClick={() => setProfileOpen(true)}
                 className="h-8 w-8 rounded-full overflow-hidden border-2 border-primary/20 hover:border-primary/40 transition-colors flex items-center justify-center bg-primary/10 text-primary font-bold text-lg"
