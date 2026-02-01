@@ -5,10 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { TrendingUp, Zap, Battery, RefreshCw, Lock, Info } from "lucide-react";
-import { syncPlayerState } from "@/services/syncService";
 
 interface Booster {
-  key: string;
+  key: "incomePerTap" | "energyPerTap" | "energyCapacity" | "recoveryRate";
   name: string;
   icon: React.ComponentType<{ className?: string }>;
   description: string;
@@ -52,25 +51,18 @@ const boosters: Booster[] = [
 ];
 
 export function BoostScreen() {
-  const { bz, bzPerHour, referralCount, subtractBZ, tier, setMaxEnergy, energy, maxEnergy, incrementUpgrades } = useGameState();
-  const [boosterLevels, setBoosterLevels] = useState<Record<string, number>>({
-    incomePerTap: 1,
-    energyPerTap: 1,
-    energyCapacity: 1,
-    recoveryRate: 1
-  });
-
-  useEffect(() => {
-    const saved = localStorage.getItem("boosters");
-    if (saved) {
-      setBoosterLevels(JSON.parse(saved));
-    }
-  }, []);
-
-  const saveBoosterLevels = (levels: Record<string, number>) => {
-    setBoosterLevels(levels);
-    localStorage.setItem("boosters", JSON.stringify(levels));
-  };
+  const { 
+    bz, 
+    bzPerHour, 
+    referralCount, 
+    subtractBZ, 
+    tier, 
+    energy, 
+    maxEnergy, 
+    incrementUpgrades,
+    boosters: boosterLevels,
+    upgradeBooster
+  } = useGameState();
 
   const calculateCost = (booster: Booster, currentLevel: number): number => {
     return Math.floor(booster.baseCost * Math.pow(1 + currentLevel, 2) + 1.2 * bzPerHour);
@@ -78,10 +70,10 @@ export function BoostScreen() {
 
   const getReferralGate = (booster: Booster, currentLevel: number): number | null => {
     if (booster.key === "incomePerTap") return null;
-    if (currentLevel < 3) return null; // L1-L2 are free
-    if (currentLevel === 3) return 3;  // L3 requires 3 referrals
-    if (currentLevel === 4 || currentLevel === 5) return 5; // L4-L5 require 5
-    return 7; // L6+ require 7
+    if (currentLevel < 3) return null;
+    if (currentLevel === 3) return 3;
+    if (currentLevel === 4 || currentLevel === 5) return 5;
+    return 7;
   };
 
   const canUpgrade = (booster: Booster, currentLevel: number): boolean => {
@@ -94,40 +86,29 @@ export function BoostScreen() {
     return true;
   };
 
-  const handleUpgrade = async (booster: Booster) => {
+  const handleUpgrade = (booster: Booster) => {
     const currentLevel = boosterLevels[booster.key];
     const cost = calculateCost(booster, currentLevel);
 
-    if (!canUpgrade(booster, currentLevel)) return;
+    if (!canUpgrade(booster, currentLevel)) {
+      console.log("❌ [Boost] Cannot upgrade:", booster.name, "- requirements not met");
+      return;
+    }
 
+    console.log("⬆️ [Boost] Upgrading", booster.name, "from level", currentLevel, "to", currentLevel + 1);
+    
     if (subtractBZ(cost)) {
-      const newLevels = { ...boosterLevels, [booster.key]: currentLevel + 1 };
-      saveBoosterLevels(newLevels);
-
-      // CRITICAL FIX: Apply Energy Capacity upgrade immediately to global state
-      if (booster.key === "energyCapacity") {
-        const newMaxEnergy = 1500 + (currentLevel + 1 - 1) * 100;
-        setMaxEnergy(newMaxEnergy);
-      }
-
+      console.log("✅ [Boost] BZ deducted:", cost);
+      
+      // Update booster level in GameStateContext
+      upgradeBooster(booster.key);
+      
       // Track upgrade count
       incrementUpgrades();
-
-      // Save locally
-      localStorage.setItem("boosters", JSON.stringify(newLevels));
-
-      // Sync to DB immediately
-      const syncResult = await syncPlayerState({
-        boosterIncomeTap: newLevels.incomePerTap,
-        boosterEnergyTap: newLevels.energyPerTap,
-        boosterCapacity: newLevels.energyCapacity,
-        boosterRecovery: newLevels.recoveryRate,
-        bzBalance: bz - cost
-      }).catch(console.error);
-
-      if (syncResult) {
-        console.log(`✅ [BoostScreen] Upgraded ${booster.name} to level ${newLevels[booster.key]}`);
-      }
+      
+      console.log("✅ [Boost] Upgrade complete!");
+    } else {
+      console.log("❌ [Boost] Failed to deduct BZ");
     }
   };
 
@@ -162,35 +143,12 @@ export function BoostScreen() {
     return "7/7";
   };
 
-  const getBoosterLevel = (key: string): number => {
-    try {
-      if (typeof window === "undefined") return 1;
-      const saved = localStorage.getItem("boosters");
-      if (!saved) return 1;
-      const data = JSON.parse(saved);
-      return data[key] || 1;
-    } catch {
-      return 1;
-    }
-  };
-
-  const capacityLevel = getBoosterLevel("energyCapacity");
+  const capacityLevel = boosterLevels.energyCapacity;
   const actualMaxEnergy = 1500 + (capacityLevel - 1) * 100;
-
-  // Referral requirements for Energy boosters
-  const getReferralRequirement = (boosterKey: string, level: number): number | null => {
-    if (!boosterKey.startsWith("energy")) return null;
-    
-    // Energy boosters: L1-L2 free, L3+ require referrals
-    if (level < 2) return null;
-    if (level === 2) return 3;
-    if (level === 3 || level === 4) return 5;
-    return 7;
-  };
 
   return (
     <div className="p-6 space-y-4 max-w-2xl mx-auto pb-24">
-      {/* Info Block (Non-closable) - FIXED: Now shows correct bzPerHour from Build */}
+      {/* Info Block (Non-closable) */}
       <Card className="p-4 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
         <div className="flex items-start gap-3">
           <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />

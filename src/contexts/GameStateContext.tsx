@@ -292,16 +292,20 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     
     console.log("🚀 [AUTO-SYNC] Starting automatic sync every 30 seconds");
     
-    const stopAutoSync = startAutoSync(() => {
-      const state = getFullStateForSync();
-      console.log("⏰ [AUTO-SYNC] 30-second timer fired, syncing state:", state);
-      return state;
-    }, 30000);
-    
-    return () => {
-      console.log("🛑 [AUTO-SYNC] Stopping automatic sync");
-      stopAutoSync();
-    };
+    try {
+      const stopAutoSync = startAutoSync(() => {
+        const state = getFullStateForSync();
+        console.log("⏰ [AUTO-SYNC] 30-second timer fired, syncing state");
+        return state;
+      }, 30000);
+      
+      return () => {
+        console.log("🛑 [AUTO-SYNC] Stopping automatic sync");
+        stopAutoSync();
+      };
+    } catch (error) {
+      console.error("❌ [AUTO-SYNC] Failed to start:", error);
+    }
   }, [mounted, getFullStateForSync]);
 
   // Online/Offline Monitor

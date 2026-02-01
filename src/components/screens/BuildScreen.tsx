@@ -540,37 +540,64 @@ export function BuildScreen() {
 
   const handleUpgrade = (part: Part) => {
     const state = partStates[part.key];
-    if (state.isBuilding && state.buildEndsAt <= currentTime) {
+    const cost = getUpgradeCost(part, state.level);
+    const upgradeTime = getUpgradeTime(state.level);
+
+    console.log("🔨 [Build] Upgrade button clicked:", part.name);
+    console.log("🔨 [Build] Current state:", state);
+    console.log("🔨 [Build] Cost:", cost, "BZ | Time:", upgradeTime);
+
+    // Check if can afford
+    if (bz < cost) {
+      console.log("❌ [Build] Cannot afford upgrade");
+      return;
+    }
+
+    // Check if already building
+    if (state.isBuilding) {
+      console.log("❌ [Build] Already building");
+      return;
+    }
+
+    console.log("✅ [Build] Starting upgrade...");
+
+    // Deduct BZ locally first
+    if (subtractBZ(cost)) {
+      console.log("✅ [Build] BZ deducted");
+
+      // Start build timer locally
+      const endTime = Date.now() + upgradeTime;
       const newState = {
         ...state,
-        level: state.level + 1,
-        isBuilding: false,
-        buildEndsAt: 0
+        isBuilding: upgradeTime > 0,
+        buildEndsAt: upgradeTime > 0 ? endTime : 0,
+        level: upgradeTime === 0 ? state.level + 1 : state.level
       };
 
       const newStates = { ...partStates, [part.key]: newState };
       setPartStates(newStates);
-      
-      // Sync to DB
-      const syncBuildData = async () => {
-        const tgUser = window.Telegram?.WebApp?.initDataUnsafe?.user;
-        if (!tgUser) return;
-        
-        const { data: profile } = await supabase.from("profiles").select("id").eq("telegram_id", tgUser.id).single();
-        if (profile) {
-          const result = await syncBuildPart(profile.id, {
-            partId: part.key,
-            level: newState.level,
-            isBuilding: false,
-            buildEndsAt: 0
-          });
-          
-          if (result.success) console.log("✅ [BuildScreen] Upgrade synced to DB");
-          else console.error("❌ [BuildScreen] Upgrade sync failed:", result.error);
-        }
-      };
-      
-      syncBuildData().catch(console.error);
+      localStorage.setItem("buildParts", JSON.stringify(newStates));
+
+      // Track upgrade
+      incrementUpgrades();
+
+      // Set active build
+      if (upgradeTime > 0) {
+        const newIdleState = { ...idleState, activeBuildKey: part.key };
+        setIdleState(newIdleState);
+        localStorage.setItem("idleState", JSON.stringify(newIdleState));
+      }
+
+      console.log("✅ [Build] Local state updated");
+
+      // Sync to DB in background (non-blocking)
+      setTimeout(() => {
+        syncBuildPart(part.key, newState).catch(err => {
+          console.error("❌ [Build] Background sync failed:", err);
+        });
+      }, 100);
+    } else {
+      console.log("❌ [Build] Failed to deduct BZ");
     }
   };
 
