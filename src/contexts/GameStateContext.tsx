@@ -484,7 +484,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       syncPlayerState({
         quickChargeUsesRemaining: quickChargeUsesRemaining - 1,
         quickChargeCooldownUntil: cooldownEnd,
-        quickChargeLastReset: Date.now()
+        quickChargeLastReset: Date.now(),
+        currentEnergy: maxEnergy, // Also sync full energy
+        lastEnergyUpdate: Date.now()
       }).catch(console.error);
     }
   };

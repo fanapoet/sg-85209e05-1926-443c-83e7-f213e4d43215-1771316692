@@ -300,11 +300,11 @@ export function RewardsNFTsScreen() {
       setTimeout(() => {
         import("@/services/syncService").then(({ syncPlayerState }) => {
           syncPlayerState({
-            bz: gameState.bz,
-            bb: gameState.bb,
+            bzBalance: gameState.bz,
+            bbBalance: gameState.bb,
             xp: gameState.xp,
             tier: gameState.tier,
-            energy: gameState.energy,
+            currentEnergy: gameState.energy,
             maxEnergy: gameState.maxEnergy,
             totalTaps: gameState.totalTaps,
             lastClaimTimestamp: gameState.lastClaimTimestamp,

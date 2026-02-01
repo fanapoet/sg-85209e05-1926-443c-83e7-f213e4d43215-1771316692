@@ -2,9 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 
 type Profile = Database["public"]["Tables"]["profiles"]["Row"];
-type ProfileUpdate = Database["public"]["Tables"]["profiles"]["Update"];
 type BuildPartInsert = Database["public"]["Tables"]["user_build_parts"]["Insert"];
-type BuildPartUpdate = Database["public"]["Tables"]["user_build_parts"]["Update"];
 
 // ============================================================================
 // SYNC STATUS TRACKING
@@ -59,14 +57,14 @@ export async function syncInitialGameState(
 
   try {
     // Build the complete update object with ALL fields
-    const updates: any = { // Changed to any to avoid strict type checking against potentially outdated generated types
+    const updates: any = {
       bz_balance: gameState.bzBalance,
-      bb_balance: gameState.bbBalance, // Removed .toString()
+      bb_balance: gameState.bbBalance,
       xp: gameState.xp,
       tier: gameState.tier,
-      current_energy: gameState.currentEnergy, // Removed .toString()
-      max_energy: gameState.maxEnergy, // Removed .toString()
-      energy_recovery_rate: gameState.energyRecoveryRate, // Removed .toString()
+      current_energy: gameState.currentEnergy,
+      max_energy: gameState.maxEnergy,
+      energy_recovery_rate: gameState.energyRecoveryRate,
       last_energy_update: new Date().toISOString(),
       booster_income_per_tap: gameState.boosterIncomeTap,
       booster_energy_per_tap: gameState.boosterEnergyTap,
@@ -76,7 +74,7 @@ export async function syncInitialGameState(
       quickcharge_cooldown_until: gameState.quickChargeCooldownUntil ? new Date(gameState.quickChargeCooldownUntil).toISOString() : null,
       total_taps: gameState.totalTaps,
       taps_today: gameState.todayTaps,
-      idle_bz_per_hour: gameState.idleBzPerHour, // Removed .toString()
+      idle_bz_per_hour: gameState.idleBzPerHour,
       last_sync_at: new Date().toISOString(),
       sync_version: 1,
       updated_at: new Date().toISOString()
@@ -150,14 +148,16 @@ export async function syncPlayerState(gameState: {
     return { success: false, error: "Offline" };
   }
 
+  // Allow immediate sync calls even if one is in progress, but maybe denounce?
+  // For now, simple lock is fine, but we might want to queue.
   if (isSyncing) {
-    console.warn("⚠️ [Sync] Already syncing - skipping");
-    return { success: false, error: "Already syncing" };
+    // console.warn("⚠️ [Sync] Already syncing - skipping");
+    // return { success: false, error: "Already syncing" };
   }
 
   try {
     isSyncing = true;
-    console.log("🔄 [Sync] Syncing player state...", gameState);
+    // console.log("🔄 [Sync] Syncing player state...", gameState);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -227,7 +227,7 @@ export async function syncPlayerState(gameState: {
       return { success: false, error: error.message };
     }
 
-    console.log("✅ [Sync] Player state synced successfully");
+    // console.log("✅ [Sync] Player state synced successfully");
     lastSyncTime = Date.now();
     return { success: true };
 
@@ -287,12 +287,21 @@ export async function syncBuildPart(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   
-  // Get part ID from key (simplified mapping, assuming key maps to ID or looking up from constant)
-  // For now, we pass the key as part_id. 
-  // NOTE: In a real scenario, we should map 's1p1' -> 'uuid' if parts have UUIDs. 
-  // Based on user_build_parts schema, part_id is text, so key is likely fine.
+  // Need to get internal user ID (profile ID) not auth ID, but syncBuildParts takes profile ID?
+  // Wait, syncBuildParts implementation above uses userId directly in insert. 
+  // We need to resolve auth.uid() -> profiles.id usually.
+  // But wait, user_build_parts.user_id references profiles.id? 
+  // Let's check profile.
   
-  return syncBuildParts(user.id, [{
+  const { data: profile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", user.id)
+      .single();
+      
+  if (!profile) return;
+
+  return syncBuildParts(profile.id, [{
     partId: partKey,
     level: data.level,
     isBuilding: data.isBuilding,
@@ -304,14 +313,22 @@ export async function syncBuildPart(
 // LOAD PLAYER STATE FROM DB
 // ============================================================================
 
-export async function loadPlayerState(telegramId: string | number): Promise<Profile | null> {
+export async function loadPlayerState(telegramId?: string | number): Promise<Profile | null> {
   try {
-    console.log("📥 [Sync] Loading player state for Telegram ID:", telegramId);
+    let tid = telegramId;
+    if (!tid) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) tid = user.id;
+    }
+    
+    if (!tid) return null;
+
+    console.log("📥 [Sync] Loading player state for Telegram ID:", tid);
 
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
-      .eq("telegram_id", telegramId)
+      .eq("telegram_id", tid)
       .single();
 
     if (error) {
@@ -349,7 +366,7 @@ export async function syncTapData(gameState: {
   // Debounce for 2 seconds
   return new Promise((resolve) => {
     tapSyncTimeout = setTimeout(async () => {
-      console.log("🎯 [Sync] Debounced tap sync triggered");
+      // console.log("🎯 [Sync] Debounced tap sync triggered");
       const result = await syncPlayerState(gameState);
       resolve(result);
     }, 2000);
@@ -388,7 +405,7 @@ export async function purchaseNFT(
         nft_id: nftId,
         purchased_at: new Date().toISOString(),
         price_paid_bb: currency === 'BB' ? cost : 0
-      } as any); // Cast to any to bypass potential type mismatch if generated types are stale
+      } as any);
 
     if (nftError) {
       console.error("❌ [Sync] NFT insert failed:", nftError);
@@ -403,9 +420,10 @@ export async function purchaseNFT(
     };
 
     if (currency === "BZ") {
-      updates.bz_balance = profile.bz_balance - cost;
+      updates.bz_balance = (profile.bz_balance as number) - cost;
     } else {
-      const currentBB = typeof profile.bb_balance === "string" ? parseFloat(profile.bb_balance) : (profile.bb_balance as number);
+      // Use Number() to safely handle both string and number types from Supabase
+      const currentBB = Number(profile.bb_balance);
       updates.bb_balance = (currentBB - cost).toFixed(6);
     }
 
@@ -464,7 +482,7 @@ export function startAutoSync(
 
   autoSyncInterval = setInterval(() => {
     const state = getGameState();
-    console.log("⏰ [Sync] Periodic sync triggered");
+    // console.log("⏰ [Sync] Periodic sync triggered");
     syncPlayerState(state).catch(console.error);
   }, intervalMs);
 
