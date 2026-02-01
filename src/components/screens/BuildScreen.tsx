@@ -301,7 +301,7 @@ export function BuildScreen() {
             partId: key,
             level: state.level,
             isBuilding: false,
-            buildEndTime: null,
+            buildEndsAt: 0,
           });
           
           console.log("✅ [BuildScreen] Completed build synced to DB");
