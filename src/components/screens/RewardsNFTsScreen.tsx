@@ -19,6 +19,7 @@ import {
   Target,
   TrendingUp
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface DailyReward {
   day: number;
@@ -338,7 +339,7 @@ export function RewardsNFTsScreen() {
     }
   };
 
-  const handlePurchaseNFT = (nft: NFT) => {
+  const handlePurchaseNFT = async (nft: NFT) => {
     try {
       if (nft.owned || !nft.requirementMet) return;
       
@@ -356,25 +357,20 @@ export function RewardsNFTsScreen() {
       }
 
       // Record NFT purchase and sync player state
-      setTimeout(() => {
-        import("@/services/syncService").then(({ purchaseNFT, syncPlayerState }) => {
-          // Record NFT purchase - Pass 'BB' as currency since all NFTs in the list use BB except free ones
-          // Free NFTs cost 0 so currency doesn't matter much but we should pass one
-          purchaseNFT(nft.key, nft.price, 'BB').catch(console.error);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setTimeout(() => {
+          import("@/services/syncService").then(({ purchaseNFT, syncPlayerState }) => {
+            purchaseNFT(user.id, nft.key, nft.price, 'BB').catch(console.error);
 
-          // Sync updated BB balance
-          syncPlayerState({
-            bz: gameState.bz,
-            bb: gameState.bb,
-            xp: gameState.xp,
-            tier: gameState.tier,
-            energy: gameState.energy,
-            maxEnergy: gameState.maxEnergy,
-            totalTaps: gameState.totalTaps,
-            lastClaimTimestamp: gameState.lastClaimTimestamp,
-          }).catch(console.error);
-        });
-      }, 500);
+            // Sync updated BB balance
+            syncPlayerState({
+               bbBalance: gameState.bb - nft.price,
+               nftsOwned: [...ownedNFTs, nft.key]
+            }).catch(console.error);
+          });
+        }, 0);
+      }
     } catch (error) {
       console.error("Error purchasing NFT:", error);
     }

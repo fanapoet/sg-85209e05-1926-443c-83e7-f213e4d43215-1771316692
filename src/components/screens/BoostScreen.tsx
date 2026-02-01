@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { TrendingUp, Zap, Battery, RefreshCw, Lock, Info } from "lucide-react";
+import { syncPlayerState } from "@/services/syncService";
 
 interface Booster {
   key: string;
@@ -112,15 +113,17 @@ export function BoostScreen() {
       // Track upgrade count
       incrementUpgrades();
 
-      // Sync boosters to database immediately after upgrade
-      import("@/services/syncService").then(({ syncBoosters }) => {
-        syncBoosters({
-          incomePerTap: newLevels.incomePerTap || 1,
-          energyPerTap: newLevels.energyPerTap || 1,
-          energyCapacity: newLevels.energyCapacity || 1,
-          recoveryRate: newLevels.recoveryRate || 1,
-        }).catch(console.error);
-      });
+      // Save locally
+      localStorage.setItem("boosters", JSON.stringify(newLevels));
+
+      // Sync to DB immediately
+      syncPlayerState({
+        boosterIncomeTap: newLevels.incomePerTap,
+        boosterEnergyTap: newLevels.energyPerTap,
+        boosterCapacity: newLevels.energyCapacity,
+        boosterRecovery: newLevels.recoveryRate,
+        bzBalance: bz - cost
+      }).catch(console.error);
     }
   };
 

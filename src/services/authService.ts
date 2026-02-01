@@ -188,7 +188,27 @@ export async function initializeUser() {
     // Use dynamic import to avoid circular dependencies
     import("@/services/syncService").then(({ syncInitialGameState }) => {
       console.log("🚀 Triggering initial game state sync...");
-      syncInitialGameState(newProfile).then(syncResult => {
+      
+      const initialGameState = {
+        bzBalance: newProfile.bz_balance,
+        bbBalance: newProfile.bb_balance,
+        xp: newProfile.xp,
+        tier: newProfile.tier,
+        currentEnergy: newProfile.current_energy,
+        maxEnergy: newProfile.max_energy,
+        energyRecoveryRate: newProfile.energy_recovery_rate,
+        boosterIncomeTap: newProfile.booster_income_per_tap,
+        boosterEnergyTap: newProfile.booster_energy_per_tap,
+        boosterCapacity: newProfile.booster_energy_capacity,
+        boosterRecovery: newProfile.booster_recovery_rate,
+        quickChargeUsesRemaining: newProfile.quickcharge_uses_remaining,
+        quickChargeCooldownUntil: null,
+        totalTaps: 0,
+        todayTaps: 0,
+        idleBzPerHour: 0
+      };
+
+      syncInitialGameState(newProfile.id, initialGameState).then(syncResult => {
         if (syncResult.success) {
           console.log(`Initial game state sync completed for user ${newProfile.id}`);
         } else {

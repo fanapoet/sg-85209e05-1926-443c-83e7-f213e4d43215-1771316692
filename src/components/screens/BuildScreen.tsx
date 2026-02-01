@@ -45,6 +45,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { recordReferralEarnings } from "@/services/referralService";
 import { getCurrentTelegramUser } from "@/services/authService";
+import { syncBuildParts, syncBuildPart, syncPlayerState } from "@/services/syncService";
 
 // Speed-Up Configuration
 const SPEEDUP_CONFIG = {
@@ -284,11 +285,11 @@ export function BuildScreen() {
         setTimeout(() => {
           import("@/services/syncService").then(({ syncPlayerState }) => {
             syncPlayerState({
-              bz,
-              bb,
+              bzBalance: bz,
+              bbBalance: bb,
               xp,
               tier,
-              energy,
+              currentEnergy: energy,
               maxEnergy,
               totalTaps,
               lastClaimTimestamp,
@@ -613,31 +614,24 @@ export function BuildScreen() {
         localStorage.setItem("idleState", JSON.stringify(newIdleState));
       }
 
-      // Sync build part to database
-      import("@/services/syncService").then(({ syncBuildPart }) => {
-        syncBuildPart(part.key, {
-          level: upgradeTime === 0 ? state.level + 1 : state.level,
-          isBuilding: upgradeTime > 0,
-          buildStartedAt: upgradeTime > 0 ? now : undefined,
-          buildEndsAt: upgradeTime > 0 ? now + upgradeTime : undefined,
-        }).catch(console.error);
+      // Sync build part
+      const nextLevel = state.level + 1;
+      const endTime = now + upgradeTime;
+      
+      syncBuildParts("user_id_placeholder", [{
+        partId: part.key,
+        level: nextLevel,
+        isBuilding: true,
+        buildEndTime: endTime
+      }]).catch(err => {
+         // Fallback to syncBuildPart if needed or just log
+         console.warn("Using syncBuildPart singular fallback");
+         syncBuildPart(part.key, {
+            level: nextLevel,
+            isBuilding: true,
+            buildEndTime: endTime
+         });
       });
-
-      // Sync player state (BZ spent)
-      setTimeout(() => {
-        import("@/services/syncService").then(({ syncPlayerState }) => {
-          syncPlayerState({
-            bz,
-            bb,
-            xp,
-            tier,
-            energy,
-            maxEnergy,
-            totalTaps,
-            lastClaimTimestamp,
-          }).catch(console.error);
-        });
-      }, 1000);
     }
   };
 

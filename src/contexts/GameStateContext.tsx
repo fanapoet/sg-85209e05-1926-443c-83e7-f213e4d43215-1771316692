@@ -3,12 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { initializeUser, getCurrentTelegramUser } from "@/services/authService";
 import { 
   syncPlayerState, 
-  syncBoosters, 
-  syncQuickCharge,
   syncTapData,
   loadPlayerState,
   startAutoSync,
-  stopAutoSync,
   getSyncStatus,
   checkOnlineStatus
 } from "@/services/syncService";
@@ -121,6 +118,32 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [syncErrorCount, setSyncErrorCount] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // Helper to get full state for sync
+  const getFullStateForSync = () => {
+    const boosters = safeGetItem("boosters", { incomePerTap: 1, energyPerTap: 1, energyCapacity: 1, recoveryRate: 1 });
+    const quickCharge = safeGetItem("quickCharge", { usesRemaining: 5, cooldownEndTime: null });
+    
+    return {
+      bzBalance: bz,
+      bbBalance: bb,
+      xp: xp,
+      tier: tier as string,
+      currentEnergy: energy,
+      maxEnergy: maxEnergy,
+      energyRecoveryRate: 0.3 * (1 + (boosters.recoveryRate - 1) * 0.1), // Recalculate based on formula
+      lastEnergyUpdate: Date.now(),
+      boosterIncomeTap: boosters.incomePerTap,
+      boosterEnergyTap: boosters.energyPerTap,
+      boosterCapacity: boosters.energyCapacity,
+      boosterRecovery: boosters.recoveryRate,
+      quickChargeUsesRemaining: quickChargeUsesRemaining,
+      quickChargeCooldownUntil: quickChargeCooldownUntil,
+      totalTaps: totalTaps,
+      todayTaps: todayTaps,
+      idleBzPerHour: bzPerHour
+    };
+  };
 
   // Persist State
   useEffect(() => { safeSetItem("bunergy_bz", bz); }, [bz]);
@@ -275,45 +298,14 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     console.log("🚀 Starting auto-sync system...");
 
     // Start auto-sync with current state getter
-    startAutoSync(() => {
-      const currentState = {
-        bz,
-        bb,
-        xp,
-        tier: getTier(xp),
-        energy,
-        maxEnergy,
-        totalTaps,
-        lastClaimTimestamp,
-        boosters: safeGetItem("boosters", {
-          incomePerTap: 1,
-          energyPerTap: 1,
-          energyCapacity: 1,
-          recoveryRate: 1,
-        }),
-        quickCharge: safeGetItem("quickCharge", {
-          usesRemaining: 5,
-          cooldownEndTime: undefined,
-          lastReset: Date.now(),
-        }),
-      };
-      
-      console.log("📊 Current game state for sync:", {
-        bz: currentState.bz,
-        bb: currentState.bb,
-        xp: currentState.xp,
-        totalTaps: currentState.totalTaps,
-      });
-      
-      return currentState;
-    });
+    const stopSync = startAutoSync(() => getFullStateForSync());
 
     // Cleanup on unmount
     return () => {
       console.log("🛑 Stopping auto-sync system...");
-      stopAutoSync();
+      stopSync();
     };
-  }, [isInitialized, bz, bb, xp, energy, maxEnergy, totalTaps, lastClaimTimestamp]);
+  }, [isInitialized, bz, bb, xp, energy, maxEnergy, totalTaps, lastClaimTimestamp, quickChargeUsesRemaining]);
 
   // Daily Reset Logic
   useEffect(() => {
@@ -489,13 +481,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       setQuickChargeCooldownUntil(cooldownEnd);
       
       // Sync immediately
-      import("@/services/syncService").then(({ syncQuickCharge }) => {
-        syncQuickCharge({
-          usesRemaining: quickChargeUsesRemaining - 1,
-          cooldownUntil: cooldownEnd,
-          lastReset: Date.now()
-        }).catch(console.error);
-      });
+      syncPlayerState({
+        quickChargeUsesRemaining: quickChargeUsesRemaining - 1,
+        quickChargeCooldownUntil: cooldownEnd,
+        quickChargeLastReset: Date.now()
+      }).catch(console.error);
     }
   };
 
@@ -516,10 +506,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     // Immediate tap sync (debounced internally by sync service if needed, but here we just call it)
     if (isOnline) {
       syncTapData({
+        bzBalance: bz, 
+        currentEnergy: energy, 
+        lastEnergyUpdate: Date.now(),
         totalTaps: totalTaps + count,
-        tapsToday: todayTaps + count,
-        energy: energy,
-        bz: bz,
+        todayTaps: todayTaps + count,
       }).catch(console.error);
     }
   };
@@ -545,29 +536,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     try {
       console.log("🔄 Manual sync started...");
       
-      await syncPlayerState({
-        bz,
-        bb,
-        xp,
-        tier,
-        energy,
-        maxEnergy,
-        totalTaps,
-        lastClaimTimestamp,
-      });
-      
-      await syncBoosters(safeGetItem("boosters", {
-        incomePerTap: 1,
-        energyPerTap: 1,
-        energyCapacity: 1,
-        recoveryRate: 1,
-      }));
-      
-      await syncQuickCharge(safeGetItem("quickCharge", {
-        usesRemaining: 5,
-        cooldownEndTime: undefined,
-        lastReset: Date.now(),
-      }));
+      const state = getFullStateForSync();
+      await syncPlayerState(state);
       
       setLastSyncTime(Date.now());
       console.log("✅ Manual sync completed");
