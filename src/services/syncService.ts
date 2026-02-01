@@ -297,7 +297,69 @@ export async function syncTapData(tapState: {
 }
 
 /**
- * Sync build parts
+ * Load build parts from database
+ */
+export async function loadBuildParts(): Promise<Array<{ partId: string; level: number; isBuilding: boolean; buildEndTime: number | null }> | null> {
+  try {
+    console.log("🔧 [loadBuildParts] Getting Telegram user...");
+    
+    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+    
+    if (!tgUser) {
+      console.error("❌ [loadBuildParts] No Telegram user data");
+      return null;
+    }
+    
+    console.log("🔧 [loadBuildParts] Telegram user ID:", tgUser.id);
+    
+    // Find user profile by telegram_id
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", tgUser.id)
+      .maybeSingle();
+    
+    if (profileError || !profile) {
+      console.error("❌ [loadBuildParts] Profile not found");
+      return null;
+    }
+    
+    console.log("🔧 [loadBuildParts] Loading parts for user:", profile.id);
+    
+    // Load all build parts for this user
+    const { data, error } = await supabase
+      .from("user_build_parts")
+      .select("*")
+      .eq("user_id", profile.id);
+    
+    if (error) {
+      console.error("❌ [loadBuildParts] Error:", error);
+      return null;
+    }
+    
+    if (!data || data.length === 0) {
+      console.log("📦 [loadBuildParts] No build parts found (new user)");
+      return [];
+    }
+    
+    // Convert to app format
+    const parts = data.map(row => ({
+      partId: row.part_id,
+      level: row.current_level,
+      isBuilding: row.is_building,
+      buildEndTime: row.build_ends_at ? new Date(row.build_ends_at).getTime() : null
+    }));
+    
+    console.log(`✅ [loadBuildParts] Loaded ${parts.length} parts from DB`);
+    return parts;
+  } catch (error) {
+    console.error("❌ [loadBuildParts] Exception:", error);
+    return null;
+  }
+}
+
+/**
+ * Sync build parts (wrapper for convenience)
  */
 export async function syncBuildParts(
   userId: string,
@@ -311,13 +373,13 @@ export async function syncBuildParts(
       const endTimestamp = toTimestamp(part.buildEndTime);
 
       const { error } = await supabase
-        .from("user_build_parts") // Correct table name
+        .from("user_build_parts")
         .upsert({
           user_id: userId,
           part_id: part.partId,
-          current_level: part.level, // Correct column
+          current_level: part.level,
           is_building: part.isBuilding,
-          build_ends_at: endTimestamp // Correct column
+          build_ends_at: endTimestamp 
             ? new Date(endTimestamp).toISOString() 
             : null,
           updated_at: new Date().toISOString()

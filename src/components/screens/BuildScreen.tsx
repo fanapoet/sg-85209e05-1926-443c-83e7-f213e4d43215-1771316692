@@ -219,6 +219,58 @@ export function BuildScreen() {
       }
 
       setIsLoaded(true);
+      
+      // 🚀 LOAD BUILD PARTS FROM SERVER AND MERGE
+      const loadServerBuildData = async () => {
+        console.log("🔧 [BuildScreen] Loading build parts from server...");
+        
+        const serverParts = await import("@/services/syncService").then(m => m.loadBuildParts());
+        
+        if (serverParts && serverParts.length > 0) {
+          console.log(`🔧 [BuildScreen] Loaded ${serverParts.length} parts from server`);
+          
+          // Get current localStorage state
+          const currentParts = savedParts ? JSON.parse(savedParts) : {};
+          const mergedParts = { ...currentParts };
+          
+          // Merge with Math.max logic (never decrease levels)
+          serverParts.forEach(serverPart => {
+            const current = mergedParts[serverPart.partId];
+            
+            if (!current) {
+              // New part from server
+              mergedParts[serverPart.partId] = {
+                level: serverPart.level,
+                upgrading: serverPart.isBuilding,
+                upgradeStartTime: 0,
+                upgradeEndTime: serverPart.buildEndTime || 0
+              };
+            } else {
+              // Merge with Math.max (keep highest level)
+              const mergedLevel = Math.max(current.level, serverPart.level);
+              
+              console.log(`🔧 [BuildScreen] Part ${serverPart.partId}: Local=${current.level}, Server=${serverPart.level}, Merged=${mergedLevel}`);
+              
+              mergedParts[serverPart.partId] = {
+                level: mergedLevel,
+                upgrading: serverPart.isBuilding || current.upgrading,
+                upgradeStartTime: current.upgradeStartTime,
+                upgradeEndTime: serverPart.buildEndTime || current.upgradeEndTime
+              };
+            }
+          });
+          
+          // Update state and save
+          setPartStates(mergedParts);
+          localStorage.setItem("buildParts", JSON.stringify(mergedParts));
+          
+          console.log("✅ [BuildScreen] Build parts merged successfully");
+        } else {
+          console.log("📦 [BuildScreen] No server build parts found");
+        }
+      };
+      
+      loadServerBuildData().catch(console.error);
     } catch (error) {
       console.error("Failed to load build state:", error);
       const initial: Record<PartKey, PartState> = {};
@@ -271,34 +323,31 @@ export function BuildScreen() {
           localStorage.setItem("idleState", JSON.stringify(newIdleState));
         }
 
-        // Sync completed build to database
-        import("@/services/syncService").then(async ({ syncBuildPart }) => {
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            syncBuildPart(user.id, {
-              partId: key,
-              level: state.level,
-              isBuilding: false,
-              buildEndTime: null,
-            }).catch(console.error);
-          }
-        });
-
-        // Sync player state (BB spent, XP gained)
-        setTimeout(() => {
-          import("@/services/syncService").then(({ syncPlayerState }) => {
-            syncPlayerState({
-              bzBalance: bz,
-              bbBalance: bb,
-              xp,
-              tier,
-              currentEnergy: energy,
-              maxEnergy,
-              totalTaps,
-              lastClaimTimestamp,
-            }).catch(console.error);
+        // 🚀 SYNC COMPLETED BUILD TO DATABASE
+        const syncCompletedBuild = async () => {
+          console.log("🔧 [BuildScreen] Syncing completed build to DB:", key);
+          
+          const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+          
+          if (!tgUser) return;
+          
+          const { data: profile } = await supabase.from("profiles").select("id").eq("telegram_id", tgUser.id).maybeSingle();
+          
+          if (!profile) return;
+          
+          const { syncBuildPart } = await import("@/services/syncService");
+          
+          await syncBuildPart(profile.id, {
+            partId: key,
+            level: state.level,
+            isBuilding: false,
+            buildEndTime: null,
           });
-        }, 1000);
+          
+          console.log("✅ [BuildScreen] Completed build synced to DB");
+        };
+        
+        syncCompletedBuild().catch(console.error);
       }
     });
 
@@ -549,18 +598,31 @@ export function BuildScreen() {
       });
     }, 3000);
 
-    // Sync speed-up completed build to database
-    import("@/services/syncService").then(async ({ syncBuildPart }) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        syncBuildPart(user.id, {
-          partId: partKey,
-          level: newLevel,
-          isBuilding: false,
-          buildEndTime: null,
-        }).catch(console.error);
-      }
-    });
+    // 🚀 SYNC SPEED-UP COMPLETED BUILD TO DATABASE
+    const syncSpeedUpBuild = async () => {
+      console.log("🔧 [BuildScreen] Syncing speed-up completed build to DB:", partKey);
+      
+      const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+      
+      if (!tgUser) return;
+      
+      const { data: profile } = await supabase.from("profiles").select("id").eq("telegram_id", tgUser.id).maybeSingle();
+      
+      if (!profile) return;
+      
+      const { syncBuildPart } = await import("@/services/syncService");
+      
+      await syncBuildPart(profile.id, {
+        partId: partKey,
+        level: newLevel,
+        isBuilding: false,
+        buildEndTime: null,
+      });
+      
+      console.log("✅ [BuildScreen] Speed-up build synced to DB");
+    };
+    
+    syncSpeedUpBuild().catch(console.error);
   };
 
   const handleUpgrade = (part: Part) => {
@@ -620,22 +682,45 @@ export function BuildScreen() {
         localStorage.setItem("idleState", JSON.stringify(newIdleState));
       }
 
-      // Sync build part
-      const nextLevel = state.level + 1;
-      const endTime = Date.now() + upgradeTime;
-      
-      // Sync to database
-      import("@/services/syncService").then(async ({ syncBuildPart }) => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          syncBuildPart(user.id, {
-             partId: part.key,
-             level: nextLevel,
-             isBuilding: true,
-             buildEndTime: endTime
-          });
+      // 🚀 SYNC TO DATABASE
+      const syncBuildData = async () => {
+        console.log("🔧 [BuildScreen] Syncing upgraded part to DB:", part.key);
+        
+        const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+        
+        if (!tgUser) {
+          console.error("❌ [BuildScreen] No Telegram user for sync");
+          return;
         }
-      });
+        
+        // Find user profile
+        const { data: profile } = await supabase.from("profiles").select("id").eq("telegram_id", tgUser.id).maybeSingle();
+        
+        if (!profile) {
+          console.error("❌ [BuildScreen] Profile not found for sync");
+          return;
+        }
+        
+        const { syncBuildPart } = await import("@/services/syncService");
+        
+        const nextLevel = upgradeTime === 0 ? state.level + 1 : state.level;
+        const endTime = upgradeTime > 0 ? now + upgradeTime : null;
+        
+        const result = await syncBuildPart(profile.id, {
+          partId: part.key,
+          level: nextLevel,
+          isBuilding: upgradeTime > 0,
+          buildEndTime: endTime
+        });
+        
+        if (result.success) {
+          console.log("✅ [BuildScreen] Part synced to DB");
+        } else {
+          console.error("❌ [BuildScreen] Part sync failed:", result.error);
+        }
+      };
+      
+      syncBuildData().catch(console.error);
     }
   };
 
