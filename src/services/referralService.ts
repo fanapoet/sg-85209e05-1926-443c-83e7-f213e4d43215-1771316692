@@ -315,18 +315,97 @@ export async function recordReferralEarnings(inviteeId: number, amount: number, 
 }
 
 /**
- * Check if user reached a referral milestone and claim it
+ * Get list of milestones already claimed by user
  */
-export async function checkAndClaimMilestone(userId: number, referralCount: number): Promise<{ milestone?: number, xpReward?: number }> {
-  // Placeholder implementation to satisfy types
-  // Real implementation would check database for claimed milestones
-  return {}; 
+export async function getClaimedMilestones(telegramId: number): Promise<number[]> {
+  // First get user_id from telegram_id
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("telegram_id", telegramId)
+    .single();
+
+  if (!profile) return [];
+
+  const { data, error } = await supabase
+    .from("referral_milestones")
+    .select("milestone")
+    .eq("user_id", profile.id)
+    .order("milestone", { ascending: true });
+
+  if (error) {
+    console.error("Error fetching claimed milestones:", error);
+    return [];
+  }
+
+  return data?.map((m: any) => m.milestone) || [];
 }
 
 /**
- * Get list of milestones already claimed by user
+ * Check if user reached a referral milestone and claim it
  */
-export async function getClaimedMilestones(userId: number): Promise<number[]> {
-  // Placeholder implementation
-  return [];
+export async function checkAndClaimMilestone(
+  telegramId: number, 
+  currentReferralCount: number
+): Promise<{ milestone?: number, xpReward?: number }> {
+  // Define milestone rewards per Knowledge Base
+  const milestones = [
+    { count: 5, xp: 5000 },
+    { count: 10, xp: 15000 },
+    { count: 25, xp: 50000 },
+    { count: 50, xp: 150000 },
+  ];
+
+  // Find which milestone user just reached
+  const reachedMilestone = milestones
+    .filter(m => currentReferralCount >= m.count)
+    .sort((a, b) => b.count - a.count)[0]; // Get highest reached
+
+  if (!reachedMilestone) {
+    return {};
+  }
+
+  // Get user_id from telegram_id
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("telegram_id", telegramId)
+    .single();
+
+  if (!profile) {
+    console.error("Profile not found for telegram_id:", telegramId);
+    return {};
+  }
+
+  // Check if already claimed
+  const { data: existing } = await supabase
+    .from("referral_milestones")
+    .select("milestone")
+    .eq("user_id", profile.id)
+    .eq("milestone", reachedMilestone.count)
+    .maybeSingle();
+
+  if (existing) {
+    // Already claimed
+    return {};
+  }
+
+  // Claim the milestone
+  const { error: insertError } = await supabase
+    .from("referral_milestones")
+    .insert({
+      user_id: profile.id,
+      milestone: reachedMilestone.count,
+      xp_reward: reachedMilestone.xp,
+    } as any);
+
+  if (insertError) {
+    console.error("Error claiming milestone:", insertError);
+    return {};
+  }
+
+  return {
+    milestone: reachedMilestone.count,
+    xpReward: reachedMilestone.xp,
+  };
 }

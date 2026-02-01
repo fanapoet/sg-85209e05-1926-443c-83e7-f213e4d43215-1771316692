@@ -31,41 +31,44 @@ export default function Home() {
       setIsInTelegram(isTg);
 
       if (isTg) {
-        // Expand to full height
-        window.Telegram?.WebApp?.expand();
-
-        // 🔥 CRITICAL: Authenticate user to trigger sync
-        try {
-          console.log("🔐 Authenticating with Telegram...");
-          const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
-          console.log("👤 Telegram user data:", tgUser);
-          
-          if (tgUser) {
-            // const result = await signInWithTelegram(tgUser);
-            // console.log("🔐 Auth result:", result);
-            
-            // if (result.success) {
-            //   console.log("✅ Authentication successful - sync will start automatically");
-            //   console.log("📊 User ID:", result.user?.id);
-            //   console.log("🆕 Is new user:", result.isNewUser);
-            // } else {
-            //   console.error("❌ Authentication failed:", result.error);
-            // }
-          } else {
-            console.error("❌ No Telegram user data available");
-          }
-        } catch (error) {
-          console.error("❌ Auth error:", error);
-        } finally {
-          setIsAuthenticating(false);
-        }
+        // Authentication handled in _app.tsx (ready + expand)
+        console.log("✅ Running inside Telegram WebApp");
+        setIsAuthenticating(false);
       } else {
+        console.log("⚠️ NOT running inside Telegram - showing blocker");
         setIsAuthenticating(false);
       }
     };
 
     checkTelegram();
   }, []);
+
+  // Handle Telegram back button for sub-screens
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.Telegram?.WebApp) {
+      const tg = window.Telegram.WebApp;
+      
+      // Back button handler - return to tap screen
+      const handleBackButton = () => {
+        if (activeTab !== "tap") {
+          setActiveTab("tap");
+        }
+      };
+      
+      tg.BackButton.onClick(handleBackButton);
+      
+      // Show back button on non-root tabs, hide on root
+      if (activeTab === "tap" && !showWelcome) {
+        tg.BackButton.hide();
+      } else if (!showWelcome) {
+        tg.BackButton.show();
+      }
+      
+      return () => {
+        tg.BackButton.offClick(handleBackButton);
+      };
+    }
+  }, [activeTab, showWelcome]);
 
   const handleWelcomeComplete = () => {
     setShowWelcome(false);
@@ -145,7 +148,7 @@ export default function Home() {
         title="Bunergy - Play & Earn"
         description="Tap, build, and earn in Bunergy - The ultimate Telegram mini app game!"
       />
-      <div className="min-h-screen bg-background pb-20">
+      <div className="min-h-screen bg-background pb-20 safe-area-inset">
         <CompactDashboard />
         <main className="pt-2">
           {renderScreen()}

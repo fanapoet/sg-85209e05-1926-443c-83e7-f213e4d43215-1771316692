@@ -7,24 +7,48 @@ import { GameStateProvider } from "@/contexts/GameStateContext";
 
 export default function App({ Component, pageProps }: AppProps) {
   useEffect(() => {
-    // Sync Telegram theme with next-themes
+    // Initialize Telegram WebApp
     if (typeof window !== "undefined" && window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
-      const telegramTheme = tg.colorScheme || "dark";
       
-      // Set initial theme
+      // 1. Signal ready state
+      tg.ready();
+      
+      // 2. Expand to full height
+      tg.expand();
+      
+      // 3. Sync theme immediately
+      const telegramTheme = tg.colorScheme || "dark";
       document.documentElement.classList.remove("light", "dark");
       document.documentElement.classList.add(telegramTheme);
       
       console.log("🎨 Telegram theme detected:", telegramTheme);
+      console.log("📱 WebApp expanded to full height");
       
-      // Listen for theme changes
+      // 4. Listen for theme changes
       tg.onEvent("themeChanged", () => {
         const newTheme = tg.colorScheme || "dark";
         document.documentElement.classList.remove("light", "dark");
         document.documentElement.classList.add(newTheme);
         console.log("🎨 Theme changed to:", newTheme);
       });
+      
+      // 5. Handle back button (hide by default at root level)
+      tg.BackButton.hide();
+      
+      // Handle viewport changes (keep stable on keyboard open/close)
+      const handleViewportChanged = () => {
+        if (tg.isExpanded) {
+          console.log("📱 Viewport changed, maintaining expansion");
+        }
+      };
+      
+      tg.onEvent("viewportChanged", handleViewportChanged);
+      
+      // Cleanup
+      return () => {
+        tg.offEvent("viewportChanged", handleViewportChanged);
+      };
     }
   }, []);
 

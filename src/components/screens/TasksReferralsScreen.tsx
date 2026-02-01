@@ -339,10 +339,10 @@ export function TasksReferralsScreen() {
 
   // Referral milestones
   const milestones = [
-    { count: 5, xp: 3000, claimed: claimedMilestones.includes(5) },
-    { count: 10, xp: 8000, claimed: claimedMilestones.includes(10) },
-    { count: 25, xp: 25000, claimed: claimedMilestones.includes(25) },
-    { count: 50, xp: 50000, claimed: claimedMilestones.includes(50) },
+    { count: 5, xp: 5000, claimed: claimedMilestones.includes(5) },
+    { count: 10, xp: 15000, claimed: claimedMilestones.includes(10) },
+    { count: 25, xp: 50000, claimed: claimedMilestones.includes(25) },
+    { count: 50, xp: 150000, claimed: claimedMilestones.includes(50) },
   ];
 
   const renderTaskCard = (task: Task) => {
@@ -564,8 +564,9 @@ export function TasksReferralsScreen() {
                     </div>
                     <div className="flex-1">
                       <p className="font-medium text-sm">20% Lifetime Share</p>
-                      <p className="text-xs text-muted-foreground mb-1">Earn 20% of everything your referrals earn from tapping and building</p>
+                      <p className="text-xs text-muted-foreground mb-1">Earn 20% of all Tap + Idle earnings your referrals generate from the moment they join</p>
                       <Badge variant="outline" className="text-xs">Passive Income Forever</Badge>
+                      <p className="text-xs text-muted-foreground mt-2 italic">Claim resets the baseline to prevent double counting</p>
                     </div>
                   </div>
 
@@ -577,10 +578,10 @@ export function TasksReferralsScreen() {
                       <p className="font-medium text-sm">Milestone Bonuses</p>
                       <p className="text-xs text-muted-foreground mb-2">Extra XP rewards for reaching referral milestones</p>
                       <div className="grid grid-cols-2 gap-2">
-                        <Badge variant="outline" className="text-xs">5 refs: +3k XP</Badge>
-                        <Badge variant="outline" className="text-xs">10 refs: +8k XP</Badge>
-                        <Badge variant="outline" className="text-xs">25 refs: +25k XP</Badge>
-                        <Badge variant="outline" className="text-xs">50 refs: +50k XP</Badge>
+                        <Badge variant="outline" className="text-xs">5 refs: +5k XP</Badge>
+                        <Badge variant="outline" className="text-xs">10 refs: +15k XP</Badge>
+                        <Badge variant="outline" className="text-xs">25 refs: +50k XP</Badge>
+                        <Badge variant="outline" className="text-xs">50 refs: +150k XP</Badge>
                       </div>
                     </div>
                   </div>
