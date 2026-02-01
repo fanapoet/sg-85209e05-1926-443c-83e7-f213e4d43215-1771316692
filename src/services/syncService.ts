@@ -183,38 +183,38 @@ export async function syncPlayerState(gameState: {
       last_sync_at: new Date().toISOString()
     };
 
-    if (gameState.bzBalance !== undefined) updates.bz_balance = gameState.bzBalance;
-    if (gameState.bbBalance !== undefined) updates.bb_balance = gameState.bbBalance;
-    if (gameState.xp !== undefined) updates.xp = gameState.xp;
+    if (gameState.bzBalance !== undefined) updates.bz_balance = Number(gameState.bzBalance);
+    if (gameState.bbBalance !== undefined) updates.bb_balance = Number(gameState.bbBalance);
+    if (gameState.xp !== undefined) updates.xp = Number(gameState.xp);
     if (gameState.tier !== undefined) updates.tier = gameState.tier;
-    if (gameState.currentEnergy !== undefined) updates.current_energy = gameState.currentEnergy;
-    if (gameState.maxEnergy !== undefined) updates.max_energy = gameState.maxEnergy;
-    if (gameState.energyRecoveryRate !== undefined) updates.energy_recovery_rate = gameState.energyRecoveryRate;
+    if (gameState.currentEnergy !== undefined) updates.current_energy = Number(gameState.currentEnergy);
+    if (gameState.maxEnergy !== undefined) updates.max_energy = Number(gameState.maxEnergy);
+    if (gameState.energyRecoveryRate !== undefined) updates.energy_recovery_rate = Number(gameState.energyRecoveryRate);
     if (gameState.lastEnergyUpdate !== undefined) updates.last_energy_update = new Date(gameState.lastEnergyUpdate).toISOString();
-    if (gameState.boosterIncomeTap !== undefined) updates.booster_income_per_tap = gameState.boosterIncomeTap;
-    if (gameState.boosterEnergyTap !== undefined) updates.booster_energy_per_tap = gameState.boosterEnergyTap;
-    if (gameState.boosterCapacity !== undefined) updates.booster_energy_capacity = gameState.boosterCapacity;
-    if (gameState.boosterRecovery !== undefined) updates.booster_recovery_rate = gameState.boosterRecovery;
-    if (gameState.quickChargeUsesRemaining !== undefined) updates.quickcharge_uses_remaining = gameState.quickChargeUsesRemaining;
+    if (gameState.boosterIncomeTap !== undefined) updates.booster_income_per_tap = Number(gameState.boosterIncomeTap);
+    if (gameState.boosterEnergyTap !== undefined) updates.booster_energy_per_tap = Number(gameState.boosterEnergyTap);
+    if (gameState.boosterCapacity !== undefined) updates.booster_energy_capacity = Number(gameState.boosterCapacity);
+    if (gameState.boosterRecovery !== undefined) updates.booster_recovery_rate = Number(gameState.boosterRecovery);
+    if (gameState.quickChargeUsesRemaining !== undefined) updates.quickcharge_uses_remaining = Number(gameState.quickChargeUsesRemaining);
     if (gameState.quickChargeCooldownUntil !== undefined) {
       updates.quickcharge_cooldown_until = gameState.quickChargeCooldownUntil ? new Date(gameState.quickChargeCooldownUntil).toISOString() : null;
     }
     if (gameState.quickChargeLastReset !== undefined) updates.quickcharge_last_reset = new Date(gameState.quickChargeLastReset).toISOString();
-    if (gameState.totalTaps !== undefined) updates.total_taps = gameState.totalTaps;
-    if (gameState.todayTaps !== undefined) updates.taps_today = gameState.todayTaps;
+    if (gameState.totalTaps !== undefined) updates.total_taps = Number(gameState.totalTaps);
+    if (gameState.todayTaps !== undefined) updates.taps_today = Number(gameState.todayTaps);
     if (gameState.dailyTapsResetAt !== undefined) updates.daily_taps_reset_at = new Date(gameState.dailyTapsResetAt).toISOString();
     if (gameState.lastClaimTimestamp !== undefined) updates.last_claim_timestamp = new Date(gameState.lastClaimTimestamp).toISOString();
     if (gameState.activeBuildPartId !== undefined) updates.active_build_part_id = gameState.activeBuildPartId;
     if (gameState.activeBuildEndTime !== undefined) {
       updates.active_build_end_time = gameState.activeBuildEndTime ? new Date(gameState.activeBuildEndTime).toISOString() : null;
     }
-    if (gameState.totalReferrals !== undefined) updates.total_referrals = gameState.totalReferrals;
-    if (gameState.dailyRewardStreak !== undefined) updates.daily_reward_streak = gameState.dailyRewardStreak;
+    if (gameState.totalReferrals !== undefined) updates.total_referrals = Number(gameState.totalReferrals);
+    if (gameState.dailyRewardStreak !== undefined) updates.daily_reward_streak = Number(gameState.dailyRewardStreak);
     if (gameState.dailyRewardLastClaim !== undefined) {
       updates.daily_reward_last_claim = gameState.dailyRewardLastClaim ? new Date(gameState.dailyRewardLastClaim).toISOString() : null;
     }
     if (gameState.nftsOwned !== undefined) updates.nfts_owned = gameState.nftsOwned;
-    if (gameState.idleBzPerHour !== undefined) updates.idle_bz_per_hour = gameState.idleBzPerHour;
+    if (gameState.idleBzPerHour !== undefined) updates.idle_bz_per_hour = Number(gameState.idleBzPerHour);
     if (gameState.lastIdleClaimAt !== undefined) updates.last_idle_claim_at = new Date(gameState.lastIdleClaimAt).toISOString();
 
     const { error } = await supabase
