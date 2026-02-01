@@ -1,162 +1,53 @@
 import { useGameState } from "@/contexts/GameStateContext";
-import { useState, useEffect } from "react";
-import { useTheme } from "next-themes";
+import { useState, useEffect, useCallback } from "react";
+import { Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Zap, Clock, TrendingUp } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { recordReferralEarnings } from "@/services/referralService";
-import type React from "react";
+import { Progress } from "@/components/ui/progress";
+import Image from "next/image";
 
 interface FloatingNumber {
   id: number;
-  value: string;
+  value: number;
   x: number;
   y: number;
-}
-
-interface Ripple {
-  id: number;
-  x: number;
-  y: number;
-}
-
-interface Particle {
-  id: number;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  color: string;
+  tierBonus: number;
 }
 
 export function TapScreen() {
   const { 
-    bz, 
     energy, 
     maxEnergy, 
+    bz, 
     addBZ, 
-    setEnergy, 
-    tier, 
-    incrementTaps,
-    totalTaps
+    subtractEnergy, 
+    tier,
+    quickChargeUsesRemaining,
+    quickChargeCooldownUntil,
+    useQuickCharge: triggerQuickCharge,
+    totalTaps,
+    incrementTotalTaps
   } = useGameState();
 
-  const { theme, resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  
-  const [isOnCooldown, setIsOnCooldown] = useState(false);
-  const [quickChargeUses, setQuickChargeUses] = useState(5);
-  const [quickChargeCooldown, setQuickChargeCooldown] = useState(0);
   const [floatingNumbers, setFloatingNumbers] = useState<FloatingNumber[]>([]);
-  const [ripples, setRipples] = useState<Ripple[]>([]);
-  const [particles, setParticles] = useState<Particle[]>([]);
-  const [displayMaxEnergy, setDisplayMaxEnergy] = useState(maxEnergy);
-  const [recoveryRate, setRecoveryRate] = useState(0.3);
-  const [bunnyScale, setBunnyScale] = useState(1);
-  const [bunnyGlow, setBunnyGlow] = useState(false);
+  const [lastTapTime, setLastTapTime] = useState(0);
+  const [canTap, setCanTap] = useState(true);
+  const TAP_COOLDOWN = 110;
 
-  // Ensure theme is mounted
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  const isDarkTheme = mounted ? resolvedTheme === "dark" : true;
-
-  // Load persisted QuickCharge state and check for 24h reset
-  useEffect(() => {
-    const saved = localStorage.getItem("quickCharge");
-    const now = Date.now();
-    
-    if (saved) {
-      const data = JSON.parse(saved);
-      
-      const timeSinceReset = now - (data.lastResetTime || 0);
-      const TWENTY_FOUR_HOURS = 86400000;
-      
-      if (timeSinceReset >= TWENTY_FOUR_HOURS) {
-        setQuickChargeUses(5);
-        setQuickChargeCooldown(0);
-        localStorage.setItem("quickCharge", JSON.stringify({
-          uses: 5,
-          cooldownEnd: 0,
-          lastResetTime: now
-        }));
-      } else {
-        setQuickChargeUses(data.uses || 5);
-        setQuickChargeCooldown(Math.max(0, (data.cooldownEnd || 0) - now));
-      }
-    } else {
-      localStorage.setItem("quickCharge", JSON.stringify({
-        uses: 5,
-        cooldownEnd: 0,
-        lastResetTime: now
-      }));
-    }
-  }, []);
-
-  // Cooldown countdown
-  useEffect(() => {
-    if (quickChargeCooldown <= 0) return;
-    const interval = setInterval(() => {
-      setQuickChargeCooldown((prev) => Math.max(0, prev - 1000));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [quickChargeCooldown]);
-
-  // Check for 24h reset every minute
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const saved = localStorage.getItem("quickCharge");
-      if (!saved) return;
-      
-      const data = JSON.parse(saved);
-      const now = Date.now();
-      const timeSinceReset = now - (data.lastResetTime || 0);
-      const TWENTY_FOUR_HOURS = 86400000;
-      
-      if (timeSinceReset >= TWENTY_FOUR_HOURS) {
-        setQuickChargeUses(5);
-        setQuickChargeCooldown(0);
-        localStorage.setItem("quickCharge", JSON.stringify({
-          uses: 5,
-          cooldownEnd: 0,
-          lastResetTime: now
-        }));
-      }
-    }, 60000);
-    
-    return () => clearInterval(interval);
-  }, []);
-
-  // Get booster levels from localStorage
   const getBoosterLevel = (key: string): number => {
-    const saved = localStorage.getItem("boosters");
-    if (!saved) return 1;
-    const data = JSON.parse(saved);
-    return data[key] || 1;
+    try {
+      if (typeof window === "undefined") return 1;
+      const saved = localStorage.getItem("boosters");
+      if (!saved) return 1;
+      const data = JSON.parse(saved);
+      return data[key] || 1;
+    } catch {
+      return 1;
+    }
   };
-
-  // Sync with global state and boosters
-  useEffect(() => {
-    const checkBoosters = () => {
-      const energyCapacityLevel = getBoosterLevel("energyCapacity");
-      const recoveryRateLevel = getBoosterLevel("recoveryRate");
-      
-      const newMaxEnergy = 1500 + (energyCapacityLevel - 1) * 100;
-      setDisplayMaxEnergy(newMaxEnergy);
-      
-      const newRecoveryRate = 0.3 + (recoveryRateLevel - 1) * 0.05;
-      setRecoveryRate(newRecoveryRate);
-    };
-
-    checkBoosters();
-    const interval = setInterval(checkBoosters, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const incomePerTapLevel = getBoosterLevel("incomePerTap");
   const energyPerTapLevel = getBoosterLevel("energyPerTap");
+  const energyCostPerTap = energyPerTapLevel;
 
   const getTierMultiplier = (): number => {
     if (tier === "Bronze") return 1.0;
@@ -167,339 +58,182 @@ export function TapScreen() {
     return 1.0;
   };
 
+  const getTierBonus = (): number => {
+    const multiplier = getTierMultiplier();
+    return Math.floor((multiplier - 1) * 100);
+  };
+
   const tierMultiplier = getTierMultiplier();
+  const tierBonus = getTierBonus();
+
   const baseTapReward = 10;
-  const tapReward = Math.ceil(baseTapReward * incomePerTapLevel * tierMultiplier);
-  const energyCost = energyPerTapLevel;
+  const tapReward = Math.floor(baseTapReward * incomePerTapLevel * tierMultiplier);
 
-  const createParticles = (x: number, y: number) => {
-    const newParticles: Particle[] = [];
-    const colors = ["#fbbf24", "#f59e0b", "#f97316", "#ef4444", "#ec4899"];
-    
-    for (let i = 0; i < 12; i++) {
-      const angle = (Math.PI * 2 * i) / 12;
-      const speed = 2 + Math.random() * 2;
-      newParticles.push({
-        id: Date.now() + i,
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        color: colors[Math.floor(Math.random() * colors.length)]
-      });
-    }
-    
-    setParticles((prev) => [...prev, ...newParticles]);
-    
+  const handleTap = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    const now = Date.now();
+    if (!canTap || now - lastTapTime < TAP_COOLDOWN) return;
+    if (energy < energyCostPerTap) return;
+
+    setCanTap(false);
+    setLastTapTime(now);
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    const newFloating: FloatingNumber = {
+      id: now,
+      value: tapReward,
+      x,
+      y,
+      tierBonus
+    };
+
+    setFloatingNumbers(prev => [...prev, newFloating]);
     setTimeout(() => {
-      setParticles((prev) => prev.filter((p) => !newParticles.find((np) => np.id === p.id)));
+      setFloatingNumbers(prev => prev.filter(f => f.id !== newFloating.id));
     }, 1000);
-  };
 
-  const handleTap = async (e: React.MouseEvent<HTMLButtonElement> | React.TouchEvent<HTMLButtonElement>) => {
-    if (energy < energyCost || isOnCooldown) return;
-
-    let clientX, clientY;
-    if ('touches' in e) {
-      clientX = e.touches[0].clientX;
-      clientY = e.touches[0].clientY;
-    } else {
-      clientX = (e as React.MouseEvent).clientX;
-      clientY = (e as React.MouseEvent).clientY;
-    }
-    
-    const target = e.currentTarget as HTMLElement;
-    const rect = target.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    setIsOnCooldown(true);
-    setTimeout(() => setIsOnCooldown(false), 110);
-
-    setEnergy(energy - energyCost);
     addBZ(tapReward);
-    
-    incrementTaps(1, tapReward);
+    subtractEnergy(energyCostPerTap);
+    incrementTotalTaps();
 
-    // Bunny animation
-    setBunnyScale(1.15);
-    setBunnyGlow(true);
-    setTimeout(() => {
-      setBunnyScale(1);
-      setBunnyGlow(false);
-    }, 150);
-
-    // Ripple effect
-    setRipples((prev) => [...prev, { id: Date.now(), x, y }]);
-
-    // Milestone particles (every 100th tap)
-    if ((totalTaps + 1) % 100 === 0) {
-      createParticles(x, y);
-    }
-
-    // Floating numbers
-    setFloatingNumbers((prev) => [...prev, { 
-      id: Date.now(), 
-      value: (totalTaps + 1) % 100 === 0 ? `🎉 +${tapReward} MILESTONE!` : `+${tapReward}`, 
-      x, 
-      y 
-    }]);
-  };
+    setTimeout(() => setCanTap(true), TAP_COOLDOWN);
+  }, [canTap, lastTapTime, energy, energyCostPerTap, tapReward, addBZ, subtractEnergy, tierBonus, incrementTotalTaps]);
 
   const handleQuickCharge = () => {
-    if (quickChargeUses <= 0 || quickChargeCooldown > 0 || energy >= displayMaxEnergy * 0.5) return;
+    if (energy >= maxEnergy * 0.5) return;
+    if (quickChargeUsesRemaining <= 0) return;
+    if (quickChargeCooldownUntil && Date.now() < quickChargeCooldownUntil) return;
 
-    setEnergy(displayMaxEnergy);
-    setQuickChargeUses((prev) => prev - 1);
-    const cooldownEnd = Date.now() + 3600000;
-    setQuickChargeCooldown(3600000);
-
-    const saved = localStorage.getItem("quickCharge");
-    const lastResetTime = saved ? JSON.parse(saved).lastResetTime : Date.now();
-    
-    localStorage.setItem("quickCharge", JSON.stringify({
-      uses: quickChargeUses - 1,
-      cooldownEnd,
-      lastResetTime
-    }));
+    triggerQuickCharge();
   };
 
-  const formatCooldown = (ms: number): string => {
-    const minutes = Math.floor(ms / 60000);
-    const seconds = Math.floor((ms % 60000) / 1000);
+  const formatTime = (ms: number): string => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  const canQuickCharge = quickChargeUses > 0 && quickChargeCooldown === 0 && energy < displayMaxEnergy * 0.5;
-  const isEnergyFull = energy >= displayMaxEnergy * 0.95;
+  const quickChargeAvailable = quickChargeUsesRemaining > 0 && 
+    (!quickChargeCooldownUntil || Date.now() >= quickChargeCooldownUntil);
+  const quickChargeDisabled = energy >= maxEnergy * 0.5 || !quickChargeAvailable;
+  const quickChargeCooldownRemaining = quickChargeCooldownUntil && Date.now() < quickChargeCooldownUntil
+    ? quickChargeCooldownUntil - Date.now()
+    : 0;
+
+  useEffect(() => {
+    if (quickChargeCooldownRemaining > 0) {
+      const interval = setInterval(() => {}, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [quickChargeCooldownRemaining]);
+
+  const energyPercent = Math.min(100, (energy / maxEnergy) * 100);
 
   return (
-    <div className="p-3 space-y-2 max-w-2xl mx-auto pb-24">
-      {/* Ultra-Compact Stats - Single Row */}
-      <Card className="p-1.5">
-        <div className="grid grid-cols-2 gap-2">
-          {/* Left: Lifetime Taps */}
-          <div className="flex items-center gap-1.5">
-            <TrendingUp className="h-3 w-3 text-orange-500" />
-            <div>
-              <span className="text-[10px] text-muted-foreground">Taps</span>
-              <div className="text-sm font-bold text-orange-500">
-                {totalTaps.toLocaleString()}
-              </div>
-            </div>
+    <div className="h-[calc(100vh-120px)] flex flex-col">
+      {/* Top Stats */}
+      <div className="px-6 pt-4 pb-2">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-left">
+            <p className="text-sm text-muted-foreground">Taps</p>
+            <p className="text-2xl font-bold text-primary">{totalTaps.toLocaleString()}</p>
           </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Energy</p>
+            <p className="text-2xl font-bold">{Math.floor(energy)}/{maxEnergy}</p>
+          </div>
+        </div>
+        <Progress value={energyPercent} className="h-3 mb-2" />
+      </div>
 
-          {/* Right: Energy */}
-          <div className="flex items-center gap-1.5">
-            <Zap className={`h-3 w-3 text-yellow-500 ${isEnergyFull ? 'animate-pulse' : ''}`} />
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-0.5">
-                <span className="text-[10px] text-muted-foreground">Energy</span>
-                {isEnergyFull && (
-                  <span className="text-[8px] text-green-500 font-semibold">⚡FULL</span>
-                )}
-              </div>
-              <div className="text-xs font-bold mb-0.5">
-                {Math.floor(energy)}/{displayMaxEnergy}
-              </div>
-              <div className="w-full bg-muted rounded-full h-1 relative overflow-hidden">
-                <div
-                  className={`h-1 rounded-full transition-all duration-300 ${
-                    isEnergyFull 
-                      ? 'bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 animate-pulse shadow-lg shadow-yellow-500/50' 
-                      : 'bg-yellow-500'
-                  }`}
-                  style={{ width: `${(energy / displayMaxEnergy) * 100}%` }}
+      {/* Center Circle - Takes remaining space */}
+      <div className="flex-1 flex items-center justify-center px-6">
+        <div className="relative" style={{ width: '280px', height: '280px' }}>
+          <button
+            onClick={handleTap}
+            disabled={energy < energyCostPerTap}
+            className="w-full h-full rounded-full bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 dark:from-pink-900 dark:via-purple-900 dark:to-blue-900 border-4 border-primary shadow-2xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
+            style={{ touchAction: 'manipulation' }}
+          >
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <div className="relative w-32 h-32 mb-2">
+                <Image
+                  src="/bunergy-icon.png"
+                  alt="Tap"
+                  fill
+                  className="object-contain drop-shadow-2xl"
+                  priority
                 />
               </div>
+              <div className="text-center">
+                <p className="text-3xl font-bold drop-shadow-lg">
+                  +{tapReward.toLocaleString()}
+                </p>
+                {tierBonus > 0 && (
+                  <p className="text-sm text-green-600 dark:text-green-400 font-semibold drop-shadow">
+                    (+{tierBonus}%)
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        </div>
-      </Card>
 
-      {/* Ultra-Compact QuickCharge */}
-      <div className="flex items-center justify-between gap-2 px-1">
-        <div className="flex items-center gap-1.5">
-          <Zap className="h-3 w-3 text-blue-500" />
-          <span className="text-xs font-semibold">QuickCharge</span>
-          <span className="text-[10px] text-muted-foreground">{quickChargeUses}/5</span>
+            {floatingNumbers.map(num => (
+              <div
+                key={num.id}
+                className="absolute text-2xl font-bold text-primary animate-float pointer-events-none"
+                style={{
+                  left: `${num.x}px`,
+                  top: `${num.y}px`,
+                  animation: 'float 1s ease-out forwards'
+                }}
+              >
+                +{num.value.toLocaleString()}
+                {num.tierBonus > 0 && (
+                  <span className="text-sm text-green-600 dark:text-green-400 ml-1">
+                    (+{num.tierBonus}%)
+                  </span>
+                )}
+              </div>
+            ))}
+          </button>
         </div>
+      </div>
+
+      {/* QuickCharge Button */}
+      <div className="px-6 pb-6">
         <Button
           onClick={handleQuickCharge}
-          disabled={!canQuickCharge}
-          size="sm"
-          className="h-6 text-[10px] px-2"
-          variant={canQuickCharge ? "default" : "secondary"}
+          disabled={quickChargeDisabled}
+          variant={quickChargeDisabled ? "secondary" : "default"}
+          className="w-full"
+          size="lg"
         >
-          {quickChargeCooldown > 0 ? (
-            <><Clock className="mr-1 h-2.5 w-2.5" />{formatCooldown(quickChargeCooldown)}</>
-          ) : energy >= displayMaxEnergy * 0.5 ? (
-            "Need < 50%"
-          ) : quickChargeUses <= 0 ? (
-            "No uses"
+          <Zap className="mr-2 h-5 w-5" />
+          {quickChargeCooldownRemaining > 0 ? (
+            `QuickCharge (${formatTime(quickChargeCooldownRemaining)})`
+          ) : energy >= maxEnergy * 0.5 ? (
+            "Need < 50% Energy"
+          ) : quickChargeUsesRemaining === 0 ? (
+            "QuickCharge (0/5)"
           ) : (
-            "Use"
+            `QuickCharge (${quickChargeUsesRemaining}/5)`
           )}
         </Button>
       </div>
 
-      {/* Bunny Character Tap Area - Theme-Aware Background */}
-      <div className="relative flex flex-col items-center justify-center py-4">
-        {/* Tap Info */}
-        <div className="text-center mb-3">
-          <div className="text-sm text-muted-foreground">Tap to earn</div>
-          <div className="text-2xl font-bold text-yellow-500">
-            +{tapReward.toLocaleString()} BZ
-            {tierMultiplier > 1 && (
-              <span className="text-sm text-orange-500 ml-1">
-                (+{Math.floor((tierMultiplier - 1) * 100)}%)
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Bunny Character Button - Theme-Aware */}
-        <button
-          onClick={handleTap}
-          onTouchStart={handleTap}
-          disabled={energy < energyCost}
-          className="relative select-none touch-manipulation transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{ 
-            WebkitTapHighlightColor: "transparent",
-            transform: `scale(${bunnyScale})`,
-            filter: bunnyGlow ? 'drop-shadow(0 0 20px rgba(251, 191, 36, 0.8))' : 'none'
-          }}
-        >
-          {/* Theme-Aware Background Circle - MEDIUM SIZE (280px) */}
-          <div 
-            className="absolute inset-0 rounded-full backdrop-blur-lg border-2 transition-all duration-300"
-            style={{
-              width: '280px',
-              height: '280px',
-              left: '50%',
-              top: '50%',
-              transform: 'translate(-50%, -50%)',
-              backgroundColor: isDarkTheme 
-                ? 'rgba(88, 28, 135, 0.25)' 
-                : 'rgba(249, 168, 212, 0.35)',
-              borderColor: isDarkTheme 
-                ? 'rgba(168, 85, 247, 0.4)' 
-                : 'rgba(236, 72, 153, 0.5)',
-              boxShadow: isDarkTheme 
-                ? '0 8px 32px rgba(168, 85, 247, 0.3), inset 0 0 60px rgba(139, 92, 246, 0.1)' 
-                : '0 8px 32px rgba(236, 72, 153, 0.2), inset 0 0 60px rgba(249, 168, 212, 0.15)'
-            }}
-          />
-
-          {/* Bunergy Logo - Centered in Circle */}
-          <img
-            src="/bunergy-icon.png"
-            alt="Bunergy Logo"
-            className="w-24 h-24 object-contain pointer-events-none select-none relative z-10"
-            draggable={false}
-            style={{
-              filter: isDarkTheme ? 'drop-shadow(0 4px 12px rgba(168, 85, 247, 0.4))' : 'drop-shadow(0 4px 12px rgba(236, 72, 153, 0.3))'
-            }}
-          />
-            
-          {/* Glow effect on tap */}
-          {bunnyGlow && (
-            <div className="absolute inset-0 rounded-full bg-yellow-400/20 animate-ping z-10" />
-          )}
-
-          {/* Character Level Badge */}
-          <div className="absolute -top-2 -right-2 bg-gradient-to-br from-yellow-400 to-orange-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg z-20">
-            Lv {Math.floor(totalTaps / 1000) + 1}
-          </div>
-        </button>
-
-        {/* Ripple Effects */}
-        {ripples.map((ripple) => (
-          <div
-            key={ripple.id}
-            className="absolute pointer-events-none"
-            style={{
-              left: ripple.x,
-              top: ripple.y,
-            }}
-            onAnimationEnd={() => {
-              setRipples((prev) => prev.filter((r) => r.id !== ripple.id));
-            }}
-          >
-            <div className="absolute w-0 h-0 rounded-full border-4 border-yellow-400/60 animate-ripple" />
-          </div>
-        ))}
-
-        {/* Particle Effects */}
-        {particles.map((particle) => (
-          <div
-            key={particle.id}
-            className="absolute pointer-events-none w-2 h-2 rounded-full animate-particle"
-            style={{
-              left: particle.x,
-              top: particle.y,
-              backgroundColor: particle.color,
-              '--particle-vx': `${particle.vx * 30}px`,
-              '--particle-vy': `${particle.vy * 30}px`,
-            } as React.CSSProperties}
-          />
-        ))}
-
-        {/* Floating Numbers */}
-        {floatingNumbers.map((num) => (
-          <div
-            key={num.id}
-            className={`absolute pointer-events-none font-bold animate-float ${
-              num.value.includes('MILESTONE') ? 'text-3xl text-orange-500' : 'text-2xl text-yellow-500'
-            }`}
-            style={{
-              left: num.x,
-              top: num.y,
-            }}
-            onAnimationEnd={() => {
-              setFloatingNumbers((prev) => prev.filter((n) => n.id !== num.id));
-            }}
-          >
-            {num.value}
-          </div>
-        ))}
-      </div>
-
       <style jsx>{`
         @keyframes float {
-          0% { opacity: 1; transform: translateY(0); }
-          100% { opacity: 0; transform: translateY(-80px); }
-        }
-        
-        @keyframes ripple {
-          0% { width: 0; height: 0; opacity: 1; }
-          100% { width: 200px; height: 200px; opacity: 0; margin-left: -100px; margin-top: -100px; }
-        }
-        
-        @keyframes particle {
-          0% { opacity: 1; transform: translate(0, 0) scale(1); }
-          100% { opacity: 0; transform: translate(var(--particle-vx), var(--particle-vy)) scale(0); }
-        }
-        
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-        
-        .animate-float {
-          animation: float 1.5s ease-out;
-        }
-        
-        .animate-ripple {
-          animation: ripple 0.6s ease-out;
-        }
-        
-        .animate-particle {
-          animation: particle 1s ease-out forwards;
-        }
-        
-        .animate-shimmer {
-          animation: shimmer 2s infinite;
+          0% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-100px) scale(1.5);
+          }
         }
       `}</style>
     </div>

@@ -101,7 +101,7 @@ const allParts: Part[] = [
   { key: "s1p5", name: "Structural Core", icon: Container, stage: 1, index: 5, baseCost: 900, baseYield: 18 },
   { key: "s1p6", name: "Mounting Brackets", icon: Wrench, stage: 1, index: 6, baseCost: 1000, baseYield: 20 },
   { key: "s1p7", name: "Reinforcement Rods", icon: Shield, stage: 1, index: 7, baseCost: 1100, baseYield: 22 },
-  { key: "s1p8", name: "Base Insulation", icon: Slice, stage: 1, index: 8, baseCost: 1200, baseYield: 24 },
+  { key: "s1p8", name: "Base Insulation", icon: Package, stage: 1, index: 8, baseCost: 1200, baseYield: 24 },
   { key: "s1p9", name: "Leveling System", icon: Gauge, stage: 1, index: 9, baseCost: 1300, baseYield: 26 },
   { key: "s1p10", name: "Foundation Seal", icon: Package, stage: 1, index: 10, baseCost: 1400, baseYield: 28 },
 
@@ -155,7 +155,25 @@ const allParts: Part[] = [
 ];
 
 export function BuildScreen() {
-  const { bz, subtractBZ, addBZ, referralCount, tier, setBzPerHour, incrementUpgrades, addXP, markIdleClaimed, hasClaimedIdleToday, bb, subtractBB } = useGameState();
+  const { 
+    bz, 
+    subtractBZ, 
+    addBZ, 
+    referralCount, 
+    tier, 
+    setBzPerHour, 
+    incrementUpgrades, 
+    addXP, 
+    markIdleClaimed, 
+    hasClaimedIdleToday, 
+    bb, 
+    subtractBB,
+    xp,
+    energy,
+    maxEnergy,
+    totalTaps,
+    lastClaimTimestamp
+  } = useGameState();
   const { toast } = useToast();
   const [partStates, setPartStates] = useState<Record<PartKey, PartState>>({});
   const [idleState, setIdleState] = useState<IdleState>({
@@ -261,6 +279,22 @@ export function BuildScreen() {
             buildEndsAt: undefined,
           }).catch(console.error);
         });
+
+        // Sync player state (BB spent, XP gained)
+        setTimeout(() => {
+          import("@/services/syncService").then(({ syncPlayerState }) => {
+            syncPlayerState({
+              bz,
+              bb,
+              xp,
+              tier,
+              energy,
+              maxEnergy,
+              totalTaps,
+              lastClaimTimestamp,
+            }).catch(console.error);
+          });
+        }, 1000);
       }
     });
 
@@ -380,7 +414,8 @@ export function BuildScreen() {
       localStorage.setItem("idleState", JSON.stringify(newIdleState));
       
       markIdleClaimed();
-
+      // Removed direct setLastClaimTimestamp call as it is handled by markIdleClaimed
+      
       const trackEarnings = async () => {
         try {
           const user = getCurrentTelegramUser();
@@ -587,6 +622,22 @@ export function BuildScreen() {
           buildEndsAt: upgradeTime > 0 ? now + upgradeTime : undefined,
         }).catch(console.error);
       });
+
+      // Sync player state (BZ spent)
+      setTimeout(() => {
+        import("@/services/syncService").then(({ syncPlayerState }) => {
+          syncPlayerState({
+            bz,
+            bb,
+            xp,
+            tier,
+            energy,
+            maxEnergy,
+            totalTaps,
+            lastClaimTimestamp,
+          }).catch(console.error);
+        });
+      }, 1000);
     }
   };
 

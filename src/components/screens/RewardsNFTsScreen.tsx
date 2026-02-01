@@ -294,6 +294,22 @@ export function RewardsNFTsScreen() {
       setLastClaimDate(today);
       localStorage.setItem("dailyStreak", newStreak.toString());
       localStorage.setItem("lastClaimDate", today);
+
+      // Sync player state to database
+      setTimeout(() => {
+        import("@/services/syncService").then(({ syncPlayerState }) => {
+          syncPlayerState({
+            bz: gameState.bz,
+            bb: gameState.bb,
+            xp: gameState.xp,
+            tier: gameState.tier,
+            energy: gameState.energy,
+            maxEnergy: gameState.maxEnergy,
+            totalTaps: gameState.totalTaps,
+            lastClaimTimestamp: gameState.lastClaimTimestamp,
+          }).catch(console.error);
+        });
+      }, 500);
     } catch (error) {
       console.error("Error claiming daily reward:", error);
     }
@@ -338,6 +354,27 @@ export function RewardsNFTsScreen() {
         setOwnedNFTs(updated);
         localStorage.setItem("ownedNFTs", JSON.stringify(updated));
       }
+
+      // Record NFT purchase and sync player state
+      setTimeout(() => {
+        import("@/services/syncService").then(({ purchaseNFT, syncPlayerState }) => {
+          // Record NFT purchase - Pass 'BB' as currency since all NFTs in the list use BB except free ones
+          // Free NFTs cost 0 so currency doesn't matter much but we should pass one
+          purchaseNFT(nft.key, nft.price, 'BB').catch(console.error);
+
+          // Sync updated BB balance
+          syncPlayerState({
+            bz: gameState.bz,
+            bb: gameState.bb,
+            xp: gameState.xp,
+            tier: gameState.tier,
+            energy: gameState.energy,
+            maxEnergy: gameState.maxEnergy,
+            totalTaps: gameState.totalTaps,
+            lastClaimTimestamp: gameState.lastClaimTimestamp,
+          }).catch(console.error);
+        });
+      }, 500);
     } catch (error) {
       console.error("Error purchasing NFT:", error);
     }

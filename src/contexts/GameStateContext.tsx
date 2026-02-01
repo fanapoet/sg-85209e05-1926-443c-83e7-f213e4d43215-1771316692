@@ -34,6 +34,10 @@ interface GameState {
   hasClaimedIdleToday: boolean;
   lastClaimTimestamp: number;
   
+  // QuickCharge State
+  quickChargeUsesRemaining: number;
+  quickChargeCooldownUntil: number | null;
+
   // Sync status
   isSyncing: boolean;
   lastSyncTime: number;
@@ -42,6 +46,8 @@ interface GameState {
   
   // Methods
   addBZ: (amount: number) => void;
+  subtractEnergy: (amount: number) => void;
+  useQuickCharge: () => void;
   subtractBZ: (amount: number) => boolean;
   addBB: (amount: number) => void;
   subtractBB: (amount: number) => boolean;
@@ -52,6 +58,7 @@ interface GameState {
   addReferral: () => void;
   
   // Task tracking methods
+  incrementTotalTaps: () => void;
   incrementTaps: (count: number, income: number) => void;
   incrementUpgrades: () => void;
   incrementConversions: (amount: number) => void;
@@ -103,6 +110,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [hasClaimedIdleToday, setHasClaimedIdleToday] = useState(() => safeGetItem("bunergy_hasClaimedIdleToday", false));
   const [lastResetDate, setLastResetDate] = useState(() => safeGetItem("bunergy_lastResetDate", new Date().toDateString()));
   const [lastClaimTimestamp, setLastClaimTimestamp] = useState(() => safeGetItem("bunergy_lastClaimTimestamp", Date.now()));
+
+  // QuickCharge State
+  const [quickChargeUsesRemaining, setQuickChargeUsesRemaining] = useState(() => safeGetItem("bunergy_qc_uses", 5));
+  const [quickChargeCooldownUntil, setQuickChargeCooldownUntil] = useState<number | null>(() => safeGetItem("bunergy_qc_cooldown", null));
 
   // Sync State
   const [isSyncing, setIsSyncing] = useState(false);
@@ -158,7 +169,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkSync = setInterval(() => {
       const status = getSyncStatus();
-      setSyncErrorCount(status.errorCount);
+      // status does not have errorCount currently, removing it to fix type error
+      // setSyncErrorCount(status.errorCount); 
     }, 5000);
 
     return () => clearInterval(checkSync);
@@ -191,50 +203,52 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
         // Step 2: Load player state from database
         console.log("📊 [GameState] Loading player state...");
-        const result = await loadPlayerState();
+        const serverData = await loadPlayerState();
         
         console.log("📊 [GameState] Load result:", {
-          success: result.success,
-          hasData: !!result.data,
-          error: result.error,
+          hasData: !!serverData,
         });
         
-        if (result.success && result.data) {
-          const serverData = result.data;
-          
+        if (serverData) {
           console.log("📊 [GameState] Server data loaded:", {
-            bz: serverData.bz,
-            bb: serverData.bb,
+            bz: serverData.bz_balance,
+            bb: serverData.bb_balance,
             xp: serverData.xp,
-            totalTaps: serverData.totalTaps,
+            totalTaps: serverData.total_taps,
           });
           
           // Merge server data (take max values - never decrease)
-          setBz(Math.max(bz, serverData.bz));
-          setBb(Math.max(bb, serverData.bb));
-          setXp(Math.max(xp, serverData.xp));
-          setEnergyState(serverData.energy);
-          setMaxEnergyState(serverData.maxEnergy);
-          setTotalTaps(Math.max(totalTaps, serverData.totalTaps));
-          setTodayTaps(Math.max(todayTaps, serverData.tapsToday || 0));
-          setLastClaimTimestamp(Math.max(lastClaimTimestamp, serverData.lastClaimTimestamp));
+          setBz(Math.max(bz, Number(serverData.bz_balance)));
+          setBb(Math.max(bb, Number(serverData.bb_balance)));
+          setXp(Math.max(xp, Number(serverData.xp)));
+          setEnergyState(Number(serverData.current_energy));
+          setMaxEnergyState(Number(serverData.max_energy));
+          setTotalTaps(Math.max(totalTaps, Number(serverData.total_taps)));
+          // Cast to any to avoid TS error if types aren't fully synced yet
+          setTodayTaps(Math.max(todayTaps, (serverData as any).taps_today || 0));
+          
+          // Fix date handling for lastClaimTimestamp
+          const serverClaimTime = serverData.last_claim_timestamp ? new Date(serverData.last_claim_timestamp).getTime() : 0;
+          setLastClaimTimestamp(Math.max(lastClaimTimestamp, serverClaimTime));
           
           // Load boosters
-          const savedBoosters = safeGetItem("boosters", {});
           const mergedBoosters = {
-            incomePerTap: Math.max(savedBoosters.incomePerTap || 1, serverData.boosters.incomePerTap),
-            energyPerTap: Math.max(savedBoosters.energyPerTap || 1, serverData.boosters.energyPerTap),
-            energyCapacity: Math.max(savedBoosters.energyCapacity || 1, serverData.boosters.energyCapacity),
-            recoveryRate: Math.max(savedBoosters.recoveryRate || 1, serverData.boosters.recoveryRate),
+            incomePerTap: Math.max(1, serverData.booster_income_per_tap),
+            energyPerTap: Math.max(1, serverData.booster_energy_per_tap),
+            energyCapacity: Math.max(1, serverData.booster_energy_capacity),
+            recoveryRate: Math.max(1, serverData.booster_recovery_rate),
           };
           safeSetItem("boosters", mergedBoosters);
           
           // Load QuickCharge
-          const savedQC = safeGetItem("quickCharge", {});
+          const serverCooldown = serverData.quickcharge_cooldown_until ? new Date(serverData.quickcharge_cooldown_until).getTime() : null;
+          setQuickChargeUsesRemaining(serverData.quickcharge_uses_remaining);
+          setQuickChargeCooldownUntil(serverCooldown);
+          
           const mergedQC = {
-            usesRemaining: Math.max(savedQC.usesRemaining || 5, serverData.quickCharge.usesRemaining),
-            cooldownEndTime: serverData.quickCharge.cooldownEndTime || savedQC.cooldownEndTime,
-            lastReset: Math.max(savedQC.lastReset || Date.now(), serverData.quickCharge.lastReset),
+            usesRemaining: serverData.quickcharge_uses_remaining,
+            cooldownUntil: serverCooldown,
+            lastReset: serverData.quickcharge_last_reset ? new Date(serverData.quickcharge_last_reset).getTime() : Date.now(),
           };
           safeSetItem("quickCharge", mergedQC);
           
@@ -371,16 +385,55 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const recoveryRateLevel = getBoosterLevel("recoveryRate");
-      const recoveryPerSecond = 0.3 + (recoveryRateLevel - 1) * 0.05;
-      
-      setEnergyState((prev) => {
-        const newEnergy = prev + recoveryPerSecond;
-        return newEnergy >= maxEnergy ? maxEnergy : newEnergy;
+      setEnergyState(current => {
+        // Safety check for null/undefined
+        const safeCurrent = typeof current === 'number' ? current : 0;
+        
+        // Get current booster levels
+        const capacityLevel = getBoosterLevel("energyCapacity");
+        const recoveryLevel = getBoosterLevel("recoveryRate");
+        
+        // Calculate dynamic max energy based on booster level
+        const dynamicMaxEnergy = 1500 + (capacityLevel - 1) * 100;
+        
+        // Calculate recovery rate (base 0.3 per second)
+        const baseRecovery = 0.3;
+        const recoveryMultiplier = 1 + (recoveryLevel - 1) * 0.1;
+        const actualRecovery = baseRecovery * recoveryMultiplier;
+        
+        // Don't exceed max energy
+        const newEnergy = Math.min(safeCurrent + actualRecovery, dynamicMaxEnergy);
+        
+        // Only log occasionally to avoid console spam, and use safeCurrent
+        if (Math.random() < 0.05) {
+          console.log("🔋 Energy recovery:", {
+            current: safeCurrent.toFixed(1),
+            maxEnergy: dynamicMaxEnergy,
+            capacityLevel,
+            recoveryLevel,
+            actualRecovery: actualRecovery.toFixed(3),
+            newEnergy: newEnergy.toFixed(1)
+          });
+        }
+        
+        return newEnergy;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [maxEnergy]);
+  }, []); // Empty dependency array - reads boosters fresh each time
+
+  // Recalculate maxEnergy when energy capacity booster changes
+  useEffect(() => {
+    const capacityLevel = getBoosterLevel("energyCapacity");
+    const newMaxEnergy = 1500 + (capacityLevel - 1) * 100;
+    
+    console.log("⚡ Max energy updated:", {
+      capacityLevel,
+      newMaxEnergy
+    });
+    
+    setMaxEnergy(newMaxEnergy);
+  }, [energy]); // Run when energy changes (which happens when boosters change)
 
   // Actions
   const addBZ = (amount: number) => {
@@ -418,30 +471,57 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const setBzPerHour = (val: number) => {
     setBzPerHourState(Math.max(0, val));
   };
+
+  const subtractEnergy = (amount: number) => {
+    setEnergyState(prev => Math.max(0, prev - amount));
+  };
   
   const addReferral = () => {
     setReferralCount(p => p + 1);
   };
 
-  // Tracking Actions with immediate tap sync
-  const incrementTaps = (count: number, income: number) => {
-    setTotalTaps(p => {
-      const newTotal = p + count;
+  const useQuickCharge = () => {
+    if (quickChargeUsesRemaining > 0) {
+      setQuickChargeUsesRemaining(p => p - 1);
+      setEnergyState(maxEnergy);
+      // Set 1 hour cooldown
+      const cooldownEnd = Date.now() + 60 * 60 * 1000;
+      setQuickChargeCooldownUntil(cooldownEnd);
       
-      // Immediate tap sync (debounced internally by sync service)
-      if (isOnline) {
-        syncTapData({
-          totalTaps: newTotal,
-          tapsToday: todayTaps + count,
-          totalTapIncome: totalTapIncome + income,
-          lastTapTime: Date.now(),
+      // Sync immediately
+      import("@/services/syncService").then(({ syncQuickCharge }) => {
+        syncQuickCharge({
+          usesRemaining: quickChargeUsesRemaining - 1,
+          cooldownUntil: cooldownEnd,
+          lastReset: Date.now()
         }).catch(console.error);
-      }
-      
+      });
+    }
+  };
+
+  // Tracking Actions with immediate tap sync
+  const incrementTotalTaps = () => {
+    setTotalTaps(p => {
+      const newTotal = p + 1;
+      // Trigger sync
+      incrementTaps(1, 0); 
       return newTotal;
     });
+  };
+
+  const incrementTaps = (count: number, income: number) => {
     setTodayTaps(p => p + count);
     setTotalTapIncome(p => p + income);
+    
+    // Immediate tap sync (debounced internally by sync service if needed, but here we just call it)
+    if (isOnline) {
+      syncTapData({
+        totalTaps: totalTaps + count,
+        tapsToday: todayTaps + count,
+        energy: energy,
+        bz: bz,
+      }).catch(console.error);
+    }
   };
   
   const incrementUpgrades = () => {
@@ -528,6 +608,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       setMaxEnergy, 
       setBzPerHour, 
       addReferral,
+      subtractEnergy,
+      useQuickCharge,
+      quickChargeUsesRemaining,
+      quickChargeCooldownUntil,
+      incrementTotalTaps,
       incrementTaps, 
       incrementUpgrades, 
       incrementConversions, 

@@ -178,12 +178,30 @@ export async function initializeUser() {
       };
     }
 
-    console.log("✅ User created successfully!");
-    console.log("✅ Profile data:", createdProfile);
+    console.log("✅ User created successfully!", {
+      id: newProfile.id,
+      telegram_id: newProfile.telegram_id,
+      created_at: newProfile.created_at,
+    });
+
+    // 🚀 CRITICAL: Sync initial game state
+    // Use dynamic import to avoid circular dependencies
+    import("@/services/syncService").then(({ syncInitialGameState }) => {
+      console.log("🚀 Triggering initial game state sync...");
+      syncInitialGameState(newProfile).then(syncResult => {
+        if (syncResult.success) {
+          console.log(`Initial game state sync completed for user ${newProfile.id}`);
+        } else {
+          console.error("❌ Initial game state sync failed:", syncResult.error);
+        }
+      }).catch(err => 
+        console.error("❌ Initial sync failed:", err)
+      );
+    });
 
     return {
       success: true,
-      profile: createdProfile,
+      profile: newProfile,
       isNewUser: true,
     };
   } catch (error) {

@@ -51,7 +51,7 @@ const boosters: Booster[] = [
 ];
 
 export function BoostScreen() {
-  const { bz, bzPerHour, referralCount, subtractBZ, tier, setMaxEnergy, energy, maxEnergy } = useGameState();
+  const { bz, bzPerHour, referralCount, subtractBZ, tier, setMaxEnergy, energy, maxEnergy, incrementUpgrades } = useGameState();
   const [boosterLevels, setBoosterLevels] = useState<Record<string, number>>({
     incomePerTap: 1,
     energyPerTap: 1,
@@ -108,6 +108,9 @@ export function BoostScreen() {
         const newMaxEnergy = 1500 + (currentLevel + 1 - 1) * 100;
         setMaxEnergy(newMaxEnergy);
       }
+
+      // Track upgrade count
+      incrementUpgrades();
 
       // Sync boosters to database immediately after upgrade
       import("@/services/syncService").then(({ syncBoosters }) => {
