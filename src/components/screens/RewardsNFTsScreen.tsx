@@ -19,8 +19,8 @@ import {
   Target,
   TrendingUp
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { claimDailyReward, purchaseNFT, updateWeeklyChallengeProgress, getUserNFTs } from "@/services/rewardsService";
+import { claimDailyReward, purchaseNFT, updateWeeklyChallengeProgress } from "@/services/rewardsService";
+import { getRewardState, upsertRewardState, updateLastDailyClaimDate, incrementDailyStreak, resetDailyStreak, startNewWeeklyPeriod } from "@/services/rewardStateService";
 
 interface DailyReward {
   day: number;
@@ -85,67 +85,134 @@ export function RewardsNFTsScreen() {
   const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
   const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallenge[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dbSyncError, setDbSyncError] = useState(false);
 
   const dailyRewards = getWeeklyRewards(currentWeek);
 
+  // Load reward state from database on mount
   useEffect(() => {
-    try {
-      const savedStreak = localStorage.getItem("dailyStreak");
-      const savedWeek = localStorage.getItem("currentRewardWeek");
-      const savedLastClaim = localStorage.getItem("lastClaimDate");
-      const savedNFTs = localStorage.getItem("ownedNFTs");
-      const savedChallenges = localStorage.getItem("weeklyChallenges");
+    const loadRewardState = async () => {
+      if (!gameState?.telegramId) {
+        setLoading(false);
+        return;
+      }
 
-      if (savedStreak) setDailyStreak(parseInt(savedStreak, 10) || 0);
-      if (savedWeek) setCurrentWeek(parseInt(savedWeek, 10) || 1);
-      if (savedLastClaim) setLastClaimDate(savedLastClaim);
-      if (savedNFTs) setOwnedNFTs(JSON.parse(savedNFTs));
-      
-      if (savedChallenges) {
-        setWeeklyChallenges(JSON.parse(savedChallenges));
-      } else {
-        const defaultChallenges: WeeklyChallenge[] = [
-          {
-            key: "builder",
-            name: "Builder Challenge",
-            icon: "Hammer",
-            description: "Upgrade 10 build parts this week",
-            target: 10,
-            progress: 0,
-            reward: { type: "XP", amount: 5000 },
-            claimed: false
-          },
-          {
-            key: "recruiter",
-            name: "Recruiter Challenge",
-            icon: "Users",
-            description: "Invite 3 new friends this week",
-            target: 3,
-            progress: 0,
-            reward: { type: "BB", amount: 0.003 },
-            claimed: false
-          },
-          {
-            key: "converter",
-            name: "Converter Challenge",
-            icon: "ArrowLeftRight",
-            description: "Convert 1,000,000 BZ to BB",
-            target: 1000000,
-            progress: 0,
-            reward: { type: "BZ", amount: 2000 },
-            claimed: false
+      try {
+        console.log("📥 [Rewards] Loading state from database...");
+        
+        // Fetch from database
+        const dbState = await getRewardState(gameState.telegramId);
+        
+        if (dbState) {
+          console.log("✅ [Rewards] Loaded from database:", dbState);
+          setDailyStreak(dbState.dailyStreak);
+          setCurrentWeek(dbState.currentRewardWeek);
+          setLastClaimDate(dbState.lastDailyClaimDate);
+          
+          // Update localStorage cache
+          localStorage.setItem("dailyStreak", dbState.dailyStreak.toString());
+          localStorage.setItem("currentRewardWeek", dbState.currentRewardWeek.toString());
+          if (dbState.lastDailyClaimDate) {
+            localStorage.setItem("lastClaimDate", dbState.lastDailyClaimDate);
           }
-        ];
-        setWeeklyChallenges(defaultChallenges);
-        localStorage.setItem("weeklyChallenges", JSON.stringify(defaultChallenges));
+        } else {
+          console.log("ℹ️ [Rewards] No database state, using localStorage fallback");
+          
+          // Fallback to localStorage
+          const savedStreak = localStorage.getItem("dailyStreak");
+          const savedWeek = localStorage.getItem("currentRewardWeek");
+          const savedLastClaim = localStorage.getItem("lastClaimDate");
+
+          const streak = savedStreak ? parseInt(savedStreak, 10) || 0 : 0;
+          const week = savedWeek ? parseInt(savedWeek, 10) || 1 : 1;
+          
+          setDailyStreak(streak);
+          setCurrentWeek(week);
+          if (savedLastClaim) setLastClaimDate(savedLastClaim);
+
+          // Create initial database record if user_id available
+          if (gameState.userId) {
+            console.log("📤 [Rewards] Creating initial database record...");
+            await upsertRewardState({
+              telegramId: gameState.telegramId,
+              userId: gameState.userId,
+              dailyStreak: streak,
+              currentRewardWeek: week,
+              lastDailyClaimDate: savedLastClaim,
+              currentWeeklyPeriodStart: new Date().toISOString()
+            });
+          }
+        }
+        
+        setDbSyncError(false);
+      } catch (error) {
+        console.error("❌ [Rewards] Failed to load from database:", error);
+        setDbSyncError(true);
+        
+        // Fallback to localStorage on error
+        const savedStreak = localStorage.getItem("dailyStreak");
+        const savedWeek = localStorage.getItem("currentRewardWeek");
+        const savedLastClaim = localStorage.getItem("lastClaimDate");
+
+        if (savedStreak) setDailyStreak(parseInt(savedStreak, 10) || 0);
+        if (savedWeek) setCurrentWeek(parseInt(savedWeek, 10) || 1);
+        if (savedLastClaim) setLastClaimDate(savedLastClaim);
+      }
+
+      // Load NFTs and challenges (local for now)
+      try {
+        const savedNFTs = localStorage.getItem("ownedNFTs");
+        const savedChallenges = localStorage.getItem("weeklyChallenges");
+
+        if (savedNFTs) setOwnedNFTs(JSON.parse(savedNFTs));
+        
+        if (savedChallenges) {
+          setWeeklyChallenges(JSON.parse(savedChallenges));
+        } else {
+          const defaultChallenges: WeeklyChallenge[] = [
+            {
+              key: "builder",
+              name: "Builder Challenge",
+              icon: "Hammer",
+              description: "Upgrade 10 build parts this week",
+              target: 10,
+              progress: 0,
+              reward: { type: "XP", amount: 5000 },
+              claimed: false
+            },
+            {
+              key: "recruiter",
+              name: "Recruiter Challenge",
+              icon: "Users",
+              description: "Invite 3 new friends this week",
+              target: 3,
+              progress: 0,
+              reward: { type: "BB", amount: 0.003 },
+              claimed: false
+            },
+            {
+              key: "converter",
+              name: "Converter Challenge",
+              icon: "ArrowLeftRight",
+              description: "Convert 1,000,000 BZ to BB",
+              target: 1000000,
+              progress: 0,
+              reward: { type: "BZ", amount: 2000 },
+              claimed: false
+            }
+          ];
+          setWeeklyChallenges(defaultChallenges);
+          localStorage.setItem("weeklyChallenges", JSON.stringify(defaultChallenges));
+        }
+      } catch (error) {
+        console.error("❌ [Rewards] Error loading local data:", error);
       }
       
       setLoading(false);
-    } catch (error) {
-      console.error("Error loading rewards data:", error);
-      setLoading(false);
-    }
-  }, []);
+    };
+
+    loadRewardState();
+  }, [gameState?.telegramId, gameState?.userId]);
 
   useEffect(() => {
     if (loading || !gameState) return;
@@ -168,7 +235,7 @@ export function RewardsNFTsScreen() {
         })
       );
     } catch (error) {
-      console.error("Error updating challenge progress:", error);
+      console.error("❌ [Rewards] Error updating challenge progress:", error);
     }
   }, [gameState?.totalUpgrades, gameState?.referralCount, gameState?.totalConversions, loading]);
 
@@ -177,7 +244,7 @@ export function RewardsNFTsScreen() {
       try {
         localStorage.setItem("weeklyChallenges", JSON.stringify(weeklyChallenges));
       } catch (error) {
-        console.error("Error saving challenges:", error);
+        console.error("❌ [Rewards] Error saving challenges:", error);
       }
     }
   }, [weeklyChallenges, loading]);
@@ -285,7 +352,7 @@ export function RewardsNFTsScreen() {
     }
   ];
 
-  const handleDailyClaim = () => {
+  const handleDailyClaim = async () => {
     try {
       const today = new Date().toDateString();
       
@@ -294,6 +361,7 @@ export function RewardsNFTsScreen() {
       const nextDay = (dailyStreak % 7) + 1;
       const reward = dailyRewards[nextDay - 1];
 
+      // Update balances
       if (reward.type === "BZ") {
         gameState.addBZ(reward.amount);
       } else if (reward.type === "BB") {
@@ -316,18 +384,37 @@ export function RewardsNFTsScreen() {
       localStorage.setItem("dailyStreak", newStreak.toString());
       localStorage.setItem("lastClaimDate", today);
 
-      if (gameState.userId) {
-        claimDailyReward({
-          userId: gameState.userId,
-          day: nextDay,
-          bzClaimed: reward.type === "BZ" ? reward.amount : 0,
-          bbClaimed: reward.type === "BB" ? reward.amount : 0,
-          xpClaimed: reward.type === "XP" ? reward.amount : 0
-        }).catch(err => {
-          console.error("Failed to sync daily claim to database:", err);
-        });
+      // Sync to database
+      if (gameState.telegramId) {
+        try {
+          console.log("📤 [Rewards] Syncing daily claim to database...");
+          
+          // Update streak
+          await incrementDailyStreak(gameState.telegramId, newStreak);
+          
+          // Update last claim date
+          await updateLastDailyClaimDate(gameState.telegramId, today);
+          
+          // Record the claim
+          if (gameState.userId) {
+            await claimDailyReward({
+              telegramId: gameState.telegramId,
+              day: nextDay,
+              bzClaimed: reward.type === "BZ" ? reward.amount : 0,
+              bbClaimed: reward.type === "BB" ? reward.amount : 0,
+              xpClaimed: reward.type === "XP" ? reward.amount : 0
+            });
+          }
+          
+          console.log("✅ [Rewards] Daily claim synced to database");
+          setDbSyncError(false);
+        } catch (error) {
+          console.error("❌ [Rewards] Failed to sync daily claim:", error);
+          setDbSyncError(true);
+        }
       }
 
+      // Sync player state
       import("@/services/syncService").then(({ syncPlayerState }) => {
         syncPlayerState({
           bzBalance: gameState.bz,
@@ -341,7 +428,7 @@ export function RewardsNFTsScreen() {
         }).catch(console.error);
       });
     } catch (error) {
-      console.error("Error claiming daily reward:", error);
+      console.error("❌ [Rewards] Error claiming daily reward:", error);
     }
   };
 
@@ -358,15 +445,15 @@ export function RewardsNFTsScreen() {
               gameState.addXP(challenge.reward.amount);
             }
             
-            if (gameState.userId) {
+            if (gameState.telegramId) {
               updateWeeklyChallengeProgress({
-                userId: gameState.userId,
+                telegramId: gameState.telegramId,
                 challengeKey: challenge.key,
                 progress: challenge.progress,
                 isCompleted: true,
                 claimed: true
               }).catch(err => {
-                console.error("Failed to sync challenge claim to database:", err);
+                console.error("❌ [Rewards] Failed to sync challenge claim:", err);
               });
             }
             
@@ -376,7 +463,7 @@ export function RewardsNFTsScreen() {
         })
       );
     } catch (error) {
-      console.error("Error claiming challenge:", error);
+      console.error("❌ [Rewards] Error claiming challenge:", error);
     }
   };
 
@@ -389,13 +476,13 @@ export function RewardsNFTsScreen() {
         setOwnedNFTs(updated);
         localStorage.setItem("ownedNFTs", JSON.stringify(updated));
         
-        if (gameState.userId) {
+        if (gameState.telegramId) {
           purchaseNFT({
-            userId: gameState.userId,
+            telegramId: gameState.telegramId,
             nftId: nft.key,
             pricePaid: 0
           }).catch(err => {
-            console.error("Failed to sync NFT claim to database:", err);
+            console.error("❌ [Rewards] Failed to sync NFT claim:", err);
           });
         }
         return;
@@ -406,13 +493,13 @@ export function RewardsNFTsScreen() {
         setOwnedNFTs(updated);
         localStorage.setItem("ownedNFTs", JSON.stringify(updated));
         
-        if (gameState.userId) {
+        if (gameState.telegramId) {
           purchaseNFT({
-            userId: gameState.userId,
+            telegramId: gameState.telegramId,
             nftId: nft.key,
             pricePaid: nft.price
           }).catch(err => {
-            console.error("Failed to sync NFT purchase to database:", err);
+            console.error("❌ [Rewards] Failed to sync NFT purchase:", err);
           });
 
           import("@/services/syncService").then(({ syncPlayerState }) => {
@@ -424,7 +511,7 @@ export function RewardsNFTsScreen() {
         }
       }
     } catch (error) {
-      console.error("Error purchasing NFT:", error);
+      console.error("❌ [Rewards] Error purchasing NFT:", error);
     }
   };
 
@@ -492,6 +579,14 @@ export function RewardsNFTsScreen() {
 
   return (
     <div className="p-6 space-y-6 max-w-2xl mx-auto pb-24">
+      {dbSyncError && (
+        <div className="bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3 text-sm">
+          <p className="text-yellow-800 dark:text-yellow-200">
+            ⚠️ Offline – changes will sync when connection is restored
+          </p>
+        </div>
+      )}
+
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">Rewards & NFTs</h1>
         <p className="text-sm text-muted-foreground">
