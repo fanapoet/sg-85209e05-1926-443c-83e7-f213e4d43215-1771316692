@@ -49,15 +49,34 @@ interface NFT {
   owned: boolean;
 }
 
-const dailyRewards: DailyReward[] = [
-  { day: 1, type: "BZ", amount: 1000 },
-  { day: 2, type: "BZ", amount: 2000 },
-  { day: 3, type: "BB", amount: 0.001 },
-  { day: 4, type: "XP", amount: 500 },
-  { day: 5, type: "BZ", amount: 5000 },
-  { day: 6, type: "BB", amount: 0.002 },
-  { day: 7, type: "XP", amount: 1000 }
-];
+// Multi-week daily rewards system with progressive scaling
+const getWeeklyRewards = (weekNumber: number): DailyReward[] => {
+  const baseMultiplier = Math.min(weekNumber, 10); // Cap at week 10
+  
+  if (weekNumber === 1) {
+    // Week 1: Onboarding-friendly mix
+    return [
+      { day: 1, type: "BZ", amount: 1000 },
+      { day: 2, type: "BZ", amount: 2000 },
+      { day: 3, type: "BB", amount: 0.001 },
+      { day: 4, type: "XP", amount: 500 },
+      { day: 5, type: "BZ", amount: 5000 },
+      { day: 6, type: "BB", amount: 0.002 },
+      { day: 7, type: "XP", amount: 1000 }
+    ];
+  }
+  
+  // Week 2+: Apply 50% XP / 35% BB / 15% BZ distribution
+  return [
+    { day: 1, type: "XP", amount: 1000 * baseMultiplier },      // 50% allocation
+    { day: 2, type: "BB", amount: 0.002 * baseMultiplier },     // 35% allocation
+    { day: 3, type: "XP", amount: 1500 * baseMultiplier },      // 50% allocation
+    { day: 4, type: "BZ", amount: 3000 * baseMultiplier },      // 15% allocation
+    { day: 5, type: "XP", amount: 2000 * baseMultiplier },      // 50% allocation
+    { day: 6, type: "BB", amount: 0.003 * baseMultiplier },     // 35% allocation
+    { day: 7, type: "XP", amount: 2500 * baseMultiplier }       // 50% allocation
+  ];
+};
 
 const getIconComponent = (iconName: string) => {
   const icons: Record<string, any> = {
@@ -71,26 +90,33 @@ export function RewardsNFTsScreen() {
   
   // State
   const [dailyStreak, setDailyStreak] = useState(0);
+  const [currentWeek, setCurrentWeek] = useState(1);
   const [lastClaimDate, setLastClaimDate] = useState<string | null>(null);
   const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
   const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallenge[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Get current week's rewards
+  const dailyRewards = getWeeklyRewards(currentWeek);
+
   // Load saved state
   useEffect(() => {
     try {
       const savedStreak = localStorage.getItem("dailyStreak");
+      const savedWeek = localStorage.getItem("currentRewardWeek");
       const savedLastClaim = localStorage.getItem("lastClaimDate");
       const savedNFTs = localStorage.getItem("ownedNFTs");
       const savedChallenges = localStorage.getItem("weeklyChallenges");
 
       if (savedStreak) setDailyStreak(parseInt(savedStreak, 10) || 0);
+      if (savedWeek) setCurrentWeek(parseInt(savedWeek, 10) || 1);
       if (savedLastClaim) setLastClaimDate(savedLastClaim);
       if (savedNFTs) setOwnedNFTs(JSON.parse(savedNFTs));
       
       if (savedChallenges) {
         setWeeklyChallenges(JSON.parse(savedChallenges));
       } else {
+        // Weekly challenges rebalanced to 50% XP / 35% BB / 15% BZ
         const defaultChallenges: WeeklyChallenge[] = [
           {
             key: "builder",
@@ -99,7 +125,7 @@ export function RewardsNFTsScreen() {
             description: "Upgrade 10 build parts this week",
             target: 10,
             progress: 0,
-            reward: { type: "BZ", amount: 10000 },
+            reward: { type: "XP", amount: 5000 },  // 50% allocation
             claimed: false
           },
           {
@@ -109,7 +135,7 @@ export function RewardsNFTsScreen() {
             description: "Invite 3 new friends this week",
             target: 3,
             progress: 0,
-            reward: { type: "XP", amount: 2000 },
+            reward: { type: "BB", amount: 0.003 },  // 35% allocation
             claimed: false
           },
           {
@@ -119,7 +145,7 @@ export function RewardsNFTsScreen() {
             description: "Convert 1,000,000 BZ to BB",
             target: 1000000,
             progress: 0,
-            reward: { type: "BB", amount: 0.005 },
+            reward: { type: "BZ", amount: 2000 },  // 15% allocation
             claimed: false
           }
         ];
@@ -296,6 +322,15 @@ export function RewardsNFTsScreen() {
       }
 
       const newStreak = nextDay;
+      
+      // Increment week when completing day 7
+      let newWeek = currentWeek;
+      if (nextDay === 7) {
+        newWeek = currentWeek + 1;
+        setCurrentWeek(newWeek);
+        localStorage.setItem("currentRewardWeek", newWeek.toString());
+      }
+      
       setDailyStreak(newStreak);
       setLastClaimDate(today);
       localStorage.setItem("dailyStreak", newStreak.toString());
@@ -380,7 +415,7 @@ export function RewardsNFTsScreen() {
   };
 
   const canClaimDaily = lastClaimDate !== new Date().toDateString();
-  const currentDayReward = dailyRewards[dailyStreak % 7];
+  const currentDayReward = getWeeklyRewards(Math.floor(dailyStreak / 7) + 1)[(dailyStreak % 7)];
 
   // Helper function to get progress text for each NFT
   const getProgressText = (nft: NFT): string => {
@@ -461,13 +496,18 @@ export function RewardsNFTsScreen() {
               <Calendar className="h-5 w-5 text-primary" />
               <h3 className="font-semibold">Daily Rewards</h3>
             </div>
-            <Badge variant="outline">
-              Day {(dailyStreak % 7) + 1}/7
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="text-xs">
+                Week {currentWeek}
+              </Badge>
+              <Badge variant="outline">
+                Day {(dailyStreak % 7) + 1}/7
+              </Badge>
+            </div>
           </div>
 
           <div className="grid grid-cols-7 gap-2">
-            {dailyRewards.map((reward, index) => {
+            {getWeeklyRewards(Math.floor(dailyStreak / 7) + 1).map((reward, index) => {
               const dayNum = index + 1;
               const isClaimed = dailyStreak >= dayNum && dailyStreak < dayNum + 7;
               const isCurrent = (dailyStreak % 7) + 1 === dayNum;
