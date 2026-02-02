@@ -203,6 +203,35 @@ export function RewardsNFTsScreen() {
     loadRewardState();
   }, [gameState?.telegramId, gameState?.userId]);
 
+  // AUTO-SYNC: Sync state changes to database (LOCAL-FIRST, background sync)
+  useEffect(() => {
+    if (loading || !gameState?.telegramId || !gameState?.userId) return;
+
+    // Debounce sync to avoid spamming DB
+    const syncTimeout = setTimeout(async () => {
+      try {
+        console.log("📤 [Rewards] Auto-syncing state to database...");
+        
+        await upsertRewardState({
+          telegramId: gameState.telegramId,
+          userId: gameState.userId,
+          dailyStreak,
+          currentRewardWeek: currentWeek,
+          lastDailyClaimDate: lastClaimDate,
+          currentWeeklyPeriodStart: new Date().toISOString()
+        });
+        
+        console.log("✅ [Rewards] Auto-sync complete");
+        setDbSyncError(false);
+      } catch (error) {
+        console.error("❌ [Rewards] Auto-sync failed:", error);
+        setDbSyncError(true);
+      }
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(syncTimeout);
+  }, [dailyStreak, currentWeek, lastClaimDate, loading, gameState?.telegramId, gameState?.userId]);
+
   useEffect(() => {
     if (loading || !gameState) return;
     
