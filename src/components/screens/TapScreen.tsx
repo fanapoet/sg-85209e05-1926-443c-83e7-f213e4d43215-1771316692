@@ -133,7 +133,7 @@ export function TapScreen() {
   const energyPercent = Math.min(100, (energy / maxEnergy) * 100);
 
   return (
-    <div className="h-[calc(100vh-120px)] flex flex-col">
+    <div className="h-[calc(100vh-180px)] flex flex-col">
       {/* Top Stats */}
       <div className="px-6 pt-4 pb-2">
         <div className="flex items-center justify-between mb-3">
@@ -203,7 +203,7 @@ export function TapScreen() {
       </div>
 
       {/* QuickCharge Button */}
-      <div className="px-6 pb-6">
+      <div className="px-6 pb-24">
         <Button
           onClick={handleQuickCharge}
           disabled={quickChargeDisabled}
