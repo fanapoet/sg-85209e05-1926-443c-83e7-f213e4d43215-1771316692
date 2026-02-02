@@ -52,31 +52,23 @@ interface NFT {
 
 // Multi-week daily rewards system with progressive scaling
 const getWeeklyRewards = (weekNumber: number): DailyReward[] => {
-  const baseMultiplier = Math.min(weekNumber, 10); // Cap at week 10
-  
-  if (weekNumber === 1) {
-    // Week 1: Onboarding-friendly mix
-    return [
-      { day: 1, type: "BZ", amount: 1000 },
-      { day: 2, type: "BZ", amount: 2000 },
-      { day: 3, type: "BB", amount: 0.001 },
-      { day: 4, type: "XP", amount: 500 },
-      { day: 5, type: "BZ", amount: 5000 },
-      { day: 6, type: "BB", amount: 0.002 },
-      { day: 7, type: "XP", amount: 1000 }
-    ];
-  }
-  
-  // Week 2+: Apply 50% XP / 35% BB / 15% BZ distribution
-  return [
-    { day: 1, type: "XP", amount: 1000 * baseMultiplier },      // 50% allocation
-    { day: 2, type: "BB", amount: 0.002 * baseMultiplier },     // 35% allocation
-    { day: 3, type: "XP", amount: 1500 * baseMultiplier },      // 50% allocation
-    { day: 4, type: "BZ", amount: 3000 * baseMultiplier },      // 15% allocation
-    { day: 5, type: "XP", amount: 2000 * baseMultiplier },      // 50% allocation
-    { day: 6, type: "BB", amount: 0.003 * baseMultiplier },     // 35% allocation
-    { day: 7, type: "XP", amount: 2500 * baseMultiplier }       // 50% allocation
+  const baseRewards = [
+    { day: 1, type: "XP" as const, amount: 2000 },
+    { day: 2, type: "BZ" as const, amount: 5000 },
+    { day: 3, type: "XP" as const, amount: 3000 },
+    { day: 4, type: "BZ" as const, amount: 8000 },
+    { day: 5, type: "XP" as const, amount: 5000 },
+    { day: 6, type: "BB" as const, amount: 0.001 },
+    { day: 7, type: "BZ" as const, amount: 15000 }
   ];
+
+  // Scale rewards based on week number
+  return baseRewards.map(reward => ({
+    ...reward,
+    amount: reward.type === "BB" 
+      ? reward.amount * weekNumber 
+      : reward.amount * weekNumber
+  }));
 };
 
 const getIconComponent = (iconName: string) => {
