@@ -309,6 +309,80 @@ export function XPTiersScreen() {
           </div>
         )}
 
+        {/* Available Devices Information */}
+        <div className="space-y-3 mb-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Smartphone className="h-4 w-4 text-orange-600" />
+            <h4 className="font-semibold text-sm">Available Bunergy Devices</h4>
+          </div>
+          
+          <div className="grid gap-2">
+            <div className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-950/50 rounded-lg border border-orange-200 dark:border-orange-800">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-orange-500/20 flex items-center justify-center flex-shrink-0">
+                  <Zap className="h-5 w-5 text-orange-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">GameCore Stand (GC)</p>
+                  <p className="text-xs text-muted-foreground">Gaming device holder</p>
+                </div>
+              </div>
+              <Badge className="bg-orange-600 text-white">+5,000 XP</Badge>
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-yellow-50 dark:bg-yellow-950/50 rounded-lg border border-yellow-200 dark:border-yellow-800">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-yellow-500/20 flex items-center justify-center flex-shrink-0">
+                  <Zap className="h-5 w-5 text-yellow-600" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">BIP-X Power Bank (BX)</p>
+                  <p className="text-xs text-muted-foreground">Portable charging solution</p>
+                </div>
+              </div>
+              <Badge className="bg-yellow-600 text-white">+10,000 XP</Badge>
+            </div>
+          </div>
+        </div>
+
+        {/* Connection Info Cards */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <div className="p-3 bg-background rounded-lg border text-center">
+            <p className="text-2xl font-bold text-orange-600">2-4</p>
+            <p className="text-xs text-muted-foreground">New models/year</p>
+          </div>
+          <div className="p-3 bg-background rounded-lg border text-center">
+            <p className="text-2xl font-bold text-orange-600">No Limit</p>
+            <p className="text-xs text-muted-foreground">Devices per account</p>
+          </div>
+        </div>
+
+        <div className="bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
+          <div className="flex items-start gap-2">
+            <Zap className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-blue-800 dark:text-blue-200 space-y-1">
+              <p className="font-semibold">How It Works:</p>
+              <p>• Purchase real Bunergy hardware devices</p>
+              <p>• Scan the unique QR code on your device</p>
+              <p>• Instantly earn bonus XP (one-time per device)</p>
+              <p>• Enjoy your hardware + unlock in-game rewards!</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800 rounded-lg p-3 mb-4">
+          <div className="flex items-start gap-2">
+            <Trophy className="h-4 w-4 text-orange-600 mt-0.5 flex-shrink-0" />
+            <div className="text-xs text-orange-800 dark:text-orange-200 space-y-1">
+              <p className="font-semibold">2026 Release Schedule:</p>
+              <p>• Q1: GameCore Stand (GC) - Available Now</p>
+              <p>• Q2: BIP-X Power Bank (BX) - Coming Soon</p>
+              <p>• Q3-Q4: 2 additional models (TBA)</p>
+              <p className="pt-1 italic">Connect unlimited devices to maximize XP!</p>
+            </div>
+          </div>
+        </div>
+
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="w-full bg-orange-600 hover:bg-orange-700" size="lg">
