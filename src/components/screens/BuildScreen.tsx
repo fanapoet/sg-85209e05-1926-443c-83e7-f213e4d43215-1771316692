@@ -33,7 +33,6 @@ import {
   Grid,
   Boxes,
   Container,
-  Slice,
   Lock,
   Clock,
   TrendingUp,
@@ -880,17 +879,44 @@ export function BuildScreen() {
                 const isActive = idleState.activeBuildKey === part.key;
                 const isCelebrating = completionCelebrations[part.key];
 
-                // SIMPLIFIED LOGIC: Check stage lock FIRST
-                const stageLocked = !unlocked;
-                const canUpgrade = !stageLocked && partUnlocked && !state.isBuilding && state.level < 20 && (idleState.activeBuildKey === null || idleState.activeBuildKey === part.key);
+                // Determine button state
+                let buttonText = "";
+                let buttonIcon = null;
+                let buttonDisabled = true;
+                let buttonVariant: "default" | "secondary" = "secondary";
+
+                if (!unlocked) {
+                  buttonText = "Stage Locked";
+                  buttonIcon = <Lock className="mr-2 h-4 w-4" />;
+                  buttonDisabled = true;
+                } else if (!partUnlocked) {
+                  buttonText = "Requires Prev Part L5";
+                  buttonIcon = <Lock className="mr-2 h-4 w-4" />;
+                  buttonDisabled = true;
+                } else if (state.level >= 20) {
+                  buttonText = "Max Level Reached";
+                  buttonIcon = <CheckCircle2 className="mr-2 h-4 w-4" />;
+                  buttonDisabled = true;
+                } else if (state.isBuilding) {
+                  buttonText = "Building...";
+                  buttonDisabled = true;
+                } else if (idleState.activeBuildKey && idleState.activeBuildKey !== part.key) {
+                  buttonText = "Another Build Active";
+                  buttonDisabled = true;
+                } else if (bz < cost) {
+                  buttonText = `Need ${cost.toLocaleString()} BZ`;
+                  buttonDisabled = true;
+                } else {
+                  buttonText = `Upgrade for ${cost.toLocaleString()} BZ`;
+                  buttonDisabled = false;
+                  buttonVariant = "default";
+                }
 
                 return (
                   <Card 
                     key={part.key} 
-                    className={`p-3 relative transition-all duration-300 ${
+                    className={`p-4 relative transition-all duration-300 ${
                       isActive ? "border-blue-500 border-2" : ""
-                    } ${
-                      (stageLocked || !partUnlocked) ? "opacity-60" : ""
                     } ${
                       isCelebrating ? "scale-105 shadow-xl border-green-500 border-2" : ""
                     }`}
@@ -905,40 +931,44 @@ export function BuildScreen() {
                     )}
 
                     <div className="flex items-start gap-3">
+                      {/* Icon */}
                       <div className={`p-2 rounded-lg flex-shrink-0 transition-all duration-300 ${
-                        !stageLocked && partUnlocked ? "bg-primary/10" : "bg-muted"
+                        unlocked && partUnlocked ? "bg-primary/10" : "bg-muted"
                       } ${
                         isCelebrating ? "bg-green-500/20 animate-pulse" : ""
                       }`}>
                         <Icon className={`h-5 w-5 ${
-                          !stageLocked && partUnlocked ? "text-primary" : "text-muted-foreground"
+                          unlocked && partUnlocked ? "text-primary" : "text-muted-foreground"
                         } ${
                           isCelebrating ? "text-green-500" : ""
                         }`} />
                       </div>
 
+                      {/* Content */}
                       <div className="flex-1 space-y-2 min-w-0">
+                        {/* Name + Badge Row - ALWAYS PRESENT */}
                         <div className="flex items-center justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <h3 className="font-semibold truncate">{part.name}</h3>
-                              {!partUnlocked && !stageLocked && <Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {currentYield > 0 ? `${currentYield.toFixed(1)} BZ/h` : "Not built"}
-                              {yieldDelta > 0 && state.level < 20 && ` → +${yieldDelta.toFixed(1)} BZ/h`}
-                            </p>
-                          </div>
-                          <Badge variant="outline" className="flex-shrink-0">{state.level === 20 ? "MAX" : `L${state.level}`}</Badge>
+                          <h3 className="font-semibold truncate">{part.name}</h3>
+                          <Badge variant="outline" className="flex-shrink-0">
+                            {state.level === 20 ? "MAX" : `L${state.level}`}
+                          </Badge>
                         </div>
 
-                        {upgradeTime > 0 && state.level < 20 && !state.isBuilding && !stageLocked && (
+                        {/* Yield Info */}
+                        <p className="text-xs text-muted-foreground">
+                          {currentYield > 0 ? `${currentYield.toFixed(1)} BZ/h` : "Not built"}
+                          {yieldDelta > 0 && state.level < 20 && ` → +${yieldDelta.toFixed(1)} BZ/h`}
+                        </p>
+
+                        {/* Build Time Info */}
+                        {upgradeTime > 0 && state.level < 20 && !state.isBuilding && unlocked && partUnlocked && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Clock className="h-3 w-3 flex-shrink-0" />
                             <span>Next build: {formatTime(upgradeTime)}</span>
                           </div>
                         )}
 
+                        {/* Progress Bar - if building */}
                         {state.isBuilding && timeRemaining > 0 && (
                           <div className="space-y-1">
                             <Progress 
@@ -952,40 +982,19 @@ export function BuildScreen() {
                           </div>
                         )}
 
-                        {/* SINGLE BUTTON - SIMPLIFIED LOGIC */}
+                        {/* SINGLE BUTTON - ALWAYS PRESENT */}
                         <Button
                           onClick={() => handleUpgrade(part)}
-                          disabled={!canUpgrade || state.level >= 20 || bz < cost}
+                          disabled={buttonDisabled}
                           className="w-full"
                           size="sm"
-                          variant={canUpgrade && state.level < 20 && bz >= cost ? "default" : "secondary"}
+                          variant={buttonVariant}
                         >
-                          {stageLocked ? (
-                            <>
-                              <Lock className="mr-2 h-4 w-4" />
-                              Stage Locked
-                            </>
-                          ) : !partUnlocked ? (
-                            <>
-                              <Lock className="mr-2 h-4 w-4" />
-                              Requires Prev Part L5
-                            </>
-                          ) : state.level >= 20 ? (
-                            <>
-                              <CheckCircle2 className="mr-2 h-4 w-4" />
-                              Max Level Reached
-                            </>
-                          ) : state.isBuilding ? (
-                            "Building..."
-                          ) : idleState.activeBuildKey && idleState.activeBuildKey !== part.key ? (
-                            "Another Build Active"
-                          ) : bz < cost ? (
-                            `Need ${cost.toLocaleString()} BZ`
-                          ) : (
-                            `Upgrade for ${cost.toLocaleString()} BZ`
-                          )}
+                          {buttonIcon}
+                          {buttonText}
                         </Button>
 
+                        {/* Speed Up Button - conditional */}
                         {canSpeedUp(part, state) && (
                           <Button
                             onClick={() => handleOpenSpeedUp(part.key)}

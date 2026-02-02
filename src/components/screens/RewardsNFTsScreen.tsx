@@ -20,6 +20,7 @@ import {
   TrendingUp
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { claimDailyReward, purchaseNFT, updateWeeklyChallengeProgress, getUserNFTs } from "@/services/rewardsService";
 
 interface DailyReward {
   day: number;
@@ -336,6 +337,19 @@ export function RewardsNFTsScreen() {
       localStorage.setItem("dailyStreak", newStreak.toString());
       localStorage.setItem("lastClaimDate", today);
 
+      // Sync to database (background, non-blocking)
+      if (gameState.userId) {
+        claimDailyReward({
+          userId: gameState.userId,
+          day: nextDay,
+          bzClaimed: reward.type === "BZ" ? reward.amount : 0,
+          bbClaimed: reward.type === "BB" ? reward.amount : 0,
+          xpClaimed: reward.type === "XP" ? reward.amount : 0
+        }).catch(err => {
+          console.error("Failed to sync daily claim to database:", err);
+        });
+      }
+
       // Sync player state to database immediately after claim
       import("@/services/syncService").then(({ syncPlayerState }) => {
         syncPlayerState({
@@ -367,6 +381,19 @@ export function RewardsNFTsScreen() {
               gameState.addXP(challenge.reward.amount);
             }
             
+            // Sync to database (background, non-blocking)
+            if (gameState.userId) {
+              updateWeeklyChallengeProgress({
+                userId: gameState.userId,
+                challengeKey: challenge.key,
+                progress: challenge.progress,
+                isCompleted: true,
+                claimed: true
+              }).catch(err => {
+                console.error("Failed to sync challenge claim to database:", err);
+              });
+            }
+            
             return { ...challenge, claimed: true };
           }
           return challenge;
@@ -385,6 +412,17 @@ export function RewardsNFTsScreen() {
         const updated = [...ownedNFTs, nft.key];
         setOwnedNFTs(updated);
         localStorage.setItem("ownedNFTs", JSON.stringify(updated));
+        
+        // Sync free NFT to database
+        if (gameState.userId) {
+          purchaseNFT({
+            userId: gameState.userId,
+            nftId: nft.key,
+            pricePaid: 0
+          }).catch(err => {
+            console.error("Failed to sync NFT claim to database:", err);
+          });
+        }
         return;
       }
 
@@ -392,22 +430,25 @@ export function RewardsNFTsScreen() {
         const updated = [...ownedNFTs, nft.key];
         setOwnedNFTs(updated);
         localStorage.setItem("ownedNFTs", JSON.stringify(updated));
-      }
+        
+        // Sync NFT purchase to database
+        if (gameState.userId) {
+          purchaseNFT({
+            userId: gameState.userId,
+            nftId: nft.key,
+            pricePaid: nft.price
+          }).catch(err => {
+            console.error("Failed to sync NFT purchase to database:", err);
+          });
 
-      // Record NFT purchase and sync player state
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        setTimeout(() => {
-          import("@/services/syncService").then(({ purchaseNFT, syncPlayerState }) => {
-            purchaseNFT(user.id, nft.key, nft.price, 'BB').catch(console.error);
-
-            // Sync updated BB balance
+          // Sync updated BB balance
+          import("@/services/syncService").then(({ syncPlayerState }) => {
             syncPlayerState({
-               bbBalance: gameState.bb - nft.price,
-               nftsOwned: [...ownedNFTs, nft.key]
+              bbBalance: gameState.bb,
+              nftsOwned: updated
             }).catch(console.error);
           });
-        }, 0);
+        }
       }
     } catch (error) {
       console.error("Error purchasing NFT:", error);
