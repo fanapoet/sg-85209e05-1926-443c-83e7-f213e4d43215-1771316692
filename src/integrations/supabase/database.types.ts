@@ -55,38 +55,32 @@ export type Database = {
         Row: {
           amount_in: number
           amount_out: number
-          burned_amount: number | null
+          bonus_percent: number | null
           conversion_type: string
           created_at: string | null
-          exchange_rate: number
           id: string
-          tier_at_conversion: string
-          tier_bonus_percent: number
-          user_id: string
+          telegram_id: number
+          tier_at_conversion: string | null
         }
         Insert: {
           amount_in: number
           amount_out: number
-          burned_amount?: number | null
+          bonus_percent?: number | null
           conversion_type: string
           created_at?: string | null
-          exchange_rate: number
           id?: string
-          tier_at_conversion: string
-          tier_bonus_percent: number
-          user_id: string
+          telegram_id: number
+          tier_at_conversion?: string | null
         }
         Update: {
           amount_in?: number
           amount_out?: number
-          burned_amount?: number | null
+          bonus_percent?: number | null
           conversion_type?: string
           created_at?: string | null
-          exchange_rate?: number
           id?: string
-          tier_at_conversion?: string
-          tier_bonus_percent?: number
-          user_id?: string
+          telegram_id?: number
+          tier_at_conversion?: string | null
         }
         Relationships: []
       }
