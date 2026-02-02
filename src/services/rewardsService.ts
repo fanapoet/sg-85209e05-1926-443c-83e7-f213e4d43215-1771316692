@@ -6,7 +6,8 @@ import { supabase } from "@/integrations/supabase/client";
  */
 
 export interface DailyClaimData {
-  userId: string;
+  telegramId: number;
+  userId?: string;
   day: number;
   bzClaimed: number;
   bbClaimed: number;
@@ -32,6 +33,7 @@ export async function claimDailyReward(data: DailyClaimData) {
     const { data: result, error } = await supabase
       .from("user_daily_claims")
       .insert({
+        telegram_id: data.telegramId,
         user_id: data.userId,
         day: data.day,
         bz_claimed: data.bzClaimed,
@@ -93,7 +95,8 @@ export async function getDailyClaimHistory(userId: string): Promise<DailyClaimRe
  */
 
 export interface NFTPurchaseData {
-  userId: string;
+  telegramId: number;
+  userId?: string;
   nftId: string;
   pricePaid: number;
 }
@@ -115,6 +118,7 @@ export async function purchaseNFT(data: NFTPurchaseData) {
     const { data: result, error } = await supabase
       .from("user_nfts")
       .insert({
+        telegram_id: data.telegramId,
         user_id: data.userId,
         nft_id: data.nftId,
         price_paid_bb: data.pricePaid
@@ -172,7 +176,8 @@ export async function getUserNFTs(userId: string): Promise<UserNFT[]> {
  */
 
 export interface WeeklyChallengeProgress {
-  userId: string;
+  telegramId: number;
+  userId?: string;
   challengeKey: string;
   progress: number;
   isCompleted: boolean;
@@ -192,6 +197,7 @@ export async function updateWeeklyChallengeProgress(data: WeeklyChallengeProgres
     const { data: result, error } = await supabase
       .from("user_task_progress")
       .upsert({
+        telegram_id: data.telegramId,
         user_id: data.userId,
         task_id: taskId,
         current_progress: data.progress,
@@ -201,7 +207,7 @@ export async function updateWeeklyChallengeProgress(data: WeeklyChallengeProgres
         claimed_at: data.claimed ? new Date().toISOString() : null,
         reset_at: new Date().toISOString() // Weekly reset timestamp
       }, {
-        onConflict: "user_id,task_id,reset_at"
+        onConflict: "telegram_id,task_id,reset_at"
       })
       .select()
       .single();

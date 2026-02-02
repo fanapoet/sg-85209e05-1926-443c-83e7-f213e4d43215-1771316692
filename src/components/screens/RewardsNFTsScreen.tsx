@@ -399,6 +399,7 @@ export function RewardsNFTsScreen() {
           if (gameState.userId) {
             await claimDailyReward({
               telegramId: gameState.telegramId,
+              userId: gameState.userId,
               day: nextDay,
               bzClaimed: reward.type === "BZ" ? reward.amount : 0,
               bbClaimed: reward.type === "BB" ? reward.amount : 0,
@@ -448,6 +449,7 @@ export function RewardsNFTsScreen() {
             if (gameState.telegramId) {
               updateWeeklyChallengeProgress({
                 telegramId: gameState.telegramId,
+                userId: gameState.userId,
                 challengeKey: challenge.key,
                 progress: challenge.progress,
                 isCompleted: true,
@@ -479,6 +481,7 @@ export function RewardsNFTsScreen() {
         if (gameState.telegramId) {
           purchaseNFT({
             telegramId: gameState.telegramId,
+            userId: gameState.userId,
             nftId: nft.key,
             pricePaid: 0
           }).catch(err => {
@@ -496,6 +499,7 @@ export function RewardsNFTsScreen() {
         if (gameState.telegramId) {
           purchaseNFT({
             telegramId: gameState.telegramId,
+            userId: gameState.userId,
             nftId: nft.key,
             pricePaid: nft.price
           }).catch(err => {

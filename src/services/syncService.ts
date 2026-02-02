@@ -629,7 +629,7 @@ export async function syncConversionToDB(
         conversion_type: conversion.type,
         amount_in: conversion.input,
         amount_out: conversion.output,
-        bonus_percent: conversion.bonus ? Math.round(conversion.bonus * 100) : 0,
+        tier_bonus_percent: conversion.bonus ? Math.round(conversion.bonus * 100) : 0,
         tier_at_conversion: conversion.tier || "Bronze",
         created_at: new Date(conversion.timestamp).toISOString()
       });
