@@ -23,6 +23,13 @@ export async function recordConversion(
   conversion: ConversionRecord
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    console.log("💾 [Conversion] Recording to database:", {
+      userId,
+      type: conversion.type,
+      amountIn: conversion.amountIn,
+      amountOut: conversion.amountOut
+    });
+
     const conversionData: ConversionInsert = {
       user_id: userId,
       conversion_type: conversion.type,
@@ -34,18 +41,27 @@ export async function recordConversion(
       exchange_rate: conversion.exchangeRate,
     };
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("conversion_history")
-      .insert(conversionData);
+      .insert(conversionData)
+      .select()
+      .single();
 
     if (error) {
-      console.error("Error recording conversion:", error);
+      console.error("❌ [Conversion] Database error:", error);
+      console.error("❌ [Conversion] Error details:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
       return { success: false, error: error.message };
     }
 
+    console.log("✅ [Conversion] Saved successfully:", data?.id);
     return { success: true };
   } catch (error) {
-    console.error("Exception recording conversion:", error);
+    console.error("❌ [Conversion] Exception:", error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : "Unknown error" 

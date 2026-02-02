@@ -35,7 +35,8 @@ export function ConvertScreen() {
     addBB, 
     subtractBB, 
     incrementConversions,
-    telegramId 
+    telegramId,
+    userId
   } = useGameState();
   
   const [conversionType, setConversionType] = useState<ConversionType>("bz-to-bb");
@@ -45,12 +46,14 @@ export function ConvertScreen() {
 
   // Load conversion history from database
   useEffect(() => {
-    if (!telegramId) return;
+    if (!userId) return;
 
     const loadHistory = async () => {
-      const result = await getConversionHistory(telegramId.toString(), 20);
+      console.log("📥 [Conversion] Loading history for user:", userId);
+      const result = await getConversionHistory(userId, 20);
       
       if (result.success && result.data) {
+        console.log("✅ [Conversion] Loaded records:", result.data.length);
         const formatted = result.data.map((conv: DBConversionHistory) => ({
           id: conv.id,
           timestamp: new Date(conv.created_at).getTime(),
@@ -78,7 +81,7 @@ export function ConvertScreen() {
     };
 
     loadHistory();
-  }, [telegramId]);
+  }, [userId]);
 
   const saveTransaction = async (tx: Transaction) => {
     // Optimistically update UI
@@ -87,8 +90,9 @@ export function ConvertScreen() {
     localStorage.setItem("conversionHistory", JSON.stringify(updated));
 
     // Save to database
-    if (telegramId) {
-      const result = await recordConversion(telegramId.toString(), {
+    if (userId) {
+      console.log("💾 [Conversion] Saving transaction for user:", userId);
+      const result = await recordConversion(userId, {
         type: tx.type === "bz-to-bb" ? "BZ_TO_BB" : "BB_TO_BZ",
         amountIn: tx.input,
         amountOut: tx.output,
@@ -100,9 +104,13 @@ export function ConvertScreen() {
       });
 
       if (!result.success) {
-        console.error("Failed to save conversion to database:", result.error);
+        console.error("❌ [Conversion] Failed to save to database:", result.error);
         // Transaction is already saved to localStorage as fallback
+      } else {
+        console.log("✅ [Conversion] Saved to database successfully");
       }
+    } else {
+      console.warn("⚠️ [Conversion] No userId available, skipping database save");
     }
   };
 

@@ -414,14 +414,6 @@ export function BuildScreen() {
     const rawCost = baseCost * exponential * stageFactor;
     const finalCost = Math.floor(rawCost);
     
-    console.log(`💰 [COST DEBUG] ${part.name} (${part.key})`);
-    console.log(`   Current Level: ${currentLevel} → Next Level: ${currentLevel + 1}`);
-    console.log(`   Base Cost: ${baseCost}`);
-    console.log(`   Exponential (1.2^${currentLevel}): ${exponential.toFixed(4)}`);
-    console.log(`   Stage Factor (1 + 0.10×${part.stage}): ${stageFactor}`);
-    console.log(`   Raw Cost: ${baseCost} × ${exponential.toFixed(4)} × ${stageFactor} = ${rawCost.toFixed(2)}`);
-    console.log(`   Final Cost (floored): ${finalCost}`);
-    
     return finalCost;
   };
 
@@ -754,18 +746,6 @@ export function BuildScreen() {
     return referralCount >= stage.referralRequirement;
   };
 
-  const canUpgradePart = (part: Part): boolean => {
-    const state = partStates[part.key];
-    if (!state) return false;
-    if (state.level >= 20) return false;
-    if (state.isBuilding) return false;
-    if (!isPartUnlocked(part)) return false;
-    if (!isStageVisible(part.stage)) return false;
-    if (!isStageUnlocked(part.stage)) return false;
-
-    return true;
-  };
-
   const formatTime = (ms: number): string => {
     const hours = Math.floor(ms / (60 * 60 * 1000));
     const minutes = Math.floor((ms % (60 * 60 * 1000)) / (60 * 1000));
@@ -897,28 +877,12 @@ export function BuildScreen() {
                 const yieldDelta = nextYield - currentYield;
                 const upgradeTime = getUpgradeTime(state.level);
                 const timeRemaining = state.isBuilding ? Math.max(0, state.buildEndsAt - currentTime) : 0;
-                const canUpgrade = canUpgradePart(part);
                 const isActive = idleState.activeBuildKey === part.key;
                 const isCelebrating = completionCelebrations[part.key];
 
-                let statusText = "";
-                let statusColor = "";
-                if (!partUnlocked) {
-                  statusText = "Locked";
-                  statusColor = "text-muted-foreground";
-                } else if (!unlocked) {
-                  statusText = "Stage Locked";
-                  statusColor = "text-red-600";
-                } else if (state.isBuilding) {
-                  statusText = `Building... ${formatTime(timeRemaining)}`;
-                  statusColor = "text-blue-600";
-                } else if (state.level >= 20) {
-                  statusText = "Max Level";
-                  statusColor = "text-green-600";
-                } else {
-                  statusText = "Ready";
-                  statusColor = "text-green-600";
-                }
+                // SIMPLIFIED LOGIC: Check stage lock FIRST
+                const stageLocked = !unlocked;
+                const canUpgrade = !stageLocked && partUnlocked && !state.isBuilding && state.level < 20 && (idleState.activeBuildKey === null || idleState.activeBuildKey === part.key);
 
                 return (
                   <Card 
@@ -926,7 +890,7 @@ export function BuildScreen() {
                     className={`p-3 relative transition-all duration-300 ${
                       isActive ? "border-blue-500 border-2" : ""
                     } ${
-                      (!partUnlocked || !unlocked) ? "opacity-60" : ""
+                      (stageLocked || !partUnlocked) ? "opacity-60" : ""
                     } ${
                       isCelebrating ? "scale-105 shadow-xl border-green-500 border-2" : ""
                     }`}
@@ -941,43 +905,39 @@ export function BuildScreen() {
                     )}
 
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-lg transition-all duration-300 ${
-                        unlocked && partUnlocked ? "bg-primary/10" : "bg-muted"
+                      <div className={`p-2 rounded-lg flex-shrink-0 transition-all duration-300 ${
+                        !stageLocked && partUnlocked ? "bg-primary/10" : "bg-muted"
                       } ${
                         isCelebrating ? "bg-green-500/20 animate-pulse" : ""
                       }`}>
                         <Icon className={`h-5 w-5 ${
-                          unlocked && partUnlocked ? "text-primary" : "text-muted-foreground"
+                          !stageLocked && partUnlocked ? "text-primary" : "text-muted-foreground"
                         } ${
                           isCelebrating ? "text-green-500" : ""
                         }`} />
                       </div>
 
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div>
+                      <div className="flex-1 space-y-2 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <h3 className="font-semibold">{part.name}</h3>
-                              {!partUnlocked && <Lock className="h-3 w-3 text-muted-foreground" />}
+                              <h3 className="font-semibold truncate">{part.name}</h3>
+                              {!partUnlocked && !stageLocked && <Lock className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
                             </div>
                             <p className="text-xs text-muted-foreground">
                               {currentYield > 0 ? `${currentYield.toFixed(1)} BZ/h` : "Not built"}
                               {yieldDelta > 0 && state.level < 20 && ` → +${yieldDelta.toFixed(1)} BZ/h`}
                             </p>
                           </div>
-                          <Badge variant="outline">{state.level === 20 ? "MAX" : `L${state.level}`}</Badge>
+                          <Badge variant="outline" className="flex-shrink-0">{state.level === 20 ? "MAX" : `L${state.level}`}</Badge>
                         </div>
 
-                        {upgradeTime > 0 && state.level < 20 && !state.isBuilding && (
+                        {upgradeTime > 0 && state.level < 20 && !state.isBuilding && !stageLocked && (
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Clock className="h-3 w-3" />
+                            <Clock className="h-3 w-3 flex-shrink-0" />
                             <span>Next build: {formatTime(upgradeTime)}</span>
                           </div>
                         )}
-
-                        <div className={`text-sm font-medium ${statusColor}`}>
-                          {statusText}
-                        </div>
 
                         {state.isBuilding && timeRemaining > 0 && (
                           <div className="space-y-1">
@@ -992,22 +952,23 @@ export function BuildScreen() {
                           </div>
                         )}
 
+                        {/* SINGLE BUTTON - SIMPLIFIED LOGIC */}
                         <Button
                           onClick={() => handleUpgrade(part)}
-                          disabled={!canUpgrade || state.level >= 20 || (idleState.activeBuildKey !== null && idleState.activeBuildKey !== part.key)}
+                          disabled={!canUpgrade || state.level >= 20 || bz < cost}
                           className="w-full"
                           size="sm"
-                          variant={canUpgrade && state.level < 20 ? "default" : "secondary"}
+                          variant={canUpgrade && state.level < 20 && bz >= cost ? "default" : "secondary"}
                         >
-                          {!partUnlocked ? (
-                            <>
-                              <Lock className="mr-2 h-4 w-4" />
-                              Locked
-                            </>
-                          ) : !unlocked ? (
+                          {stageLocked ? (
                             <>
                               <Lock className="mr-2 h-4 w-4" />
                               Stage Locked
+                            </>
+                          ) : !partUnlocked ? (
+                            <>
+                              <Lock className="mr-2 h-4 w-4" />
+                              Requires Prev Part L5
                             </>
                           ) : state.level >= 20 ? (
                             <>
@@ -1021,10 +982,7 @@ export function BuildScreen() {
                           ) : bz < cost ? (
                             `Need ${cost.toLocaleString()} BZ`
                           ) : (
-                            (() => {
-                              console.log(`🔘 [UI] Rendering button for ${part.key}: L${state.level}→L${state.level+1}, Cost: ${cost}`);
-                              return `Upgrade for ${cost.toLocaleString()} BZ`;
-                            })()
+                            `Upgrade for ${cost.toLocaleString()} BZ`
                           )}
                         </Button>
 
