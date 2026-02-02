@@ -43,18 +43,20 @@ export function ConvertScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Load conversion history on mount (DB + localStorage merge)
+  // Load conversion history on mount (DB + localStorage merge with deduplication)
   useEffect(() => {
     const loadHistory = async () => {
       console.log("📥 [Convert] Loading conversion history...");
       
       // Load from localStorage first (instant)
       const localData = localStorage.getItem(STORAGE_KEY);
+      let localTransactions: Transaction[] = [];
+      
       if (localData) {
         try {
-          const parsed = JSON.parse(localData);
-          setTransactions(parsed);
-          console.log(`📥 [Convert] Loaded ${parsed.length} records from localStorage`);
+          localTransactions = JSON.parse(localData);
+          setTransactions(localTransactions);
+          console.log(`📥 [Convert] Loaded ${localTransactions.length} records from localStorage`);
         } catch (e) {
           console.error("❌ [Convert] Failed to parse localStorage:", e);
         }
@@ -68,19 +70,34 @@ export function ConvertScreen() {
         if (result.success && result.data && result.data.length > 0) {
           console.log(`✅ [Convert] Loaded ${result.data.length} records from DB`);
           
-          // Merge DB + localStorage (DB as source of truth)
-          const localIds = new Set((localData ? JSON.parse(localData) : []).map((t: Transaction) => t.id));
-          const dbRecords = result.data.filter(r => !localIds.has(r.id));
+          // DEDUPLICATION: Create a Map using transaction ID as key
+          const transactionMap = new Map<string, Transaction>();
           
-          if (dbRecords.length > 0) {
-            const merged = [...dbRecords, ...(localData ? JSON.parse(localData) : [])]
-              .sort((a, b) => b.timestamp - a.timestamp)
-              .slice(0, 50);
-            
-            setTransactions(merged);
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-            console.log(`✅ [Convert] Merged ${dbRecords.length} new DB records with localStorage`);
-          }
+          // First, add all LOCAL transactions (they have full details with bonus)
+          localTransactions.forEach(tx => {
+            transactionMap.set(tx.id, tx);
+          });
+          
+          // Then, add SERVER transactions ONLY if ID doesn't exist
+          result.data.forEach(tx => {
+            if (!transactionMap.has(tx.id)) {
+              transactionMap.set(tx.id, tx);
+            }
+          });
+          
+          // Convert Map back to array, sort by timestamp, and limit to 50
+          const merged = Array.from(transactionMap.values())
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, 50);
+          
+          setTransactions(merged);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          
+          const newFromServer = result.data.filter(tx => 
+            !localTransactions.find(local => local.id === tx.id)
+          ).length;
+          
+          console.log(`✅ [Convert] Merged: ${newFromServer} new from server, ${localTransactions.length} from local`);
         }
       }
 
@@ -91,11 +108,11 @@ export function ConvertScreen() {
   }, [telegramId]);
 
   const saveTransaction = (tx: Transaction) => {
-    // 1. Update UI immediately
+    // 1. Update UI immediately (no duplicates)
     const updated = [tx, ...transactions].slice(0, 50);
     setTransactions(updated);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    console.log("✅ [Convert] Saved to localStorage");
+    console.log("✅ [Convert] Saved to localStorage with ID:", tx.id);
 
     // 2. Background sync to DB (non-blocking)
     if (telegramId) {
@@ -109,7 +126,7 @@ export function ConvertScreen() {
         timestamp: tx.timestamp
       }).then(result => {
         if (result.success) {
-          console.log("✅ [Convert] Synced to DB in background");
+          console.log("✅ [Convert] Synced to DB with same ID:", tx.id);
         } else {
           console.warn("⚠️ [Convert] DB sync failed (data safe in localStorage):", result.error);
         }
@@ -226,13 +243,16 @@ export function ConvertScreen() {
     setIsLoading(true);
 
     try {
+      // Generate unique transaction ID (timestamp + random for uniqueness)
+      const txId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
       if (conversionType === "bz-to-bb") {
         if (subtractBZ(amount)) {
           addBB(preview.output);
           incrementConversions(amount);
           
           saveTransaction({
-            id: `${Date.now()}-${Math.random()}`,
+            id: txId,
             timestamp: Date.now(),
             type: "bz-to-bb",
             input: amount,
@@ -249,7 +269,7 @@ export function ConvertScreen() {
           addBZ(preview.output);
           
           saveTransaction({
-            id: `${Date.now()}-${Math.random()}`,
+            id: txId,
             timestamp: Date.now(),
             type: "bb-to-bz",
             input: amount,

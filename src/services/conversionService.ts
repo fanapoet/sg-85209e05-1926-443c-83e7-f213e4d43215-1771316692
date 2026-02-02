@@ -13,6 +13,7 @@ export interface ConversionRecord {
 /**
  * Save conversion record to database
  * Uses telegram_id directly (no auth session needed)
+ * Uses client-provided ID to prevent duplicates
  */
 export async function saveConversionToDB(
   telegramId: number,
@@ -20,6 +21,7 @@ export async function saveConversionToDB(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     console.log("💾 [Conversion] Saving to DB:", {
+      id: conversion.id,
       telegramId,
       type: conversion.type,
       input: conversion.input,
@@ -28,13 +30,17 @@ export async function saveConversionToDB(
 
     const { error } = await supabase
       .from("conversion_history")
-      .insert({
+      .upsert({
+        id: conversion.id,  // Use client-provided UUID to prevent duplicates
         telegram_id: telegramId,
         conversion_type: conversion.type,
         amount_in: conversion.input,
         amount_out: conversion.output,
         bonus_percent: conversion.bonus ? Math.round(conversion.bonus * 100) : 0,
         tier_at_conversion: conversion.tier || "Bronze",
+        created_at: new Date(conversion.timestamp).toISOString()
+      }, {
+        onConflict: "id"  // If ID exists, update instead of insert
       });
 
     if (error) {
@@ -42,7 +48,7 @@ export async function saveConversionToDB(
       return { success: false, error: error.message };
     }
 
-    console.log("✅ [Conversion] Saved to DB successfully");
+    console.log("✅ [Conversion] Saved to DB successfully with ID:", conversion.id);
     return { success: true };
   } catch (error) {
     console.error("❌ [Conversion] Exception:", error);
