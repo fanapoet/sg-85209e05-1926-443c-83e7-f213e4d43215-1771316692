@@ -1,64 +1,48 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
-
-type ConversionHistory = Database["public"]["Tables"]["conversion_history"]["Row"];
-type ConversionInsert = Database["public"]["Tables"]["conversion_history"]["Insert"];
 
 export interface ConversionRecord {
-  type: "BZ_TO_BB" | "BB_TO_BZ";
-  amountIn: number;
-  amountOut: number;
-  burnedAmount?: number;
-  tierAtConversion: string;
-  tierBonusPercent: number;
-  exchangeRate: number;
+  id: string;
+  type: "bz-to-bb" | "bb-to-bz";
+  input: number;
+  output: number;
+  bonus?: number;
+  tier?: string;
   timestamp: number;
 }
 
 /**
- * Record a conversion to the database
+ * Save conversion record to database
+ * Uses telegram_id directly (no auth session needed)
  */
-export async function recordConversion(
-  userId: string,
+export async function saveConversionToDB(
+  telegramId: number,
   conversion: ConversionRecord
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log("💾 [Conversion] Recording to database:", {
-      userId,
+    console.log("💾 [Conversion] Saving to DB:", {
+      telegramId,
       type: conversion.type,
-      amountIn: conversion.amountIn,
-      amountOut: conversion.amountOut
+      input: conversion.input,
+      output: conversion.output
     });
 
-    const conversionData: ConversionInsert = {
-      user_id: userId,
-      conversion_type: conversion.type,
-      amount_in: conversion.amountIn,
-      amount_out: conversion.amountOut,
-      burned_amount: conversion.burnedAmount || 0,
-      tier_at_conversion: conversion.tierAtConversion,
-      tier_bonus_percent: conversion.tierBonusPercent,
-      exchange_rate: conversion.exchangeRate,
-    };
-
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("conversion_history")
-      .insert(conversionData)
-      .select()
-      .single();
+      .insert({
+        telegram_id: telegramId,
+        conversion_type: conversion.type,
+        amount_in: conversion.input,
+        amount_out: conversion.output,
+        bonus_percent: conversion.bonus ? Math.round(conversion.bonus * 100) : 0,
+        tier_at_conversion: conversion.tier || "Bronze",
+      });
 
     if (error) {
-      console.error("❌ [Conversion] Database error:", error);
-      console.error("❌ [Conversion] Error details:", {
-        message: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint
-      });
+      console.error("❌ [Conversion] DB save failed:", error);
       return { success: false, error: error.message };
     }
 
-    console.log("✅ [Conversion] Saved successfully:", data?.id);
+    console.log("✅ [Conversion] Saved to DB successfully");
     return { success: true };
   } catch (error) {
     console.error("❌ [Conversion] Exception:", error);
@@ -70,30 +54,48 @@ export async function recordConversion(
 }
 
 /**
- * Get conversion history for a user
- * @param userId - The user's UUID
- * @param limit - Maximum number of records to fetch (default: 50)
+ * Load conversion history from database
  */
-export async function getConversionHistory(
-  userId: string,
+export async function loadConversionHistory(
+  telegramId: number,
   limit = 50
-): Promise<{ success: boolean; data?: ConversionHistory[]; error?: string }> {
+): Promise<{ success: boolean; data?: ConversionRecord[]; error?: string }> {
   try {
+    console.log("📥 [Conversion] Loading history from DB for telegram_id:", telegramId);
+
     const { data, error } = await supabase
       .from("conversion_history")
       .select("*")
-      .eq("user_id", userId)
+      .eq("telegram_id", telegramId)
       .order("created_at", { ascending: false })
       .limit(limit);
 
     if (error) {
-      console.error("Error fetching conversion history:", error);
+      console.error("❌ [Conversion] Load failed:", error);
       return { success: false, error: error.message };
     }
 
-    return { success: true, data: data || [] };
+    if (!data || data.length === 0) {
+      console.log("📥 [Conversion] No history found (fresh start)");
+      return { success: true, data: [] };
+    }
+
+    // Convert DB format to ConversionRecord format
+    const conversions: ConversionRecord[] = data.map(record => ({
+      id: record.id,
+      type: record.conversion_type as "bz-to-bb" | "bb-to-bz",
+      input: Number(record.amount_in),
+      output: Number(record.amount_out),
+      bonus: record.bonus_percent ? record.bonus_percent / 100 : undefined,
+      tier: record.tier_at_conversion || undefined,
+      timestamp: new Date(record.created_at).getTime()
+    }));
+
+    console.log(`✅ [Conversion] Loaded ${conversions.length} records from DB`);
+    return { success: true, data: conversions };
+
   } catch (error) {
-    console.error("Exception fetching conversion history:", error);
+    console.error("❌ [Conversion] Load exception:", error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : "Unknown error" 
@@ -102,52 +104,46 @@ export async function getConversionHistory(
 }
 
 /**
- * Get conversion statistics for a user
+ * Batch sync conversions from localStorage to DB
  */
-export async function getConversionStats(
-  userId: string
-): Promise<{
-  success: boolean;
-  stats?: {
-    totalBzToBb: number;
-    totalBbToBz: number;
-    totalBurned: number;
-    conversionCount: number;
-  };
-  error?: string;
-}> {
+export async function syncConversionsToDB(
+  telegramId: number,
+  conversions: ConversionRecord[]
+): Promise<{ success: boolean; synced: number; error?: string }> {
   try {
-    const { data, error } = await supabase
-      .from("conversion_history")
-      .select("conversion_type, amount_in, amount_out, burned_amount")
-      .eq("user_id", userId);
-
-    if (error) {
-      console.error("Error fetching conversion stats:", error);
-      return { success: false, error: error.message };
+    if (!conversions || conversions.length === 0) {
+      return { success: true, synced: 0 };
     }
 
-    const stats = {
-      totalBzToBb: 0,
-      totalBbToBz: 0,
-      totalBurned: 0,
-      conversionCount: data?.length || 0,
-    };
+    console.log(`🔄 [Conversion] Batch syncing ${conversions.length} conversions...`);
 
-    data?.forEach((conversion) => {
-      if (conversion.conversion_type === "BZ_TO_BB") {
-        stats.totalBzToBb += Number(conversion.amount_in);
-      } else if (conversion.conversion_type === "BB_TO_BZ") {
-        stats.totalBbToBz += Number(conversion.amount_out);
-      }
-      stats.totalBurned += Number(conversion.burned_amount || 0);
-    });
+    const records = conversions.map(conv => ({
+      telegram_id: telegramId,
+      conversion_type: conv.type,
+      amount_in: conv.input,
+      amount_out: conv.output,
+      bonus_percent: conv.bonus ? Math.round(conv.bonus * 100) : 0,
+      tier_at_conversion: conv.tier || "Bronze",
+      created_at: new Date(conv.timestamp).toISOString()
+    }));
 
-    return { success: true, stats };
+    const { error } = await supabase
+      .from("conversion_history")
+      .insert(records);
+
+    if (error) {
+      console.error("❌ [Conversion] Batch sync failed:", error);
+      return { success: false, synced: 0, error: error.message };
+    }
+
+    console.log(`✅ [Conversion] Batch synced ${conversions.length} records`);
+    return { success: true, synced: conversions.length };
+
   } catch (error) {
-    console.error("Exception fetching conversion stats:", error);
+    console.error("❌ [Conversion] Batch sync exception:", error);
     return { 
       success: false, 
+      synced: 0,
       error: error instanceof Error ? error.message : "Unknown error" 
     };
   }

@@ -604,6 +604,49 @@ export function startAutoSync(
   };
 }
 
+/**
+ * Sync single conversion to database (background, non-blocking)
+ */
+export async function syncConversionToDB(
+  telegramId: number,
+  conversion: {
+    id: string;
+    type: "bz-to-bb" | "bb-to-bz";
+    input: number;
+    output: number;
+    bonus?: number;
+    tier?: string;
+    timestamp: number;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    console.log("💾 [Sync] Syncing conversion to DB:", conversion.type);
+
+    const { error } = await supabase
+      .from("conversion_history")
+      .insert({
+        telegram_id: telegramId,
+        conversion_type: conversion.type,
+        amount_in: conversion.input,
+        amount_out: conversion.output,
+        bonus_percent: conversion.bonus ? Math.round(conversion.bonus * 100) : 0,
+        tier_at_conversion: conversion.tier || "Bronze",
+        created_at: new Date(conversion.timestamp).toISOString()
+      });
+
+    if (error) {
+      console.error("❌ [Sync] Conversion sync failed:", error);
+      return { success: false, error: error.message };
+    }
+
+    console.log("✅ [Sync] Conversion synced to DB");
+    return { success: true };
+  } catch (error: any) {
+    console.error("❌ [Sync] Conversion sync exception:", error);
+    return { success: false, error: error.message };
+  }
+}
+
 // Monitor network status
 if (typeof window !== "undefined") {
   window.addEventListener("online", () => {

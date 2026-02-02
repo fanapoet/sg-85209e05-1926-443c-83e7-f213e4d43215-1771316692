@@ -6,11 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeftRight, AlertCircle, TrendingUp, TrendingDown, Clock, Divide, ArrowUpRight } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { recordConversion, getConversionHistory } from "@/services/conversionService";
-import type { Database } from "@/integrations/supabase/types";
+import { loadConversionHistory } from "@/services/conversionService";
+import { syncConversionToDB } from "@/services/syncService";
 
 type ConversionType = "bz-to-bb" | "bb-to-bz";
-type DBConversionHistory = Database["public"]["Tables"]["conversion_history"]["Row"];
 
 interface Transaction {
   id: string;
@@ -18,12 +17,12 @@ interface Transaction {
   type: ConversionType;
   input: number;
   output: number;
-  burned?: number;
   bonus?: number;
   tier?: string;
 }
 
 const ANCHOR_RATE = 1000000;
+const STORAGE_KEY = "conversionHistory";
 
 export function ConvertScreen() {
   const { 
@@ -35,81 +34,86 @@ export function ConvertScreen() {
     addBB, 
     subtractBB, 
     incrementConversions,
-    userId
+    telegramId
   } = useGameState();
   
   const [conversionType, setConversionType] = useState<ConversionType>("bz-to-bb");
   const [inputAmount, setInputAmount] = useState("");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  // Load conversion history from database
+  // Load conversion history on mount (DB + localStorage merge)
   useEffect(() => {
-    if (!userId) return;
-
     const loadHistory = async () => {
-      console.log("📥 [Conversion] Loading history for user:", userId);
-      const result = await getConversionHistory(userId, 20);
+      console.log("📥 [Convert] Loading conversion history...");
       
-      if (result.success && result.data) {
-        console.log("✅ [Conversion] Loaded records:", result.data.length);
-        const formatted = result.data.map((conv: DBConversionHistory) => ({
-          id: conv.id,
-          timestamp: new Date(conv.created_at).getTime(),
-          type: conv.conversion_type === "BZ_TO_BB" ? "bz-to-bb" as ConversionType : "bb-to-bz" as ConversionType,
-          input: Number(conv.amount_in),
-          output: Number(conv.amount_out),
-          burned: Number(conv.burned_amount) || undefined,
-          bonus: conv.conversion_type === "BZ_TO_BB" && Number(conv.amount_in) > 0 
-            ? Number(conv.amount_out) - (Number(conv.amount_in) / ANCHOR_RATE)
-            : undefined,
-          tier: conv.tier_at_conversion,
-        }));
-        setTransactions(formatted);
-      } else {
-        // Fallback to localStorage if database fails
-        const saved = localStorage.getItem("conversionHistory");
-        if (saved) {
-          try {
-            setTransactions(JSON.parse(saved));
-          } catch (e) {
-            console.error("Failed to load conversion history:", e);
+      // Load from localStorage first (instant)
+      const localData = localStorage.getItem(STORAGE_KEY);
+      if (localData) {
+        try {
+          const parsed = JSON.parse(localData);
+          setTransactions(parsed);
+          console.log(`📥 [Convert] Loaded ${parsed.length} records from localStorage`);
+        } catch (e) {
+          console.error("❌ [Convert] Failed to parse localStorage:", e);
+        }
+      }
+
+      // Load from DB if telegramId available (background)
+      if (telegramId) {
+        console.log("📥 [Convert] Loading from DB for telegram_id:", telegramId);
+        const result = await loadConversionHistory(telegramId, 50);
+        
+        if (result.success && result.data && result.data.length > 0) {
+          console.log(`✅ [Convert] Loaded ${result.data.length} records from DB`);
+          
+          // Merge DB + localStorage (DB as source of truth)
+          const localIds = new Set((localData ? JSON.parse(localData) : []).map((t: Transaction) => t.id));
+          const dbRecords = result.data.filter(r => !localIds.has(r.id));
+          
+          if (dbRecords.length > 0) {
+            const merged = [...dbRecords, ...(localData ? JSON.parse(localData) : [])]
+              .sort((a, b) => b.timestamp - a.timestamp)
+              .slice(0, 50);
+            
+            setTransactions(merged);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+            console.log(`✅ [Convert] Merged ${dbRecords.length} new DB records with localStorage`);
           }
         }
       }
+
+      setIsInitialLoad(false);
     };
 
     loadHistory();
-  }, [userId]);
+  }, [telegramId]);
 
-  const saveTransaction = async (tx: Transaction) => {
-    // Optimistically update UI
-    const updated = [tx, ...transactions].slice(0, 20);
+  const saveTransaction = (tx: Transaction) => {
+    // 1. Update UI immediately
+    const updated = [tx, ...transactions].slice(0, 50);
     setTransactions(updated);
-    localStorage.setItem("conversionHistory", JSON.stringify(updated));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    console.log("✅ [Convert] Saved to localStorage");
 
-    // Save to database
-    if (userId) {
-      console.log("💾 [Conversion] Saving transaction for user:", userId);
-      const result = await recordConversion(userId, {
-        type: tx.type === "bz-to-bb" ? "BZ_TO_BB" : "BB_TO_BZ",
-        amountIn: tx.input,
-        amountOut: tx.output,
-        burnedAmount: tx.burned || 0,
-        tierAtConversion: tier,
-        tierBonusPercent: getTierPercent(),
-        exchangeRate: ANCHOR_RATE,
-        timestamp: tx.timestamp,
+    // 2. Background sync to DB (non-blocking)
+    if (telegramId) {
+      syncConversionToDB(telegramId, {
+        id: tx.id,
+        type: tx.type,
+        input: tx.input,
+        output: tx.output,
+        bonus: tx.bonus,
+        tier: tx.tier,
+        timestamp: tx.timestamp
+      }).then(result => {
+        if (result.success) {
+          console.log("✅ [Convert] Synced to DB in background");
+        } else {
+          console.warn("⚠️ [Convert] DB sync failed (data safe in localStorage):", result.error);
+        }
       });
-
-      if (!result.success) {
-        console.error("❌ [Conversion] Failed to save to database:", result.error);
-        // Transaction is already saved to localStorage as fallback
-      } else {
-        console.log("✅ [Conversion] Saved to database successfully");
-      }
-    } else {
-      console.warn("⚠️ [Conversion] No userId available, skipping database save");
     }
   };
 
@@ -206,11 +210,9 @@ export function ConvertScreen() {
 
   const handleQuickFill = (type: "half" | "max") => {
     if (conversionType === "bz-to-bb") {
-      // BZ → BB: Use full BZ balance
       const amount = type === "half" ? bz / 2 : bz;
       setInputAmount(amount.toString());
     } else {
-      // BB → BZ: Use eligible BB (tier % of total)
       const eligible = bb * (tierPercent / 100);
       const amount = type === "half" ? eligible / 2 : eligible;
       setInputAmount(amount.toFixed(6));
@@ -229,13 +231,14 @@ export function ConvertScreen() {
           addBB(preview.output);
           incrementConversions(amount);
           
-          await saveTransaction({
-            id: Date.now().toString(),
+          saveTransaction({
+            id: `${Date.now()}-${Math.random()}`,
             timestamp: Date.now(),
             type: "bz-to-bb",
             input: amount,
             output: preview.output,
-            bonus: preview.bonus
+            bonus: preview.bonus,
+            tier
           });
           
           setInputAmount("");
@@ -245,13 +248,13 @@ export function ConvertScreen() {
         if (subtractBB(totalCost)) {
           addBZ(preview.output);
           
-          await saveTransaction({
-            id: Date.now().toString(),
+          saveTransaction({
+            id: `${Date.now()}-${Math.random()}`,
             timestamp: Date.now(),
             type: "bb-to-bz",
             input: amount,
             output: preview.output,
-            burned: preview.burned
+            tier
           });
           
           setInputAmount("");
@@ -351,7 +354,6 @@ export function ConvertScreen() {
             className="text-lg"
           />
           
-          {/* Quick Fill Buttons */}
           <div className="flex gap-2">
             <Button
               type="button"
@@ -468,25 +470,6 @@ export function ConvertScreen() {
           </Alert>
         )}
 
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickFill("half")}
-          >
-            <Divide className="mr-2 h-4 w-4" />
-            Half
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleQuickFill("max")}
-          >
-            <ArrowUpRight className="mr-2 h-4 w-4" />
-            Max
-          </Button>
-        </div>
-
         <Button
           onClick={handleConvert}
           disabled={!preview.valid || parseFloat(inputAmount) <= 0 || isLoading}
@@ -545,11 +528,6 @@ export function ConvertScreen() {
                   {tx.bonus && tx.bonus > 0 && (
                     <p className="text-xs text-green-600 dark:text-green-400 ml-5">
                       Bonus: +{formatBB(tx.bonus)} BB
-                    </p>
-                  )}
-                  {tx.burned && tx.burned > 0 && (
-                    <p className="text-xs text-red-600 dark:text-red-400 ml-5">
-                      Burned: {formatBB(tx.burned)} BB
                     </p>
                   )}
                   {tx.tier && (
