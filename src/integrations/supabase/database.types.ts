@@ -1,4 +1,4 @@
- 
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 export type Json =
   | string
   | number
@@ -55,32 +55,41 @@ export type Database = {
         Row: {
           amount_in: number
           amount_out: number
-          bonus_percent: number | null
+          burned_amount: number | null
           conversion_type: string
           created_at: string | null
+          exchange_rate: number | null
           id: string
-          telegram_id: number
-          tier_at_conversion: string | null
+          telegram_id: number | null
+          tier_at_conversion: string
+          tier_bonus_percent: number
+          user_id: string | null
         }
         Insert: {
           amount_in: number
           amount_out: number
-          bonus_percent?: number | null
+          burned_amount?: number | null
           conversion_type: string
           created_at?: string | null
+          exchange_rate?: number | null
           id?: string
-          telegram_id: number
-          tier_at_conversion?: string | null
+          telegram_id?: number | null
+          tier_at_conversion: string
+          tier_bonus_percent: number
+          user_id?: string | null
         }
         Update: {
           amount_in?: number
           amount_out?: number
-          bonus_percent?: number | null
+          burned_amount?: number | null
           conversion_type?: string
           created_at?: string | null
+          exchange_rate?: number | null
           id?: string
-          telegram_id?: number
-          tier_at_conversion?: string | null
+          telegram_id?: number | null
+          tier_at_conversion?: string
+          tier_bonus_percent?: number
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -694,6 +703,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_reward_state: {
+        Row: {
+          created_at: string | null
+          current_reward_week: number | null
+          current_weekly_period_start: string | null
+          daily_streak: number | null
+          id: string
+          last_daily_claim_date: string | null
+          telegram_id: number | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          current_reward_week?: number | null
+          current_weekly_period_start?: string | null
+          daily_streak?: number | null
+          id?: string
+          last_daily_claim_date?: string | null
+          telegram_id?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          current_reward_week?: number | null
+          current_weekly_period_start?: string | null
+          daily_streak?: number | null
+          id?: string
+          last_daily_claim_date?: string | null
+          telegram_id?: number | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       user_task_progress: {
         Row: {
