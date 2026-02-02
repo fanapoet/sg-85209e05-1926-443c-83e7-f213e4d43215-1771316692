@@ -57,47 +57,46 @@ export function ConvertScreen() {
           localTransactions = JSON.parse(localData);
           setTransactions(localTransactions);
           console.log(`📥 [Convert] Loaded ${localTransactions.length} records from localStorage`);
+          setIsInitialLoad(false);
+          // ✅ STOP HERE - If localStorage has data, don't fetch from DB
+          return;
         } catch (e) {
           console.error("❌ [Convert] Failed to parse localStorage:", e);
+          // Clear corrupted localStorage
+          localStorage.removeItem(STORAGE_KEY);
         }
       }
 
-      // Load from DB if telegramId available (background)
+      // Only reach here if localStorage is EMPTY (device change or cleared)
       if (telegramId) {
-        console.log("📥 [Convert] Loading from DB for telegram_id:", telegramId);
+        console.log("📥 [Convert] localStorage empty. Fetching from DB...");
         const result = await loadConversionHistory(telegramId, 50);
         
         if (result.success && result.data && result.data.length > 0) {
-          console.log(`✅ [Convert] Loaded ${result.data.length} records from DB`);
+          console.log(`✅ [Convert] Restored ${result.data.length} records from DB`);
           
-          // DEDUPLICATION: Create a Map using transaction ID as key
-          const transactionMap = new Map<string, Transaction>();
-          
-          // First, add all LOCAL transactions (they have full details with bonus)
-          localTransactions.forEach(tx => {
-            transactionMap.set(tx.id, tx);
-          });
-          
-          // Then, add SERVER transactions ONLY if ID doesn't exist
-          result.data.forEach(tx => {
-            if (!transactionMap.has(tx.id)) {
-              transactionMap.set(tx.id, tx);
+          // Calculate bonus from actual amounts for each record
+          const restoredTransactions = result.data.map(record => {
+            let bonus = 0;
+            
+            // For BZ → BB conversions, calculate bonus from amounts
+            if (record.type === "bz-to-bb") {
+              const baseOutput = record.input / 1_000_000; // Anchor rate
+              const actualBonus = record.output - baseOutput;
+              bonus = actualBonus > 0.000001 ? actualBonus : 0;
             }
+            
+            return {
+              ...record,
+              bonus: bonus
+            };
           });
           
-          // Convert Map back to array, sort by timestamp, and limit to 50
-          const merged = Array.from(transactionMap.values())
-            .sort((a, b) => b.timestamp - a.timestamp)
-            .slice(0, 50);
-          
-          setTransactions(merged);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-          
-          const newFromServer = result.data.filter(tx => 
-            !localTransactions.find(local => local.id === tx.id)
-          ).length;
-          
-          console.log(`✅ [Convert] Merged: ${newFromServer} new from server, ${localTransactions.length} from local`);
+          setTransactions(restoredTransactions);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(restoredTransactions));
+          console.log(`✅ [Convert] Restored with calculated bonuses`);
+        } else {
+          console.log("ℹ️ [Convert] No history found in DB. Fresh start.");
         }
       }
 
