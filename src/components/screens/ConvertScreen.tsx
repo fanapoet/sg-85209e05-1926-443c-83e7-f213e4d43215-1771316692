@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeftRight, AlertCircle, TrendingUp, TrendingDown, Clock } from "lucide-react";
+import { ArrowLeftRight, AlertCircle, TrendingUp, TrendingDown, Clock, Divide, ArrowUpRight } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { recordConversion, getConversionHistory } from "@/services/conversionService";
 import type { Database } from "@/integrations/supabase/types";
@@ -35,7 +35,6 @@ export function ConvertScreen() {
     addBB, 
     subtractBB, 
     incrementConversions,
-    telegramId,
     userId
   } = useGameState();
   
@@ -205,6 +204,19 @@ export function ConvertScreen() {
 
   const preview = calculatePreview();
 
+  const handleQuickFill = (type: "half" | "max") => {
+    if (conversionType === "bz-to-bb") {
+      // BZ → BB: Use full BZ balance
+      const amount = type === "half" ? bz / 2 : bz;
+      setInputAmount(amount.toString());
+    } else {
+      // BB → BZ: Use eligible BB (tier % of total)
+      const eligible = bb * (tierPercent / 100);
+      const amount = type === "half" ? eligible / 2 : eligible;
+      setInputAmount(amount.toFixed(6));
+    }
+  };
+
   const handleConvert = async () => {
     const amount = parseFloat(inputAmount) || 0;
     if (!preview.valid || amount <= 0 || isLoading) return;
@@ -338,6 +350,31 @@ export function ConvertScreen() {
             onChange={(e) => setInputAmount(e.target.value)}
             className="text-lg"
           />
+          
+          {/* Quick Fill Buttons */}
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleQuickFill("half")}
+              className="flex-1"
+            >
+              <Divide className="mr-1 h-3 w-3" />
+              Half
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleQuickFill("max")}
+              className="flex-1"
+            >
+              <ArrowUpRight className="mr-1 h-3 w-3" />
+              Max
+            </Button>
+          </div>
+
           {conversionType === "bz-to-bb" && tierPercent > 0 && (
             <p className="text-xs text-green-600 dark:text-green-400">
               Tier bonus: +{tierPercent}% extra BB on conversion
@@ -430,6 +467,25 @@ export function ConvertScreen() {
             <AlertDescription>{preview.error}</AlertDescription>
           </Alert>
         )}
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleQuickFill("half")}
+          >
+            <Divide className="mr-2 h-4 w-4" />
+            Half
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleQuickFill("max")}
+          >
+            <ArrowUpRight className="mr-2 h-4 w-4" />
+            Max
+          </Button>
+        </div>
 
         <Button
           onClick={handleConvert}
