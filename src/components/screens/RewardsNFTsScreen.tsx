@@ -50,7 +50,6 @@ interface NFT {
   owned: boolean;
 }
 
-// Multi-week daily rewards system with progressive scaling
 const getWeeklyRewards = (weekNumber: number): DailyReward[] => {
   const baseRewards = [
     { day: 1, type: "XP" as const, amount: 2000 },
@@ -62,7 +61,6 @@ const getWeeklyRewards = (weekNumber: number): DailyReward[] => {
     { day: 7, type: "BZ" as const, amount: 15000 }
   ];
 
-  // Scale rewards based on week number
   return baseRewards.map(reward => ({
     ...reward,
     amount: reward.type === "BB" 
@@ -81,7 +79,6 @@ const getIconComponent = (iconName: string) => {
 export function RewardsNFTsScreen() {
   const gameState = useGameState();
   
-  // State
   const [dailyStreak, setDailyStreak] = useState(0);
   const [currentWeek, setCurrentWeek] = useState(1);
   const [lastClaimDate, setLastClaimDate] = useState<string | null>(null);
@@ -89,10 +86,8 @@ export function RewardsNFTsScreen() {
   const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallenge[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Get current week's rewards
   const dailyRewards = getWeeklyRewards(currentWeek);
 
-  // Load saved state
   useEffect(() => {
     try {
       const savedStreak = localStorage.getItem("dailyStreak");
@@ -109,7 +104,6 @@ export function RewardsNFTsScreen() {
       if (savedChallenges) {
         setWeeklyChallenges(JSON.parse(savedChallenges));
       } else {
-        // Weekly challenges rebalanced to 50% XP / 35% BB / 15% BZ
         const defaultChallenges: WeeklyChallenge[] = [
           {
             key: "builder",
@@ -118,7 +112,7 @@ export function RewardsNFTsScreen() {
             description: "Upgrade 10 build parts this week",
             target: 10,
             progress: 0,
-            reward: { type: "XP", amount: 5000 },  // 50% allocation
+            reward: { type: "XP", amount: 5000 },
             claimed: false
           },
           {
@@ -128,7 +122,7 @@ export function RewardsNFTsScreen() {
             description: "Invite 3 new friends this week",
             target: 3,
             progress: 0,
-            reward: { type: "BB", amount: 0.003 },  // 35% allocation
+            reward: { type: "BB", amount: 0.003 },
             claimed: false
           },
           {
@@ -138,7 +132,7 @@ export function RewardsNFTsScreen() {
             description: "Convert 1,000,000 BZ to BB",
             target: 1000000,
             progress: 0,
-            reward: { type: "BZ", amount: 2000 },  // 15% allocation
+            reward: { type: "BZ", amount: 2000 },
             claimed: false
           }
         ];
@@ -153,7 +147,6 @@ export function RewardsNFTsScreen() {
     }
   }, []);
 
-  // Update weekly challenges progress
   useEffect(() => {
     if (loading || !gameState) return;
     
@@ -179,7 +172,6 @@ export function RewardsNFTsScreen() {
     }
   }, [gameState?.totalUpgrades, gameState?.referralCount, gameState?.totalConversions, loading]);
 
-  // Save weekly challenges
   useEffect(() => {
     if (!loading && weeklyChallenges.length > 0) {
       try {
@@ -190,7 +182,6 @@ export function RewardsNFTsScreen() {
     }
   }, [weeklyChallenges, loading]);
 
-  // Check Stage 2 completion
   const isStage2Complete = (): boolean => {
     try {
       const buildParts = localStorage.getItem("buildParts");
@@ -205,14 +196,12 @@ export function RewardsNFTsScreen() {
     }
   };
 
-  // Check if boosters are maxed
   const areBoostersMaxed = (): boolean => {
     try {
       const boosters = localStorage.getItem("boosters");
       if (!boosters) return false;
       
       const data = JSON.parse(boosters);
-      // Check Energy per Tap, Energy Capacity, and Recovery Rate are at max level (10)
       return (
         data.energyPerTap >= 10 && 
         data.energyCapacity >= 10 && 
@@ -223,7 +212,6 @@ export function RewardsNFTsScreen() {
     }
   };
 
-  // NFT definitions
   const nfts: NFT[] = [
     {
       key: "early_adopter",
@@ -316,7 +304,6 @@ export function RewardsNFTsScreen() {
 
       const newStreak = nextDay;
       
-      // Increment week when completing day 7
       let newWeek = currentWeek;
       if (nextDay === 7) {
         newWeek = currentWeek + 1;
@@ -329,7 +316,6 @@ export function RewardsNFTsScreen() {
       localStorage.setItem("dailyStreak", newStreak.toString());
       localStorage.setItem("lastClaimDate", today);
 
-      // Sync to database (background, non-blocking)
       if (gameState.userId) {
         claimDailyReward({
           userId: gameState.userId,
@@ -342,7 +328,6 @@ export function RewardsNFTsScreen() {
         });
       }
 
-      // Sync player state to database immediately after claim
       import("@/services/syncService").then(({ syncPlayerState }) => {
         syncPlayerState({
           bzBalance: gameState.bz,
@@ -373,7 +358,6 @@ export function RewardsNFTsScreen() {
               gameState.addXP(challenge.reward.amount);
             }
             
-            // Sync to database (background, non-blocking)
             if (gameState.userId) {
               updateWeeklyChallengeProgress({
                 userId: gameState.userId,
@@ -405,7 +389,6 @@ export function RewardsNFTsScreen() {
         setOwnedNFTs(updated);
         localStorage.setItem("ownedNFTs", JSON.stringify(updated));
         
-        // Sync free NFT to database
         if (gameState.userId) {
           purchaseNFT({
             userId: gameState.userId,
@@ -423,7 +406,6 @@ export function RewardsNFTsScreen() {
         setOwnedNFTs(updated);
         localStorage.setItem("ownedNFTs", JSON.stringify(updated));
         
-        // Sync NFT purchase to database
         if (gameState.userId) {
           purchaseNFT({
             userId: gameState.userId,
@@ -433,7 +415,6 @@ export function RewardsNFTsScreen() {
             console.error("Failed to sync NFT purchase to database:", err);
           });
 
-          // Sync updated BB balance
           import("@/services/syncService").then(({ syncPlayerState }) => {
             syncPlayerState({
               bbBalance: gameState.bb,
@@ -448,9 +429,8 @@ export function RewardsNFTsScreen() {
   };
 
   const canClaimDaily = lastClaimDate !== new Date().toDateString();
-  const currentDayReward = getWeeklyRewards(Math.floor(dailyStreak / 7) + 1)[(dailyStreak % 7)];
+  const currentDayReward = dailyRewards[(dailyStreak % 7)];
 
-  // Helper function to get progress text for each NFT
   const getProgressText = (nft: NFT): string => {
     if (nft.owned) return "";
     
@@ -474,7 +454,6 @@ export function RewardsNFTsScreen() {
     }
   };
 
-  // Helper function to get progress percentage
   const getProgressPercent = (nft: NFT): number => {
     if (nft.owned || nft.requirementMet) return 100;
     
@@ -498,7 +477,6 @@ export function RewardsNFTsScreen() {
     }
   };
 
-  // Helper to check if NFT should show progress bar
   const shouldShowProgressBar = (nft: NFT): boolean => {
     if (nft.owned) return false;
     return ["social_king", "tap_legend", "golden_bunny", "diamond_crystal"].includes(nft.key);
@@ -521,7 +499,6 @@ export function RewardsNFTsScreen() {
         </p>
       </div>
 
-      {/* Daily Rewards */}
       <Card className="p-4">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -540,9 +517,9 @@ export function RewardsNFTsScreen() {
           </div>
 
           <div className="grid grid-cols-7 gap-2">
-            {getWeeklyRewards(Math.floor(dailyStreak / 7) + 1).map((reward, index) => {
+            {dailyRewards.map((reward, index) => {
               const dayNum = index + 1;
-              const isClaimed = dailyStreak >= dayNum && dailyStreak < dayNum + 7;
+              const isClaimed = dailyStreak >= dayNum;
               const isCurrent = (dailyStreak % 7) + 1 === dayNum;
 
               return (
@@ -557,12 +534,14 @@ export function RewardsNFTsScreen() {
                   }`}
                 >
                   <p className="text-xs font-medium mb-1">D{dayNum}</p>
-                  {isClaimed && !isCurrent ? (
-                    <Check className="h-4 w-4 mx-auto text-green-600" />
-                  ) : (
-                    <p className="text-xs font-bold">
-                      {reward.type === "BB" ? reward.amount.toFixed(3) : reward.amount.toLocaleString()} {reward.type}
-                    </p>
+                  <p className="text-[10px] font-bold leading-tight">
+                    {reward.type === "BB" 
+                      ? `${reward.amount.toFixed(3)} BB` 
+                      : `${reward.amount.toLocaleString()} ${reward.type}`
+                    }
+                  </p>
+                  {isClaimed && !isCurrent && (
+                    <Check className="h-3 w-3 mx-auto mt-1 text-green-600" />
                   )}
                 </div>
               );
@@ -587,7 +566,6 @@ export function RewardsNFTsScreen() {
         </div>
       </Card>
 
-      {/* Weekly Challenges */}
       <Card className="p-4">
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -667,7 +645,6 @@ export function RewardsNFTsScreen() {
         </div>
       </Card>
 
-      {/* NFTs */}
       <Card className="p-4">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -698,7 +675,6 @@ export function RewardsNFTsScreen() {
                       : ""
                   }`}
                 >
-                  {/* Header: Icon + Title + Badge */}
                   <div className="flex items-start gap-4 mb-4">
                     <div className={`p-3 rounded-lg flex-shrink-0 ${nft.owned ? "bg-green-500/20" : "bg-primary/10"}`}>
                       <Icon className={`h-6 w-6 ${nft.owned ? "text-green-600" : "text-primary"}`} />
@@ -721,7 +697,6 @@ export function RewardsNFTsScreen() {
                     </div>
                   </div>
 
-                  {/* Progress Section (only if not owned) */}
                   {!nft.owned && progressText && (
                     <div className="mb-4 space-y-2">
                       <div className="flex items-center justify-between text-sm">
@@ -736,7 +711,6 @@ export function RewardsNFTsScreen() {
                     </div>
                   )}
 
-                  {/* Requirement & Price */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-2 text-sm">
                       {nft.requirementMet ? (
@@ -753,7 +727,6 @@ export function RewardsNFTsScreen() {
                     </Badge>
                   </div>
 
-                  {/* Action Button */}
                   <Button
                     onClick={() => handlePurchaseNFT(nft)}
                     disabled={nft.owned || !nft.requirementMet}
