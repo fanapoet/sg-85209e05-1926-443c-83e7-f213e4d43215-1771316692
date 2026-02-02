@@ -38,7 +38,8 @@ import {
   TrendingUp,
   Flame,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  Star
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -81,6 +82,7 @@ interface IdleState {
 interface CompletionCelebration {
   partKey: string;
   show: boolean;
+  xpAwarded: number;
 }
 
 const stages = [
@@ -155,6 +157,14 @@ const allParts: Part[] = [
 
 const BUILD_DURATION = 10 * 1000; // 10 seconds for testing
 
+// XP Reward Calculation
+const calculateXPReward = (part: Part, level: number): number => {
+  const baseXP = 50;
+  const stageMultiplier = part.stage;
+  const levelMultiplier = 1 + (level * 0.1);
+  return Math.floor(baseXP * stageMultiplier * levelMultiplier);
+};
+
 export function BuildScreen() {
   const { 
     bz, 
@@ -184,7 +194,7 @@ export function BuildScreen() {
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [isLoaded, setIsLoaded] = useState(false);
   const [upgradeButtonMessage, setUpgradeButtonMessage] = useState<Record<PartKey, string>>({});
-  const [completionCelebrations, setCompletionCelebrations] = useState<Record<PartKey, boolean>>({});
+  const [completionCelebrations, setCompletionCelebrations] = useState<Record<PartKey, CompletionCelebration>>({});
   const [claimAnimating, setClaimAnimating] = useState(false);
   const [speedUpDialog, setSpeedUpDialog] = useState<{
     open: boolean;
@@ -317,7 +327,7 @@ export function BuildScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  // Auto-complete builds with celebration
+  // Auto-complete builds with celebration AND XP REWARD
   useEffect(() => {
     if (!isLoaded) return;
 
@@ -329,14 +339,36 @@ export function BuildScreen() {
     Object.keys(newStates).forEach(key => {
       const state = newStates[key];
       if (state.isBuilding && now >= state.buildEndsAt) {
+        const part = allParts.find(p => p.key === key);
+        if (!part) return;
+
         console.log("🎉 [BuildScreen] Build completed:", key);
         
+        // Calculate XP reward
+        const xpReward = calculateXPReward(part, state.level);
+        
+        // Award XP
+        addXP(xpReward);
+        
+        // Update state
         state.level += 1;
         state.isBuilding = false;
         state.buildEndsAt = 0;
         updated = true;
 
-        newCelebrations[key] = true;
+        // Show celebration with XP
+        newCelebrations[key] = {
+          show: true,
+          xpAwarded: xpReward
+        } as CompletionCelebration;
+        
+        // Show toast
+        toast({
+          title: "🎉 Build Complete!",
+          description: `${part.name} upgraded to L${state.level}! +${xpReward} XP`,
+          duration: 3000,
+        });
+
         setTimeout(() => {
           setCompletionCelebrations(prev => {
             const updated = { ...prev };
@@ -384,7 +416,7 @@ export function BuildScreen() {
       setPartStates(newStates);
       setCompletionCelebrations(newCelebrations);
     }
-  }, [currentTime, isLoaded, partStates, idleState]);
+  }, [currentTime, isLoaded, partStates, idleState, addXP, toast]);
 
   // Update global bzPerHour
   useEffect(() => {
@@ -573,10 +605,15 @@ export function BuildScreen() {
   };
 
   const completeBuildInstantly = (partKey: string) => {
+    const part = allParts.find(p => p.key === partKey);
     const state = partStates[partKey];
-    if (!state.isBuilding) return;
+    if (!part || !state.isBuilding) return;
 
     console.log("⚡ [BuildScreen] Speed-up instant completion:", partKey);
+
+    // Calculate XP reward for speed-up completion
+    const xpReward = calculateXPReward(part, state.level);
+    addXP(xpReward);
 
     setPartStates(prev => ({
       ...prev,
@@ -586,6 +623,23 @@ export function BuildScreen() {
         buildEndsAt: 0
       }
     }));
+
+    // Show completion celebration
+    setCompletionCelebrations(prev => ({
+      ...prev,
+      [partKey]: {
+        show: true,
+        xpAwarded: xpReward
+      } as CompletionCelebration
+    }));
+
+    setTimeout(() => {
+      setCompletionCelebrations(prev => {
+        const updated = { ...prev };
+        delete updated[partKey];
+        return updated;
+      });
+    }, 3000);
 
     // Clear active build
     setIdleState(prev => ({ ...prev, activeBuildKey: null }));
@@ -662,6 +716,20 @@ export function BuildScreen() {
     }
 
     console.log("✅ [BuildScreen] BZ deducted");
+
+    // For instant upgrades (L0-L2), award XP immediately
+    if (upgradeTime === 0) {
+      const xpReward = calculateXPReward(part, state.level);
+      addXP(xpReward);
+      
+      toast({
+        title: "⚡ Instant Upgrade!",
+        description: `${part.name} upgraded to L${state.level + 1}! +${xpReward} XP`,
+        duration: 3000,
+      });
+      
+      console.log(`✅ [BuildScreen] Instant XP awarded: ${xpReward}`);
+    }
 
     // Update part state
     const endTime = Date.now() + upgradeTime;
@@ -877,7 +945,12 @@ export function BuildScreen() {
                 const upgradeTime = getUpgradeTime(state.level);
                 const timeRemaining = state.isBuilding ? Math.max(0, state.buildEndsAt - currentTime) : 0;
                 const isActive = idleState.activeBuildKey === part.key;
-                const isCelebrating = completionCelebrations[part.key];
+                const celebration = completionCelebrations[part.key];
+                const isCelebrating = celebration?.show || false;
+                const xpAwarded = celebration?.xpAwarded || 0;
+
+                // Calculate XP for next upgrade
+                const nextXP = calculateXPReward(part, state.level);
 
                 // Determine button state
                 let buttonText = "";
@@ -923,9 +996,9 @@ export function BuildScreen() {
                   >
                     {isCelebrating && (
                       <div className="absolute -top-2 -right-2 z-10">
-                        <div className="flex items-center gap-1 bg-green-500 text-white px-2 py-1 rounded-full text-xs font-bold animate-bounce">
-                          <Sparkles className="h-3 w-3" />
-                          <span>Complete!</span>
+                        <div className="flex items-center gap-1 bg-green-500 text-white px-3 py-1.5 rounded-full text-sm font-bold animate-bounce shadow-lg">
+                          <Sparkles className="h-4 w-4" />
+                          <span>+{xpAwarded} XP!</span>
                         </div>
                       </div>
                     )}
@@ -959,6 +1032,14 @@ export function BuildScreen() {
                           {currentYield > 0 ? `${currentYield.toFixed(1)} BZ/h` : "Not built"}
                           {yieldDelta > 0 && state.level < 20 && ` → +${yieldDelta.toFixed(1)} BZ/h`}
                         </p>
+
+                        {/* XP Reward Preview - Show for next upgrade */}
+                        {state.level < 20 && unlocked && partUnlocked && (
+                          <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                            <Star className="h-3 w-3 fill-current" />
+                            <span>+{nextXP} XP on upgrade</span>
+                          </div>
+                        )}
 
                         {/* Build Time Info */}
                         {upgradeTime > 0 && state.level < 20 && !state.isBuilding && unlocked && partUnlocked && (
