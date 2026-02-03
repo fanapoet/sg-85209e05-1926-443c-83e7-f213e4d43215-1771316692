@@ -325,9 +325,12 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       totalTaps: totalTaps,
       todayTaps: todayTaps,
       idleBzPerHour: bzPerHour,
-      buildParts: buildPartsData
+      buildParts: buildPartsData,
+      dailyStreak: dailyStreak,
+      currentRewardWeek: currentRewardWeek,
+      lastDailyClaimDate: lastDailyClaimDate
     };
-  }, [bz, bb, xp, tier, energy, maxEnergy, boosters, quickChargeUsesRemaining, quickChargeCooldownUntil, totalTaps, todayTaps, bzPerHour]);
+  }, [bz, bb, xp, tier, energy, maxEnergy, boosters, quickChargeUsesRemaining, quickChargeCooldownUntil, totalTaps, todayTaps, bzPerHour, dailyStreak, currentRewardWeek, lastDailyClaimDate]);
 
   // Manual Sync Function
   const manualSync = async () => {

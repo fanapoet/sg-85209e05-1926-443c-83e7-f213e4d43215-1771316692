@@ -190,6 +190,9 @@ export async function syncPlayerState(gameState: Partial<{
   buildEndTime: number;
   nftsOwned: string[];
   buildParts: Array<{ partId: string; level: number; isBuilding: boolean; buildEndsAt: number | null }>;
+  dailyStreak: number;
+  currentRewardWeek: number;
+  lastDailyClaimDate: string | null;
 }>): Promise<{ success: boolean; error?: string }> {
   console.log("🔵 [syncPlayerState] ========== FUNCTION ENTERED ==========");
   console.log("🔵 [syncPlayerState] Received gameState:", gameState);
@@ -286,6 +289,36 @@ export async function syncPlayerState(gameState: Partial<{
         console.log("✅ [Sync] Build parts synced successfully!");
       } else {
         console.error("❌ [Sync] Build parts sync failed:", buildSyncResult.error);
+      }
+    }
+
+    // Sync reward state if provided
+    if (gameState.dailyStreak !== undefined || gameState.currentRewardWeek !== undefined || gameState.lastDailyClaimDate !== undefined) {
+      console.log("🎁 [REWARDS-SYNC] Syncing reward state:", {
+        dailyStreak: gameState.dailyStreak,
+        currentRewardWeek: gameState.currentRewardWeek,
+        lastDailyClaimDate: gameState.lastDailyClaimDate
+      });
+      
+      try {
+        const { upsertRewardState } = await import("./rewardStateService");
+        
+        const rewardSyncResult = await upsertRewardState({
+          telegramId: tgUser.id,
+          userId: profile.id,
+          dailyStreak: gameState.dailyStreak || 0,
+          currentRewardWeek: gameState.currentRewardWeek || 1,
+          lastDailyClaimDate: gameState.lastDailyClaimDate || null,
+          currentWeeklyPeriodStart: new Date().toISOString()
+        });
+        
+        if (rewardSyncResult.success) {
+          console.log("✅ [REWARDS-SYNC] Reward state synced successfully!");
+        } else {
+          console.error("❌ [REWARDS-SYNC] Reward state sync failed:", rewardSyncResult.error);
+        }
+      } catch (error: any) {
+        console.error("❌ [REWARDS-SYNC] Reward state sync exception:", error);
       }
     }
 
