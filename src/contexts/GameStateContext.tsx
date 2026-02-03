@@ -9,6 +9,8 @@ import {
   getSyncStatus, 
   checkOnlineStatus 
 } from "@/services/syncService";
+import { getRewardState, upsertRewardState } from "@/services/rewardStateService";
+import { claimDailyReward } from "@/services/rewardsService";
 import { useToast } from "@/hooks/use-toast";
 
 type Tier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
@@ -31,7 +33,11 @@ interface GameState {
   tier: Tier;
   xp: number;
   referralCount: number;
-  reward: number;
+  
+  // Rewards
+  dailyStreak: number;
+  currentRewardWeek: number;
+  lastDailyClaimDate: string | null;
   
   // Stats
   totalTaps: number;
@@ -77,6 +83,7 @@ interface GameState {
   checkAndResetQuickCharge: () => void;
   addReward: (amount: number) => void;
   claimReward: () => void;
+  performDailyClaim: (day: number, week: number, type: "BZ" | "BB" | "XP", amount: number) => Promise<void>;
 }
 
 const GameStateContext = createContext<GameState | null>(null);
@@ -119,6 +126,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [xp, setXp] = useState(() => safeGetItem("bunergy_xp", 0));
   const [referralCount, setReferralCount] = useState(() => safeGetItem("bunergy_referralCount", 0));
   const [reward, setReward] = useState(() => safeGetItem("bunergy_reward", 0));
+
+  // Rewards State
+  const [dailyStreak, setDailyStreak] = useState(() => safeGetItem("dailyStreak", 0));
+  const [currentRewardWeek, setCurrentRewardWeek] = useState(() => safeGetItem("currentRewardWeek", 1));
+  const [lastDailyClaimDate, setLastDailyClaimDate] = useState<string | null>(() => safeGetItem("lastDailyClaimDate", null));
 
   // Boosters
   const [boosters, setBoosters] = useState<Boosters>(() => safeGetItem("boosters", {
@@ -173,6 +185,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => { safeSetItem("bunergy_bzPerHour", bzPerHour); }, [bzPerHour]);
   useEffect(() => { safeSetItem("bunergy_xp", xp); }, [xp]);
   useEffect(() => { safeSetItem("bunergy_referralCount", referralCount); }, [referralCount]);
+  useEffect(() => { safeSetItem("dailyStreak", dailyStreak); }, [dailyStreak]);
+  useEffect(() => { safeSetItem("currentRewardWeek", currentRewardWeek); }, [currentRewardWeek]);
+  useEffect(() => { safeSetItem("lastDailyClaimDate", lastDailyClaimDate); }, [lastDailyClaimDate]);
   useEffect(() => { safeSetItem("boosters", boosters); }, [boosters]);
   useEffect(() => { safeSetItem("bunergy_totalTaps", totalTaps); }, [totalTaps]);
   useEffect(() => { safeSetItem("bunergy_todayTaps", todayTaps); }, [todayTaps]);
@@ -202,6 +217,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         setTelegramId(authResult.profile.telegram_id);
         setUserId(authResult.profile.id);
         
+        // Load main player state
         const serverData = await loadPlayerState();
         
         if (serverData) {
@@ -223,6 +239,17 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           
           setQuickChargeUsesRemaining(Number(serverData.quickcharge_uses_remaining));
           setQuickChargeCooldownUntil(serverData.quickcharge_cooldown_until ? new Date(serverData.quickcharge_cooldown_until).getTime() : null);
+        }
+
+        // Load reward state
+        const rewardData = await getRewardState(authResult.profile.telegram_id);
+        if (rewardData) {
+          console.log("🎁 [GameState] Loaded reward data:", rewardData);
+          setDailyStreak(Math.max(dailyStreak, rewardData.dailyStreak));
+          setCurrentRewardWeek(Math.max(currentRewardWeek, rewardData.currentRewardWeek));
+          if (rewardData.lastDailyClaimDate) {
+            setLastDailyClaimDate(rewardData.lastDailyClaimDate);
+          }
         }
       }
     };
@@ -541,11 +568,61 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const performDailyClaim = async (day: number, week: number, type: "BZ" | "BB" | "XP", amount: number) => {
+    const today = new Date().toDateString();
+    
+    // 1. Update State & LocalStorage (Instant UX)
+    setDailyStreak(day);
+    setCurrentRewardWeek(week);
+    setLastDailyClaimDate(today);
+    
+    // 2. Update Balances
+    if (type === "BZ") addBZ(amount);
+    else if (type === "BB") addBB(amount);
+    else if (type === "XP") addXP(amount);
+
+    toast({
+      title: "🎁 Daily Reward Claimed",
+      description: `You received ${type === "BB" ? amount.toFixed(3) : amount.toLocaleString()} ${type}!`
+    });
+
+    // 3. Sync to Database (Background)
+    if (telegramId && userId) {
+      console.log("📤 [Rewards] Syncing claim to DB...");
+      try {
+        // Update state table
+        await upsertRewardState({
+          telegramId,
+          userId,
+          dailyStreak: day,
+          currentRewardWeek: week,
+          lastDailyClaimDate: today,
+          currentWeeklyPeriodStart: new Date().toISOString()
+        });
+
+        // Log transaction
+        await claimDailyReward({
+          telegramId,
+          userId,
+          day,
+          bzClaimed: type === "BZ" ? amount : 0,
+          bbClaimed: type === "BB" ? amount : 0,
+          xpClaimed: type === "XP" ? amount : 0
+        });
+        
+        console.log("✅ [Rewards] DB Sync successful");
+      } catch (error) {
+        console.error("❌ [Rewards] DB Sync failed:", error);
+      }
+    }
+  };
+
   return (
     <GameStateContext.Provider value={{
       telegramId,
       userId,
       bz, bb, energy, maxEnergy, bzPerHour, tier, xp, referralCount,
+      dailyStreak, currentRewardWeek, lastDailyClaimDate,
       totalTaps, todayTaps, totalTapIncome, totalUpgrades, totalConversions,
       hasClaimedIdleToday, lastClaimTimestamp,
       boosters, upgradeBooster,
@@ -557,7 +634,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       markIdleClaimed, subtractEnergy, useQuickCharge,
       checkAndResetQuickCharge,
       addReward,
-      claimReward
+      claimReward,
+      performDailyClaim
     }}>
       {children}
     </GameStateContext.Provider>
