@@ -11,7 +11,6 @@ export interface RewardStateData {
   dailyStreak: number;
   currentRewardWeek: number;
   lastDailyClaimDate: string | null;
-  currentWeeklyPeriodStart: string | null;
 }
 
 export interface RewardStateRecord {
@@ -69,20 +68,32 @@ export async function getRewardState(telegramId: number): Promise<RewardStateRec
 
 /**
  * Upsert (create or update) user's reward state
+ * CRITICAL: Uses auth.uid() from session, NOT passed userId for RLS compliance
  */
 export async function upsertRewardState(data: RewardStateData) {
   try {
     console.log("💾 [Reward State] Upserting:", data);
 
+    // CRITICAL: Get authenticated user's UUID from session (for RLS)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session?.user?.id) {
+      console.error("❌ [Reward State] No authenticated session:", sessionError);
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const authenticatedUserId = session.user.id;
+    console.log("🔐 [Reward State] Using authenticated user_id:", authenticatedUserId);
+
     const { data: result, error } = await supabase
       .from("user_reward_state")
       .upsert({
         telegram_id: data.telegramId,
-        user_id: data.userId,
+        user_id: authenticatedUserId, // ← Use auth.uid() from session!
         daily_streak: data.dailyStreak,
         current_reward_week: data.currentRewardWeek,
         last_daily_claim_date: data.lastDailyClaimDate,
-        current_weekly_period_start: data.currentWeeklyPeriodStart,
+        current_weekly_period_start: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }, {
         onConflict: "telegram_id"
@@ -92,6 +103,7 @@ export async function upsertRewardState(data: RewardStateData) {
 
     if (error) {
       console.error("❌ [Reward State] Upsert error:", error);
+      console.error("❌ [Reward State] Error details:", JSON.stringify(error, null, 2));
       return { success: false, error: error.message };
     }
 
