@@ -454,6 +454,7 @@ export function RewardsNFTsScreen() {
             
             // 2. BACKGROUND SYNC TO DATABASE (non-blocking)
             if (gameState.telegramId) {
+              console.log("📤 [Rewards] Syncing challenge claim to database...");
               updateWeeklyChallengeProgress({
                 telegramId: gameState.telegramId,
                 userId: gameState.userId,
