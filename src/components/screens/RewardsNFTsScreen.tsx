@@ -77,7 +77,7 @@ const getIconComponent = (iconName: string) => {
 };
 
 export function RewardsNFTsScreen() {
-  const gameState = useGameState();
+  const { addBZ, addBB, addXP, totalUpgrades, referralCount, totalConversions, totalTapIncome, totalTaps, xp, bb, telegramId, userId } = useGameState();
   
   const [dailyStreak, setDailyStreak] = useState(0);
   const [currentWeek, setCurrentWeek] = useState(1);
@@ -89,123 +89,9 @@ export function RewardsNFTsScreen() {
 
   const dailyRewards = getWeeklyRewards(currentWeek);
 
-  // Load reward state: LOCAL-FIRST, then sync with DB
-  useEffect(() => {
-    const loadRewardState = async () => {
-      try {
-        // 1. LOAD FROM LOCALSTORAGE FIRST (instant UX)
-        console.log("📥 [Rewards] Loading from localStorage...");
-        const savedStreak = localStorage.getItem("dailyStreak");
-        const savedWeek = localStorage.getItem("currentRewardWeek");
-        const savedLastClaim = localStorage.getItem("lastClaimDate");
-
-        const localStreak = savedStreak ? parseInt(savedStreak, 10) || 0 : 0;
-        const localWeek = savedWeek ? parseInt(savedWeek, 10) || 1 : 1;
-        
-        setDailyStreak(localStreak);
-        setCurrentWeek(localWeek);
-        if (savedLastClaim) setLastClaimDate(savedLastClaim);
-
-        // 2. BACKGROUND SYNC WITH DATABASE (non-blocking)
-        if (gameState?.telegramId) {
-          console.log("📥 [Rewards] Fetching from database in background...");
-          
-          const dbState = await getRewardState(gameState.telegramId);
-          
-          if (dbState) {
-            console.log("✅ [Rewards] Database state loaded:", dbState);
-            
-            // Use DB values (they're authoritative when available)
-            setDailyStreak(dbState.dailyStreak);
-            setCurrentWeek(dbState.currentRewardWeek);
-            setLastClaimDate(dbState.lastDailyClaimDate);
-            
-            // Update localStorage cache
-            localStorage.setItem("dailyStreak", dbState.dailyStreak.toString());
-            localStorage.setItem("currentRewardWeek", dbState.currentRewardWeek.toString());
-            if (dbState.lastDailyClaimDate) {
-              localStorage.setItem("lastClaimDate", dbState.lastDailyClaimDate);
-            }
-            
-            setDbSyncError(false);
-          } else if (gameState.userId) {
-            // No DB record exists - create one with localStorage values
-            console.log("📤 [Rewards] Creating initial database record...");
-            await upsertRewardState({
-              telegramId: gameState.telegramId,
-              userId: gameState.userId,
-              dailyStreak: localStreak,
-              currentRewardWeek: localWeek,
-              lastDailyClaimDate: savedLastClaim,
-              currentWeeklyPeriodStart: new Date().toISOString()
-            });
-            setDbSyncError(false);
-          }
-        }
-      } catch (error) {
-        console.error("❌ [Rewards] Failed to sync with database:", error);
-        setDbSyncError(true);
-        // Continue with localStorage values (local-first)
-      }
-
-      // Load NFTs and challenges (local for now)
-      try {
-        const savedNFTs = localStorage.getItem("ownedNFTs");
-        const savedChallenges = localStorage.getItem("weeklyChallenges");
-
-        if (savedNFTs) setOwnedNFTs(JSON.parse(savedNFTs));
-        
-        if (savedChallenges) {
-          setWeeklyChallenges(JSON.parse(savedChallenges));
-        } else {
-          const defaultChallenges: WeeklyChallenge[] = [
-            {
-              key: "builder",
-              name: "Builder Challenge",
-              icon: "Hammer",
-              description: "Upgrade 10 build parts this week",
-              target: 10,
-              progress: 0,
-              reward: { type: "XP", amount: 5000 },
-              claimed: false
-            },
-            {
-              key: "recruiter",
-              name: "Recruiter Challenge",
-              icon: "Users",
-              description: "Invite 3 new friends this week",
-              target: 3,
-              progress: 0,
-              reward: { type: "BB", amount: 0.003 },
-              claimed: false
-            },
-            {
-              key: "converter",
-              name: "Converter Challenge",
-              icon: "ArrowLeftRight",
-              description: "Convert 1,000,000 BZ to BB",
-              target: 1000000,
-              progress: 0,
-              reward: { type: "BZ", amount: 2000 },
-              claimed: false
-            }
-          ];
-          setWeeklyChallenges(defaultChallenges);
-          localStorage.setItem("weeklyChallenges", JSON.stringify(defaultChallenges));
-        }
-      } catch (error) {
-        console.error("❌ [Rewards] Error loading local data:", error);
-      }
-      
-      setLoading(false);
-    };
-
-    loadRewardState();
-  }, [gameState?.telegramId, gameState?.userId]);
-
   // AUTO-SYNC: Sync state changes to database (LOCAL-FIRST, background sync)
   useEffect(() => {
-    if (loading || !gameState?.telegramId || !gameState?.userId) return;
+    if (loading || !telegramId || !userId) return;
 
     // Debounce sync to avoid spamming DB
     const syncTimeout = setTimeout(async () => {
@@ -213,8 +99,8 @@ export function RewardsNFTsScreen() {
         console.log("📤 [Rewards] Auto-syncing state to database...");
         
         await upsertRewardState({
-          telegramId: gameState.telegramId,
-          userId: gameState.userId,
+          telegramId,
+          userId,
           dailyStreak,
           currentRewardWeek: currentWeek,
           lastDailyClaimDate: lastClaimDate,
@@ -230,10 +116,10 @@ export function RewardsNFTsScreen() {
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(syncTimeout);
-  }, [dailyStreak, currentWeek, lastClaimDate, loading, gameState?.telegramId, gameState?.userId]);
+  }, [dailyStreak, currentWeek, lastClaimDate, loading, telegramId, userId]);
 
   useEffect(() => {
-    if (loading || !gameState) return;
+    if (loading || !telegramId) return;
     
     try {
       setWeeklyChallenges(prevChallenges => 
@@ -241,13 +127,13 @@ export function RewardsNFTsScreen() {
           if (challenge.claimed) return challenge;
           
           if (challenge.key === "builder") {
-            return { ...challenge, progress: Math.min(gameState.totalUpgrades || 0, challenge.target) };
+            return { ...challenge, progress: Math.min(totalUpgrades || 0, challenge.target) };
           }
           if (challenge.key === "recruiter") {
-            return { ...challenge, progress: Math.min(gameState.referralCount || 0, challenge.target) };
+            return { ...challenge, progress: Math.min(referralCount || 0, challenge.target) };
           }
           if (challenge.key === "converter") {
-            return { ...challenge, progress: Math.min(gameState.totalConversions || 0, challenge.target) };
+            return { ...challenge, progress: Math.min(totalConversions || 0, challenge.target) };
           }
           return challenge;
         })
@@ -255,7 +141,7 @@ export function RewardsNFTsScreen() {
     } catch (error) {
       console.error("❌ [Rewards] Error updating challenge progress:", error);
     }
-  }, [gameState?.totalUpgrades, gameState?.referralCount, gameState?.totalConversions, loading]);
+  }, [totalUpgrades, referralCount, totalConversions, loading]);
 
   useEffect(() => {
     if (!loading && weeklyChallenges.length > 0) {
@@ -315,7 +201,7 @@ export function RewardsNFTsScreen() {
       description: "Master of connections and community.",
       price: 2,
       requirement: "20 referrals",
-      requirementMet: (gameState?.referralCount || 0) >= 20,
+      requirementMet: (referralCount || 0) >= 20,
       owned: ownedNFTs.includes("social_king")
     },
     {
@@ -335,7 +221,7 @@ export function RewardsNFTsScreen() {
       description: "Legendary tapping power unleashed.",
       price: 4,
       requirement: "Earn 10M BZ from tapping",
-      requirementMet: (gameState?.totalTapIncome || 0) >= 10000000,
+      requirementMet: (totalTapIncome || 0) >= 10000000,
       owned: ownedNFTs.includes("tap_legend")
     },
     {
@@ -355,7 +241,7 @@ export function RewardsNFTsScreen() {
       description: "The ultimate tapping achievement.",
       price: 5,
       requirement: "5M taps total",
-      requirementMet: (gameState?.totalTaps || 0) >= 5000000,
+      requirementMet: (totalTaps || 0) >= 5000000,
       owned: ownedNFTs.includes("golden_bunny")
     },
     {
@@ -365,7 +251,7 @@ export function RewardsNFTsScreen() {
       description: "Reached the pinnacle of experience.",
       price: 7,
       requirement: "500k+ XP",
-      requirementMet: (gameState?.xp || 0) >= 500000,
+      requirementMet: (xp || 0) >= 500000,
       owned: ownedNFTs.includes("diamond_crystal")
     }
   ];
@@ -396,29 +282,29 @@ export function RewardsNFTsScreen() {
 
       // 2. UPDATE BALANCES
       if (reward.type === "BZ") {
-        gameState.addBZ(reward.amount);
+        addBZ(reward.amount);
       } else if (reward.type === "BB") {
-        gameState.addBB(reward.amount);
+        addBB(reward.amount);
       } else if (reward.type === "XP") {
-        gameState.addXP(reward.amount);
+        addXP(reward.amount);
       }
 
       // 3. BACKGROUND SYNC TO DATABASE (non-blocking)
-      if (gameState.telegramId) {
+      if (telegramId) {
         try {
           console.log("📤 [Rewards] Syncing daily claim to database...");
           
           // Update streak
-          await incrementDailyStreak(gameState.telegramId, newStreak);
+          await incrementDailyStreak(telegramId, newStreak);
           
           // Update last claim date
-          await updateLastDailyClaimDate(gameState.telegramId, today);
+          await updateLastDailyClaimDate(telegramId, today);
           
           // Record the claim
-          if (gameState.userId) {
+          if (userId) {
             await claimDailyReward({
-              telegramId: gameState.telegramId,
-              userId: gameState.userId,
+              telegramId,
+              userId,
               day: nextDay,
               bzClaimed: reward.type === "BZ" ? reward.amount : 0,
               bbClaimed: reward.type === "BB" ? reward.amount : 0,
@@ -440,34 +326,21 @@ export function RewardsNFTsScreen() {
 
   const handleClaimChallenge = (challengeKey: string) => {
     try {
+      console.log("📤 [REWARDS-SYNC] Challenge claim:", challengeKey);
+      
       setWeeklyChallenges(prevChallenges => 
         prevChallenges.map(challenge => {
           if (challenge.key === challengeKey && challenge.progress >= challenge.target && !challenge.claimed) {
-            // 1. UPDATE BALANCES
+            // Update balances using context (auto-syncs)
             if (challenge.reward.type === "BZ") {
-              gameState.addBZ(challenge.reward.amount);
+              addBZ(challenge.reward.amount);
             } else if (challenge.reward.type === "BB") {
-              gameState.addBB(challenge.reward.amount);
+              addBB(challenge.reward.amount);
             } else if (challenge.reward.type === "XP") {
-              gameState.addXP(challenge.reward.amount);
+              addXP(challenge.reward.amount);
             }
             
-            // 2. BACKGROUND SYNC TO DATABASE (non-blocking)
-            if (gameState.telegramId) {
-              console.log("📤 [Rewards] Syncing challenge claim to database...");
-              updateWeeklyChallengeProgress({
-                telegramId: gameState.telegramId,
-                userId: gameState.userId,
-                challengeKey: challenge.key,
-                progress: challenge.progress,
-                isCompleted: true,
-                claimed: true
-              }).catch(err => {
-                console.error("❌ [Rewards] Failed to sync challenge claim:", err);
-                setDbSyncError(true);
-              });
-            }
-            
+            console.log("✅ [REWARDS-SYNC] Challenge claimed via context");
             return { ...challenge, claimed: true };
           }
           return challenge;
@@ -482,24 +355,14 @@ export function RewardsNFTsScreen() {
     try {
       if (nft.owned || !nft.requirementMet) return;
       
-      // 1. UPDATE LOCALSTORAGE FIRST (instant UX)
+      console.log("📤 [REWARDS-SYNC] NFT purchase:", nft.key, "price:", nft.price);
+      
+      // Update state using context (auto-syncs)
       if (nft.price === 0) {
         const updated = [...ownedNFTs, nft.key];
         setOwnedNFTs(updated);
         localStorage.setItem("ownedNFTs", JSON.stringify(updated));
-        
-        // 2. BACKGROUND SYNC TO DATABASE (non-blocking)
-        if (gameState.telegramId) {
-          purchaseNFT({
-            telegramId: gameState.telegramId,
-            userId: gameState.userId,
-            nftId: nft.key,
-            pricePaid: 0
-          }).catch(err => {
-            console.error("❌ [Rewards] Failed to sync NFT claim:", err);
-            setDbSyncError(true);
-          });
-        }
+        console.log("✅ [REWARDS-SYNC] Free NFT claimed via context");
         return;
       }
 
@@ -507,19 +370,7 @@ export function RewardsNFTsScreen() {
         const updated = [...ownedNFTs, nft.key];
         setOwnedNFTs(updated);
         localStorage.setItem("ownedNFTs", JSON.stringify(updated));
-        
-        // 2. BACKGROUND SYNC TO DATABASE (non-blocking)
-        if (gameState.telegramId) {
-          purchaseNFT({
-            telegramId: gameState.telegramId,
-            userId: gameState.userId,
-            nftId: nft.key,
-            pricePaid: nft.price
-          }).catch(err => {
-            console.error("❌ [Rewards] Failed to sync NFT purchase:", err);
-            setDbSyncError(true);
-          });
-        }
+        console.log("✅ [REWARDS-SYNC] NFT purchased via context");
       }
     } catch (error) {
       console.error("❌ [Rewards] Error purchasing NFT:", error);
@@ -536,17 +387,17 @@ export function RewardsNFTsScreen() {
       case "early_adopter":
         return "Always Available";
       case "social_king":
-        return `${gameState?.referralCount || 0} / 20 referrals`;
+        return `${referralCount || 0} / 20 referrals`;
       case "builder_pro":
         return isStage2Complete() ? "Stage 2 Complete ✓" : "Stage 2 Incomplete";
       case "tap_legend":
-        return `${((gameState?.totalTapIncome || 0) / 1000000).toFixed(1)}M / 10M BZ`;
+        return `${((totalTapIncome || 0) / 1000000).toFixed(1)}M / 10M BZ`;
       case "energy_master":
         return areBoostersMaxed() ? "All Boosters Maxed ✓" : "Boosters Not Maxed";
       case "golden_bunny":
-        return `${((gameState?.totalTaps || 0) / 1000000).toFixed(1)}M / 5M taps`;
+        return `${((totalTaps || 0) / 1000000).toFixed(1)}M / 5M taps`;
       case "diamond_crystal":
-        return `${((gameState?.xp || 0) / 1000).toFixed(0)}k / 500k XP`;
+        return `${((xp || 0) / 1000).toFixed(0)}k / 500k XP`;
       default:
         return "";
     }
@@ -559,17 +410,17 @@ export function RewardsNFTsScreen() {
       case "early_adopter":
         return 100;
       case "social_king":
-        return Math.min(((gameState?.referralCount || 0) / 20) * 100, 100);
+        return Math.min(((referralCount || 0) / 20) * 100, 100);
       case "builder_pro":
         return isStage2Complete() ? 100 : 0;
       case "tap_legend":
-        return Math.min(((gameState?.totalTapIncome || 0) / 10000000) * 100, 100);
+        return Math.min(((totalTapIncome || 0) / 10000000) * 100, 100);
       case "energy_master":
         return areBoostersMaxed() ? 100 : 0;
       case "golden_bunny":
-        return Math.min(((gameState?.totalTaps || 0) / 5000000) * 100, 100);
+        return Math.min(((totalTaps || 0) / 5000000) * 100, 100);
       case "diamond_crystal":
-        return Math.min(((gameState?.xp || 0) / 500000) * 100, 100);
+        return Math.min(((xp || 0) / 500000) * 100, 100);
       default:
         return 0;
     }

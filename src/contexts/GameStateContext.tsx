@@ -31,6 +31,7 @@ interface GameState {
   tier: Tier;
   xp: number;
   referralCount: number;
+  reward: number;
   
   // Stats
   totalTaps: number;
@@ -74,6 +75,8 @@ interface GameState {
   subtractEnergy: (amount: number) => void;
   useQuickCharge: () => void;
   checkAndResetQuickCharge: () => void;
+  addReward: (amount: number) => void;
+  claimReward: () => void;
 }
 
 const GameStateContext = createContext<GameState | null>(null);
@@ -115,6 +118,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [bzPerHour, setBzPerHourState] = useState(() => safeGetItem("bunergy_bzPerHour", 0));
   const [xp, setXp] = useState(() => safeGetItem("bunergy_xp", 0));
   const [referralCount, setReferralCount] = useState(() => safeGetItem("bunergy_referralCount", 0));
+  const [reward, setReward] = useState(() => safeGetItem("bunergy_reward", 0));
 
   // Boosters
   const [boosters, setBoosters] = useState<Boosters>(() => safeGetItem("boosters", {
@@ -520,6 +524,23 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const addReward = (amount: number) => {
+    setReward(p => p + amount);
+    safeSetItem("bunergy_reward", reward + amount);
+  };
+
+  const claimReward = () => {
+    if (reward > 0) {
+      addBZ(reward);
+      setReward(0);
+      safeSetItem("bunergy_reward", 0);
+      toast({ 
+        title: "💰 Reward Claimed", 
+        description: `You claimed ${reward} BZ!` 
+      });
+    }
+  };
+
   return (
     <GameStateContext.Provider value={{
       telegramId,
@@ -534,7 +555,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       setEnergy, setMaxEnergy, setBzPerHour, addReferral,
       incrementTotalTaps, incrementTaps, incrementUpgrades, incrementConversions,
       markIdleClaimed, subtractEnergy, useQuickCharge,
-      checkAndResetQuickCharge
+      checkAndResetQuickCharge,
+      addReward,
+      claimReward
     }}>
       {children}
     </GameStateContext.Provider>
