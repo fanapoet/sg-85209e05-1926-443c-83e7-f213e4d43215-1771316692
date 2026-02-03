@@ -11,6 +11,12 @@ import {
 } from "@/services/syncService";
 import { getRewardState, upsertRewardState } from "@/services/rewardStateService";
 import { claimDailyReward } from "@/services/rewardsService";
+import { 
+  loadDailyClaimsFromDB, 
+  loadNFTsFromDB, 
+  mergeDailyClaims, 
+  mergeNFTs 
+} from "@/services/rewardDataService";
 import { useToast } from "@/hooks/use-toast";
 
 type Tier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
@@ -280,6 +286,22 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
             console.error("❌ [REWARDS-SYNC] Failed to create initial DB record:", error);
           }
         }
+
+        // Load and merge daily claims
+        const serverClaims = await loadDailyClaimsFromDB(authResult.profile.telegram_id);
+        if (serverClaims !== null) {
+          const merged = mergeDailyClaims(claimedDailyRewards, serverClaims);
+          setClaimedDailyRewards(merged);
+          safeSetItem("claimedDailyRewards", merged);
+        }
+
+        // Load and merge NFTs
+        const serverNFTs = await loadNFTsFromDB(authResult.profile.telegram_id);
+        if (serverNFTs !== null) {
+          const merged = mergeNFTs(ownedNFTs, serverNFTs);
+          setOwnedNFTs(merged);
+          safeSetItem("ownedNFTs", merged);
+        }
       }
     };
 
@@ -357,53 +379,27 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         setLastSyncTime(Date.now());
         console.log("✅ [MANUAL SYNC] SUCCESS - Data saved to database");
         
-        // Sync daily claims if any
+        // Sync daily claims
         if (telegramId && userId && claimedDailyRewards.length > 0) {
-          console.log("🎁 [DAILY-CLAIMS-SYNC] Syncing", claimedDailyRewards.length, "daily claims...");
-          for (const claim of claimedDailyRewards) {
-            try {
-              await claimDailyReward({
-                telegramId,
-                userId,
-                day: claim.day,
-                bzClaimed: claim.type === "BZ" ? claim.amount : 0,
-                bbClaimed: claim.type === "BB" ? claim.amount : 0,
-                xpClaimed: claim.type === "XP" ? claim.amount : 0
-              });
-              console.log("✅ [DAILY-CLAIMS-SYNC] Synced claim for day", claim.day);
-            } catch (error) {
-              console.error("❌ [DAILY-CLAIMS-SYNC] Failed to sync claim:", error);
-            }
+          console.log("🎁 [MANUAL SYNC] Syncing daily claims...");
+          const { syncDailyClaimsToDB } = await import("@/services/rewardDataService");
+          const claimsResult = await syncDailyClaimsToDB(telegramId, userId, claimedDailyRewards);
+          if (claimsResult.success) {
+            console.log("✅ [MANUAL SYNC] Daily claims synced!");
+          } else {
+            console.error("❌ [MANUAL SYNC] Daily claims sync failed:", claimsResult.error);
           }
         }
         
-        // Sync NFT purchases if any
+        // Sync NFT purchases
         if (telegramId && userId && ownedNFTs.length > 0) {
-          console.log("🖼️ [NFT-SYNC] Syncing", ownedNFTs.length, "NFT purchases...");
-          const { supabase } = await import("@/integrations/supabase/client");
-          for (const nft of ownedNFTs) {
-            try {
-              const { error } = await supabase
-                .from("user_nfts")
-                .upsert({
-                  user_id: userId,
-                  telegram_id: telegramId,
-                  nft_id: nft.nftId,
-                  price_paid_bb: nft.purchasePrice,
-                  purchased_at: new Date(nft.timestamp).toISOString()
-                }, {
-                  onConflict: "user_id,nft_id",
-                  ignoreDuplicates: false
-                });
-              
-              if (error) {
-                console.error("❌ [NFT-SYNC] Failed to sync NFT:", error);
-              } else {
-                console.log("✅ [NFT-SYNC] Synced NFT:", nft.nftId);
-              }
-            } catch (error) {
-              console.error("❌ [NFT-SYNC] Exception syncing NFT:", error);
-            }
+          console.log("🖼️ [MANUAL SYNC] Syncing NFT purchases...");
+          const { syncNFTsToDB } = await import("@/services/rewardDataService");
+          const nftsResult = await syncNFTsToDB(telegramId, userId, ownedNFTs);
+          if (nftsResult.success) {
+            console.log("✅ [MANUAL SYNC] NFT purchases synced!");
+          } else {
+            console.error("❌ [MANUAL SYNC] NFT purchases sync failed:", nftsResult.error);
           }
         }
         
