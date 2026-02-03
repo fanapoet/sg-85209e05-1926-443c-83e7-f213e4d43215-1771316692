@@ -197,6 +197,14 @@ export async function syncPlayerState(gameState: Partial<{
   console.log("🔵 [syncPlayerState] ========== FUNCTION ENTERED ==========");
   console.log("🔵 [syncPlayerState] Received gameState:", gameState);
   
+  // ADD EXPLICIT REWARD STATE LOGGING
+  console.log("🎁 [REWARDS-CHECK] Reward state in gameState:", {
+    dailyStreak: gameState.dailyStreak,
+    currentRewardWeek: gameState.currentRewardWeek,
+    lastDailyClaimDate: gameState.lastDailyClaimDate,
+    hasRewardData: gameState.dailyStreak !== undefined || gameState.currentRewardWeek !== undefined || gameState.lastDailyClaimDate !== undefined
+  });
+  
   try {
     console.log("🔵 [syncPlayerState] Getting Telegram user...");
     
@@ -293,7 +301,13 @@ export async function syncPlayerState(gameState: Partial<{
     }
 
     // Sync reward state if provided
+    console.log("🎁 [REWARDS-SYNC-CHECK] Checking if should sync rewards...");
+    console.log("🎁 [REWARDS-SYNC-CHECK] dailyStreak:", gameState.dailyStreak);
+    console.log("🎁 [REWARDS-SYNC-CHECK] currentRewardWeek:", gameState.currentRewardWeek);
+    console.log("🎁 [REWARDS-SYNC-CHECK] lastDailyClaimDate:", gameState.lastDailyClaimDate);
+    
     if (gameState.dailyStreak !== undefined || gameState.currentRewardWeek !== undefined || gameState.lastDailyClaimDate !== undefined) {
+      console.log("✅ [REWARDS-SYNC-CHECK] CONDITION MET - Will sync rewards!");
       console.log("🎁 [REWARDS-SYNC] Syncing reward state:", {
         dailyStreak: gameState.dailyStreak,
         currentRewardWeek: gameState.currentRewardWeek,
@@ -302,6 +316,14 @@ export async function syncPlayerState(gameState: Partial<{
       
       try {
         const { upsertRewardState } = await import("./rewardStateService");
+        
+        console.log("🎁 [REWARDS-SYNC] Calling upsertRewardState with:", {
+          telegramId: tgUser.id,
+          userId: profile.id,
+          dailyStreak: gameState.dailyStreak || 0,
+          currentRewardWeek: gameState.currentRewardWeek || 1,
+          lastDailyClaimDate: gameState.lastDailyClaimDate || null
+        });
         
         const rewardSyncResult = await upsertRewardState({
           telegramId: tgUser.id,
@@ -320,6 +342,9 @@ export async function syncPlayerState(gameState: Partial<{
       } catch (error: any) {
         console.error("❌ [REWARDS-SYNC] Reward state sync exception:", error);
       }
+    } else {
+      console.log("⏭️ [REWARDS-SYNC-CHECK] CONDITION NOT MET - Skipping rewards sync");
+      console.log("⏭️ [REWARDS-SYNC-CHECK] No reward data in gameState");
     }
 
     return { success: true };
