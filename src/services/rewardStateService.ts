@@ -11,6 +11,7 @@ export interface RewardStateData {
   dailyStreak: number;
   currentRewardWeek: number;
   lastDailyClaimDate: string | null;
+  currentWeeklyPeriodStart?: string;
 }
 
 export interface RewardStateRecord {
@@ -93,7 +94,7 @@ export async function upsertRewardState(data: RewardStateData) {
         daily_streak: data.dailyStreak,
         current_reward_week: data.currentRewardWeek,
         last_daily_claim_date: data.lastDailyClaimDate,
-        current_weekly_period_start: new Date().toISOString(),
+        current_weekly_period_start: data.currentWeeklyPeriodStart || new Date().toISOString(),
         updated_at: new Date().toISOString()
       }, {
         onConflict: "telegram_id"
