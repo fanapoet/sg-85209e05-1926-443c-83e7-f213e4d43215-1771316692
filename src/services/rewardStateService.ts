@@ -69,28 +69,46 @@ export async function getRewardState(telegramId: number): Promise<RewardStateRec
 
 /**
  * Upsert (create or update) user's reward state
- * CRITICAL: Uses auth.uid() from session, NOT passed userId for RLS compliance
+ * USES EXACT BUILD AUTHENTICATION PATTERN
  */
 export async function upsertRewardState(data: RewardStateData) {
   try {
     console.log("💾 [Reward State] Upserting:", data);
 
-    // CRITICAL: Get authenticated user's UUID from session (for RLS)
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // EXACT BUILD PATTERN: Get Telegram user ID
+    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
     
-    if (sessionError || !session?.user?.id) {
-      console.error("❌ [Reward State] No authenticated session:", sessionError);
-      return { success: false, error: "Not authenticated" };
+    if (!tgUser) {
+      console.error("❌ [Reward State] No Telegram user data");
+      return { success: false, error: "No Telegram user data" };
     }
-
-    const authenticatedUserId = session.user.id;
-    console.log("🔐 [Reward State] Using authenticated user_id:", authenticatedUserId);
+    
+    console.log("🔵 [Reward State] Telegram user ID:", tgUser.id);
+    
+    // EXACT BUILD PATTERN: Find user profile by telegram_id
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", tgUser.id)
+      .maybeSingle();
+    
+    if (profileError) {
+      console.error("❌ [Reward State] Profile lookup error:", profileError);
+      return { success: false, error: profileError.message };
+    }
+    
+    if (!profile) {
+      console.error("❌ [Reward State] Profile not found for telegram_id:", tgUser.id);
+      return { success: false, error: "Profile not found" };
+    }
+    
+    console.log("🔵 [Reward State] Found profile UUID:", profile.id);
 
     const { data: result, error } = await supabase
       .from("user_reward_state")
       .upsert({
         telegram_id: data.telegramId,
-        user_id: authenticatedUserId, // ← Use auth.uid() from session!
+        user_id: profile.id, // ← Use profile.id from lookup!
         daily_streak: data.dailyStreak,
         current_reward_week: data.currentRewardWeek,
         last_daily_claim_date: data.lastDailyClaimDate,

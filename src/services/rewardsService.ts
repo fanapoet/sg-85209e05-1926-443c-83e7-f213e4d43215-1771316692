@@ -25,16 +25,46 @@ export interface DailyClaimRecord {
 
 /**
  * Record a daily reward claim to the database
+ * USES EXACT BUILD AUTHENTICATION PATTERN
  */
 export async function claimDailyReward(data: DailyClaimData) {
   try {
     console.log("💾 [Daily Reward] Recording claim:", data);
 
+    // EXACT BUILD PATTERN: Get Telegram user ID
+    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+    
+    if (!tgUser) {
+      console.error("❌ [Daily Reward] No Telegram user data");
+      return { success: false, error: "No Telegram user data" };
+    }
+    
+    console.log("🔵 [Daily Reward] Telegram user ID:", tgUser.id);
+    
+    // EXACT BUILD PATTERN: Find user profile by telegram_id
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", tgUser.id)
+      .maybeSingle();
+    
+    if (profileError) {
+      console.error("❌ [Daily Reward] Profile lookup error:", profileError);
+      return { success: false, error: profileError.message };
+    }
+    
+    if (!profile) {
+      console.error("❌ [Daily Reward] Profile not found for telegram_id:", tgUser.id);
+      return { success: false, error: "Profile not found" };
+    }
+    
+    console.log("🔵 [Daily Reward] Found profile UUID:", profile.id);
+
     const { data: result, error } = await supabase
       .from("user_daily_claims")
       .insert({
         telegram_id: data.telegramId,
-        user_id: data.userId,
+        user_id: profile.id, // ← Use profile.id from lookup!
         day: data.day,
         bz_claimed: data.bzClaimed,
         bb_claimed: data.bbClaimed,
@@ -110,16 +140,46 @@ export interface UserNFT {
 
 /**
  * Record an NFT purchase to the database
+ * USES EXACT BUILD AUTHENTICATION PATTERN
  */
 export async function purchaseNFT(data: NFTPurchaseData) {
   try {
     console.log("💾 [NFT Purchase] Recording:", data);
 
+    // EXACT BUILD PATTERN: Get Telegram user ID
+    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+    
+    if (!tgUser) {
+      console.error("❌ [NFT Purchase] No Telegram user data");
+      return { success: false, error: "No Telegram user data" };
+    }
+    
+    console.log("🔵 [NFT Purchase] Telegram user ID:", tgUser.id);
+    
+    // EXACT BUILD PATTERN: Find user profile by telegram_id
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", tgUser.id)
+      .maybeSingle();
+    
+    if (profileError) {
+      console.error("❌ [NFT Purchase] Profile lookup error:", profileError);
+      return { success: false, error: profileError.message };
+    }
+    
+    if (!profile) {
+      console.error("❌ [NFT Purchase] Profile not found for telegram_id:", tgUser.id);
+      return { success: false, error: "Profile not found" };
+    }
+    
+    console.log("🔵 [NFT Purchase] Found profile UUID:", profile.id);
+
     const { data: result, error } = await supabase
       .from("user_nfts")
       .insert({
         telegram_id: data.telegramId,
-        user_id: data.userId,
+        user_id: profile.id, // ← Use profile.id from lookup!
         nft_id: data.nftId,
         price_paid_bb: data.pricePaid
       })
@@ -186,10 +246,40 @@ export interface WeeklyChallengeProgress {
 
 /**
  * Update weekly challenge progress
+ * USES EXACT BUILD AUTHENTICATION PATTERN
  */
 export async function updateWeeklyChallengeProgress(data: WeeklyChallengeProgress) {
   try {
     console.log("💾 [Weekly Challenge] Updating progress:", data);
+
+    // EXACT BUILD PATTERN: Get Telegram user ID
+    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+    
+    if (!tgUser) {
+      console.error("❌ [Weekly Challenge] No Telegram user data");
+      return { success: false, error: "No Telegram user data" };
+    }
+    
+    console.log("🔵 [Weekly Challenge] Telegram user ID:", tgUser.id);
+    
+    // EXACT BUILD PATTERN: Find user profile by telegram_id
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", tgUser.id)
+      .maybeSingle();
+    
+    if (profileError) {
+      console.error("❌ [Weekly Challenge] Profile lookup error:", profileError);
+      return { success: false, error: profileError.message };
+    }
+    
+    if (!profile) {
+      console.error("❌ [Weekly Challenge] Profile not found for telegram_id:", tgUser.id);
+      return { success: false, error: "Profile not found" };
+    }
+    
+    console.log("🔵 [Weekly Challenge] Found profile UUID:", profile.id);
 
     const taskId = `weekly_${data.challengeKey}`;
 
@@ -198,7 +288,7 @@ export async function updateWeeklyChallengeProgress(data: WeeklyChallengeProgres
       .from("user_task_progress")
       .upsert({
         telegram_id: data.telegramId,
-        user_id: data.userId,
+        user_id: profile.id, // ← Use profile.id from lookup!
         task_id: taskId,
         current_progress: data.progress,
         is_completed: data.isCompleted,
