@@ -244,7 +244,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         // Load reward state
         const rewardData = await getRewardState(authResult.profile.telegram_id);
         if (rewardData) {
-          console.log("🎁 [GameState] Loaded reward data:", rewardData);
+          console.log("✅ [REWARDS-SYNC] Loaded reward data from DB:", rewardData);
           setDailyStreak(Math.max(dailyStreak, rewardData.dailyStreak));
           setCurrentRewardWeek(Math.max(currentRewardWeek, rewardData.currentRewardWeek));
           if (rewardData.lastDailyClaimDate) {
@@ -252,8 +252,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           }
         } else {
           // No DB record exists - create initial record with current localStorage values
-          console.log("📤 [Rewards] No DB record found - creating initial record");
-          console.log("📤 [Rewards] Current localStorage state:", {
+          console.log("📤 [REWARDS-SYNC] No DB record found - creating initial record");
+          console.log("📤 [REWARDS-SYNC] Current localStorage state:", {
             dailyStreak,
             currentRewardWeek,
             lastDailyClaimDate
@@ -268,9 +268,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
               lastDailyClaimDate: lastDailyClaimDate,
               currentWeeklyPeriodStart: new Date().toISOString()
             });
-            console.log("✅ [Rewards] Initial DB record created successfully");
+            console.log("✅ [REWARDS-SYNC] Initial DB record created successfully");
           } catch (error) {
-            console.error("❌ [Rewards] Failed to create initial DB record:", error);
+            console.error("❌ [REWARDS-SYNC] Failed to create initial DB record:", error);
           }
         }
       }
@@ -610,7 +610,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
     // 3. Sync to Database (Background)
     if (telegramId && userId) {
-      console.log("📤 [Rewards] Syncing claim to DB...");
+      console.log("📤 [REWARDS-SYNC] Syncing daily claim to DB...");
+      console.log("📤 [REWARDS-SYNC] Claim data:", { day, week, type, amount, telegramId, userId });
+      
       try {
         // Update state table
         await upsertRewardState({
@@ -632,10 +634,12 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           xpClaimed: type === "XP" ? amount : 0
         });
         
-        console.log("✅ [Rewards] DB Sync successful");
+        console.log("✅ [REWARDS-SYNC] Daily claim synced to DB successfully");
       } catch (error) {
-        console.error("❌ [Rewards] DB Sync failed:", error);
+        console.error("❌ [REWARDS-SYNC] Failed to sync daily claim to DB:", error);
       }
+    } else {
+      console.error("❌ [REWARDS-SYNC] Cannot sync - missing telegramId or userId");
     }
   };
 
