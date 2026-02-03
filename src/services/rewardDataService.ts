@@ -9,9 +9,10 @@ export async function loadDailyClaimsFromDB(
   try {
     console.log("📥 [DAILY-CLAIMS] Loading from DB for telegram_id:", telegramId);
 
-    const { data, error } = await supabase
-      .from("user_daily_claims")
-      .select("day, bz_claimed, bb_claimed, xp_claimed, claimed_at")
+    // Cast to any to avoid "excessively deep" type error with complex schema inference
+    const { data, error } = await (supabase
+      .from("user_daily_claims") as any)
+      .select("*")
       .eq("telegram_id", telegramId)
       .order("claimed_at", { ascending: false });
 
@@ -26,7 +27,7 @@ export async function loadDailyClaimsFromDB(
     }
 
     // Convert DB format to app format
-    const claims = data.map(row => {
+    const claims = data.map((row: any) => {
       const type = row.bz_claimed > 0 ? "BZ" : row.bb_claimed > 0 ? "BB" : "XP";
       const amount = row.bz_claimed || Number(row.bb_claimed) || row.xp_claimed || 0;
       
@@ -57,9 +58,10 @@ export async function loadNFTsFromDB(
   try {
     console.log("📥 [NFT] Loading from DB for telegram_id:", telegramId);
 
-    const { data, error } = await supabase
-      .from("user_nfts")
-      .select("nft_id, price_paid_bb, purchased_at")
+    // Cast to any to avoid "excessively deep" type error
+    const { data, error } = await (supabase
+      .from("user_nfts") as any)
+      .select("*")
       .eq("telegram_id", telegramId)
       .order("purchased_at", { ascending: false });
 
@@ -73,7 +75,7 @@ export async function loadNFTsFromDB(
       return [];
     }
 
-    const nfts = data.map(row => ({
+    const nfts = data.map((row: any) => ({
       nftId: row.nft_id,
       purchasePrice: Number(row.price_paid_bb),
       timestamp: new Date(row.purchased_at).getTime()
@@ -115,8 +117,8 @@ export async function syncDailyClaimsToDB(
       claimed_at: new Date(claim.timestamp).toISOString()
     }));
 
-    const { error } = await supabase
-      .from("user_daily_claims")
+    const { error } = await (supabase
+      .from("user_daily_claims") as any)
       .upsert(upsertData, {
         onConflict: "telegram_id,day",
         ignoreDuplicates: false
@@ -160,8 +162,8 @@ export async function syncNFTsToDB(
       purchased_at: new Date(nft.timestamp).toISOString()
     }));
 
-    const { error } = await supabase
-      .from("user_nfts")
+    const { error } = await (supabase
+      .from("user_nfts") as any)
       .upsert(upsertData, {
         onConflict: "user_id,nft_id",
         ignoreDuplicates: false
