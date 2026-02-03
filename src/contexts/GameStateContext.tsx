@@ -38,6 +38,8 @@ interface GameState {
   dailyStreak: number;
   currentRewardWeek: number;
   lastDailyClaimDate: string | null;
+  claimedDailyRewards: Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>;
+  ownedNFTs: Array<{ nftId: string; purchasePrice: number; timestamp: number }>;
   
   // Stats
   totalTaps: number;
@@ -84,6 +86,7 @@ interface GameState {
   addReward: (amount: number) => void;
   claimReward: () => void;
   performDailyClaim: (day: number, week: number, type: "BZ" | "BB" | "XP", amount: number) => Promise<void>;
+  purchaseNFT: (nftId: string, priceInBB: number) => void;
 }
 
 const GameStateContext = createContext<GameState | null>(null);
@@ -131,6 +134,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [dailyStreak, setDailyStreak] = useState(() => safeGetItem("dailyStreak", 0));
   const [currentRewardWeek, setCurrentRewardWeek] = useState(() => safeGetItem("currentRewardWeek", 1));
   const [lastDailyClaimDate, setLastDailyClaimDate] = useState<string | null>(() => safeGetItem("lastDailyClaimDate", null));
+  const [claimedDailyRewards, setClaimedDailyRewards] = useState<Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>>(() => safeGetItem("claimedDailyRewards", []));
+  const [ownedNFTs, setOwnedNFTs] = useState<Array<{ nftId: string; purchasePrice: number; timestamp: number }>>(() => safeGetItem("ownedNFTs", []));
 
   // Boosters
   const [boosters, setBoosters] = useState<Boosters>(() => safeGetItem("boosters", {
@@ -188,6 +193,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => { safeSetItem("dailyStreak", dailyStreak); }, [dailyStreak]);
   useEffect(() => { safeSetItem("currentRewardWeek", currentRewardWeek); }, [currentRewardWeek]);
   useEffect(() => { safeSetItem("lastDailyClaimDate", lastDailyClaimDate); }, [lastDailyClaimDate]);
+  useEffect(() => { safeSetItem("claimedDailyRewards", claimedDailyRewards); }, [claimedDailyRewards]);
+  useEffect(() => { safeSetItem("ownedNFTs", ownedNFTs); }, [ownedNFTs]);
   useEffect(() => { safeSetItem("boosters", boosters); }, [boosters]);
   useEffect(() => { safeSetItem("bunergy_totalTaps", totalTaps); }, [totalTaps]);
   useEffect(() => { safeSetItem("bunergy_todayTaps", todayTaps); }, [todayTaps]);
@@ -349,6 +356,57 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       if (result.success) {
         setLastSyncTime(Date.now());
         console.log("✅ [MANUAL SYNC] SUCCESS - Data saved to database");
+        
+        // Sync daily claims if any
+        if (telegramId && userId && claimedDailyRewards.length > 0) {
+          console.log("🎁 [DAILY-CLAIMS-SYNC] Syncing", claimedDailyRewards.length, "daily claims...");
+          for (const claim of claimedDailyRewards) {
+            try {
+              await claimDailyReward({
+                telegramId,
+                userId,
+                day: claim.day,
+                bzClaimed: claim.type === "BZ" ? claim.amount : 0,
+                bbClaimed: claim.type === "BB" ? claim.amount : 0,
+                xpClaimed: claim.type === "XP" ? claim.amount : 0
+              });
+              console.log("✅ [DAILY-CLAIMS-SYNC] Synced claim for day", claim.day);
+            } catch (error) {
+              console.error("❌ [DAILY-CLAIMS-SYNC] Failed to sync claim:", error);
+            }
+          }
+        }
+        
+        // Sync NFT purchases if any
+        if (telegramId && userId && ownedNFTs.length > 0) {
+          console.log("🖼️ [NFT-SYNC] Syncing", ownedNFTs.length, "NFT purchases...");
+          const { supabase } = await import("@/integrations/supabase/client");
+          for (const nft of ownedNFTs) {
+            try {
+              const { error } = await supabase
+                .from("user_nfts")
+                .upsert({
+                  user_id: userId,
+                  telegram_id: telegramId,
+                  nft_id: nft.nftId,
+                  price_paid_bb: nft.purchasePrice,
+                  purchased_at: new Date(nft.timestamp).toISOString()
+                }, {
+                  onConflict: "user_id,nft_id",
+                  ignoreDuplicates: false
+                });
+              
+              if (error) {
+                console.error("❌ [NFT-SYNC] Failed to sync NFT:", error);
+              } else {
+                console.log("✅ [NFT-SYNC] Synced NFT:", nft.nftId);
+              }
+            } catch (error) {
+              console.error("❌ [NFT-SYNC] Exception syncing NFT:", error);
+            }
+          }
+        }
+        
         toast({ 
           title: "✅ Sync Successful", 
           description: "Game progress saved to server." 
@@ -601,7 +659,18 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     setCurrentRewardWeek(week);
     setLastDailyClaimDate(today);
     
-    // 2. Update Balances
+    // 2. Track claim locally for sync
+    const claimRecord = {
+      day,
+      week,
+      type,
+      amount,
+      timestamp: Date.now()
+    };
+    setClaimedDailyRewards(prev => [...prev, claimRecord]);
+    console.log("📝 [DAILY-CLAIM] Tracked claim locally:", claimRecord);
+    
+    // 3. Update Balances
     if (type === "BZ") addBZ(amount);
     else if (type === "BB") addBB(amount);
     else if (type === "XP") addXP(amount);
@@ -611,7 +680,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       description: `You received ${type === "BB" ? amount.toFixed(3) : amount.toLocaleString()} ${type}!`
     });
 
-    // 3. Sync to Database (Background)
+    // 4. Sync to Database (Background)
     if (telegramId && userId) {
       console.log("📤 [REWARDS-SYNC] Syncing daily claim to DB...");
       console.log("📤 [REWARDS-SYNC] Claim data:", { day, week, type, amount, telegramId, userId });
@@ -646,12 +715,42 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const purchaseNFT = (nftId: string, priceInBB: number) => {
+    // 1. Deduct BB
+    if (!subtractBB(priceInBB)) {
+      toast({
+        title: "❌ Insufficient BB",
+        description: `You need ${priceInBB.toFixed(6)} BB to purchase this NFT.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // 2. Track NFT purchase locally
+    const nftRecord = {
+      nftId,
+      purchasePrice: priceInBB,
+      timestamp: Date.now()
+    };
+    setOwnedNFTs(prev => [...prev, nftRecord]);
+    console.log("📝 [NFT-PURCHASE] Tracked NFT purchase locally:", nftRecord);
+
+    toast({
+      title: "🖼️ NFT Purchased",
+      description: `You now own the ${nftId} NFT!`
+    });
+
+    // 3. Sync will happen on next manual/auto sync
+    console.log("🔄 [NFT-PURCHASE] NFT purchase will sync on next sync");
+  };
+
   return (
     <GameStateContext.Provider value={{
       telegramId,
       userId,
       bz, bb, energy, maxEnergy, bzPerHour, tier, xp, referralCount,
       dailyStreak, currentRewardWeek, lastDailyClaimDate,
+      claimedDailyRewards, ownedNFTs,
       totalTaps, todayTaps, totalTapIncome, totalUpgrades, totalConversions,
       hasClaimedIdleToday, lastClaimTimestamp,
       boosters, upgradeBooster,
@@ -664,7 +763,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       checkAndResetQuickCharge,
       addReward,
       claimReward,
-      performDailyClaim
+      performDailyClaim,
+      purchaseNFT
     }}>
       {children}
     </GameStateContext.Provider>
