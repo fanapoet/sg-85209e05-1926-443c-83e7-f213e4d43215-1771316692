@@ -250,6 +250,28 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           if (rewardData.lastDailyClaimDate) {
             setLastDailyClaimDate(rewardData.lastDailyClaimDate);
           }
+        } else {
+          // No DB record exists - create initial record with current localStorage values
+          console.log("📤 [Rewards] No DB record found - creating initial record");
+          console.log("📤 [Rewards] Current localStorage state:", {
+            dailyStreak,
+            currentRewardWeek,
+            lastDailyClaimDate
+          });
+          
+          try {
+            await upsertRewardState({
+              telegramId: authResult.profile.telegram_id,
+              userId: authResult.profile.id,
+              dailyStreak: dailyStreak,
+              currentRewardWeek: currentRewardWeek,
+              lastDailyClaimDate: lastDailyClaimDate,
+              currentWeeklyPeriodStart: new Date().toISOString()
+            });
+            console.log("✅ [Rewards] Initial DB record created successfully");
+          } catch (error) {
+            console.error("❌ [Rewards] Failed to create initial DB record:", error);
+          }
         }
       }
     };
