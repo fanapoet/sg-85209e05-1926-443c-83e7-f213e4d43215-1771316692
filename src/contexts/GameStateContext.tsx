@@ -139,6 +139,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const saved = safeGetItem("bunergy_qc_cooldown", null);
     return saved !== null ? Number(saved) : null;
   });
+  const [quickChargeLastResetDate, setQuickChargeLastResetDate] = useState(() => 
+    safeGetItem("bunergy_qc_last_reset", new Date().toDateString())
+  );
 
   // Sync State
   const [isSyncing, setIsSyncing] = useState(false);
@@ -177,7 +180,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => { 
     safeSetItem("bunergy_qc_uses", quickChargeUsesRemaining); 
     safeSetItem("bunergy_qc_cooldown", quickChargeCooldownUntil);
-  }, [quickChargeUsesRemaining, quickChargeCooldownUntil]);
+    safeSetItem("bunergy_qc_last_reset", quickChargeLastResetDate);
+  }, [quickChargeUsesRemaining, quickChargeCooldownUntil, quickChargeLastResetDate]);
 
   // Initialization
   useEffect(() => {
@@ -229,7 +233,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   // Helper to get full state for sync (defined BEFORE it's used)
   const getFullStateForSync = useCallback(() => {
     const baseRecovery = 0.3;
-    const recoveryMultiplier = 1 + (boosters.recoveryRate - 1) * 0.1;
+    const recoveryMultiplier = 1 + (boosters.recoveryRate - 1) * (0.05 / 0.3);
     const currentRecoveryRate = baseRecovery * recoveryMultiplier;
 
     // Collect build parts data from localStorage
@@ -360,6 +364,38 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // QuickCharge 24h Rolling Reset
+  useEffect(() => {
+    const checkAndResetQuickCharge = () => {
+      const today = new Date().toDateString();
+      
+      if (quickChargeLastResetDate !== today) {
+        console.log("⚡ [QuickCharge] 24h passed - resetting uses to 5");
+        setQuickChargeUsesRemaining(5);
+        setQuickChargeLastResetDate(today);
+        
+        // Sync to DB immediately
+        if (telegramId && userId) {
+          syncPlayerState({
+            ...getFullStateForSync(),
+            quickChargeUsesRemaining: 5,
+            quickChargeCooldownUntil: null
+          }).then(result => {
+            console.log("⚡ [QuickCharge] Reset synced to DB:", result);
+          }).catch(err => {
+            console.error("❌ [QuickCharge] Reset sync failed:", err);
+          });
+        }
+      }
+    };
+    
+    // Check on mount and every minute
+    checkAndResetQuickCharge();
+    const interval = setInterval(checkAndResetQuickCharge, 60000);
+    
+    return () => clearInterval(interval);
+  }, [quickChargeLastResetDate, telegramId, userId]);
+
   // Energy Recovery Loop
   useEffect(() => {
     const interval = setInterval(() => {
@@ -369,7 +405,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         const dynamicMax = 1500 + (capacityLevel - 1) * 100;
         
         const baseRecovery = 0.3;
-        const recoveryMultiplier = 1 + (recoveryLevel - 1) * 0.1;
+        const recoveryMultiplier = 1 + (recoveryLevel - 1) * (0.05 / 0.3);
         const actualRecovery = baseRecovery * recoveryMultiplier;
         
         return Math.min(current + actualRecovery, dynamicMax);
