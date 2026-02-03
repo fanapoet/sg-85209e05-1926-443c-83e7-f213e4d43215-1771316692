@@ -19,8 +19,6 @@ import {
   Target,
   TrendingUp
 } from "lucide-react";
-import { claimDailyReward, purchaseNFT, updateWeeklyChallengeProgress } from "@/services/rewardsService";
-import { getRewardState, upsertRewardState, updateLastDailyClaimDate, incrementDailyStreak } from "@/services/rewardStateService";
 
 interface DailyReward {
   day: number;
@@ -77,79 +75,119 @@ const getIconComponent = (iconName: string) => {
 };
 
 export function RewardsNFTsScreen() {
-  const { addBZ, addBB, addXP, totalUpgrades, referralCount, totalConversions, totalTapIncome, totalTaps, xp, bb, telegramId, userId } = useGameState();
+  const { 
+    // State
+    dailyStreak, 
+    currentRewardWeek, 
+    lastDailyClaimDate,
+    
+    // Stats for Challenges
+    totalUpgrades, 
+    referralCount, 
+    totalConversions, 
+    totalTapIncome, 
+    totalTaps, 
+    xp, 
+    bb, 
+    
+    // Methods
+    performDailyClaim,
+    addBZ, 
+    addBB, 
+    addXP,
+    subtractBB
+  } = useGameState();
   
-  const [dailyStreak, setDailyStreak] = useState(0);
-  const [currentWeek, setCurrentWeek] = useState(1);
-  const [lastClaimDate, setLastClaimDate] = useState<string | null>(null);
   const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
   const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallenge[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dbSyncError, setDbSyncError] = useState(false);
 
+  // Use context values for rewards
+  const currentWeek = currentRewardWeek || 1;
+  const streak = dailyStreak || 0;
   const dailyRewards = getWeeklyRewards(currentWeek);
 
-  // AUTO-SYNC: Sync state changes to database (LOCAL-FIRST, background sync)
+  // Initialize Challenges & NFTs from LocalStorage (UI state only)
   useEffect(() => {
-    if (loading || !telegramId || !userId) return;
-
-    // Debounce sync to avoid spamming DB
-    const syncTimeout = setTimeout(async () => {
-      try {
-        console.log("📤 [Rewards] Auto-syncing state to database...");
-        
-        await upsertRewardState({
-          telegramId,
-          userId,
-          dailyStreak,
-          currentRewardWeek: currentWeek,
-          lastDailyClaimDate: lastClaimDate,
-          currentWeeklyPeriodStart: new Date().toISOString()
-        });
-        
-        console.log("✅ [Rewards] Auto-sync complete");
-        setDbSyncError(false);
-      } catch (error) {
-        console.error("❌ [Rewards] Auto-sync failed:", error);
-        setDbSyncError(true);
-      }
-    }, 2000); // 2 second debounce
-
-    return () => clearTimeout(syncTimeout);
-  }, [dailyStreak, currentWeek, lastClaimDate, loading, telegramId, userId]);
-
-  useEffect(() => {
-    if (loading || !telegramId) return;
-    
+    // Load Owned NFTs
     try {
-      setWeeklyChallenges(prevChallenges => 
-        prevChallenges.map(challenge => {
-          if (challenge.claimed) return challenge;
-          
-          if (challenge.key === "builder") {
-            return { ...challenge, progress: Math.min(totalUpgrades || 0, challenge.target) };
-          }
-          if (challenge.key === "recruiter") {
-            return { ...challenge, progress: Math.min(referralCount || 0, challenge.target) };
-          }
-          if (challenge.key === "converter") {
-            return { ...challenge, progress: Math.min(totalConversions || 0, challenge.target) };
-          }
-          return challenge;
-        })
-      );
-    } catch (error) {
-      console.error("❌ [Rewards] Error updating challenge progress:", error);
+      const savedNFTs = localStorage.getItem("ownedNFTs");
+      if (savedNFTs) {
+        setOwnedNFTs(JSON.parse(savedNFTs));
+      }
+    } catch (e) {
+      console.error("Failed to load NFTs", e);
     }
+
+    // Load/Init Challenges
+    try {
+      const savedChallenges = localStorage.getItem("weeklyChallenges");
+      if (savedChallenges) {
+        setWeeklyChallenges(JSON.parse(savedChallenges));
+      } else {
+        // Default Challenges
+        setWeeklyChallenges([
+          {
+            key: "builder",
+            name: "Master Builder",
+            icon: "Hammer",
+            description: "Perform 50 upgrades",
+            target: 50,
+            progress: 0,
+            reward: { type: "BZ", amount: 10000 },
+            claimed: false
+          },
+          {
+            key: "recruiter",
+            name: "Top Recruiter",
+            icon: "Users",
+            description: "Invite 5 friends",
+            target: 5,
+            progress: 0,
+            reward: { type: "BB", amount: 0.005 },
+            claimed: false
+          },
+          {
+            key: "converter",
+            name: "Exchange Guru",
+            icon: "ArrowLeftRight",
+            description: "Convert 10 times",
+            target: 10,
+            progress: 0,
+            reward: { type: "XP", amount: 5000 },
+            claimed: false
+          }
+        ]);
+      }
+    } catch (e) {
+      console.error("Failed to load challenges", e);
+    }
+    
+    setLoading(false);
+  }, []);
+
+  // Update Challenge Progress based on Context Stats
+  useEffect(() => {
+    if (loading) return;
+    
+    setWeeklyChallenges(prev => 
+      prev.map(c => {
+        if (c.claimed) return c;
+        let newProgress = c.progress;
+        
+        if (c.key === "builder") newProgress = totalUpgrades || 0;
+        if (c.key === "recruiter") newProgress = referralCount || 0;
+        if (c.key === "converter") newProgress = totalConversions || 0;
+        
+        return { ...c, progress: Math.min(newProgress, c.target) };
+      })
+    );
   }, [totalUpgrades, referralCount, totalConversions, loading]);
 
+  // Persist Challenges to LocalStorage
   useEffect(() => {
     if (!loading && weeklyChallenges.length > 0) {
-      try {
-        localStorage.setItem("weeklyChallenges", JSON.stringify(weeklyChallenges));
-      } catch (error) {
-        console.error("❌ [Rewards] Error saving challenges:", error);
-      }
+      localStorage.setItem("weeklyChallenges", JSON.stringify(weeklyChallenges));
     }
   }, [weeklyChallenges, loading]);
 
@@ -259,66 +297,21 @@ export function RewardsNFTsScreen() {
   const handleDailyClaim = async () => {
     try {
       const today = new Date().toDateString();
-      
-      if (lastClaimDate === today) return;
+      if (lastDailyClaimDate === today) return;
 
-      const nextDay = (dailyStreak % 7) + 1;
+      const nextDay = (streak % 7) + 1;
       const reward = dailyRewards[nextDay - 1];
-
-      // 1. UPDATE LOCALSTORAGE FIRST (instant UX)
-      const newStreak = nextDay;
       
-      let newWeek = currentWeek;
+      let nextWeek = currentWeek;
       if (nextDay === 7) {
-        newWeek = currentWeek + 1;
+        nextWeek = currentWeek + 1;
       }
+
+      console.log(`🎁 [Rewards] Claiming Day ${nextDay}, Week ${nextWeek}`);
       
-      setDailyStreak(newStreak);
-      setCurrentWeek(newWeek);
-      setLastClaimDate(today);
-      localStorage.setItem("dailyStreak", newStreak.toString());
-      localStorage.setItem("currentRewardWeek", newWeek.toString());
-      localStorage.setItem("lastClaimDate", today);
-
-      // 2. UPDATE BALANCES
-      if (reward.type === "BZ") {
-        addBZ(reward.amount);
-      } else if (reward.type === "BB") {
-        addBB(reward.amount);
-      } else if (reward.type === "XP") {
-        addXP(reward.amount);
-      }
-
-      // 3. BACKGROUND SYNC TO DATABASE (non-blocking)
-      if (telegramId) {
-        try {
-          console.log("📤 [Rewards] Syncing daily claim to database...");
-          
-          // Update streak
-          await incrementDailyStreak(telegramId, newStreak);
-          
-          // Update last claim date
-          await updateLastDailyClaimDate(telegramId, today);
-          
-          // Record the claim
-          if (userId) {
-            await claimDailyReward({
-              telegramId,
-              userId,
-              day: nextDay,
-              bzClaimed: reward.type === "BZ" ? reward.amount : 0,
-              bbClaimed: reward.type === "BB" ? reward.amount : 0,
-              xpClaimed: reward.type === "XP" ? reward.amount : 0
-            });
-          }
-          
-          console.log("✅ [Rewards] Daily claim synced to database");
-          setDbSyncError(false);
-        } catch (error) {
-          console.error("❌ [Rewards] Failed to sync daily claim:", error);
-          setDbSyncError(true);
-        }
-      }
+      // Use Context Method to update state & sync to DB
+      await performDailyClaim(nextDay, nextWeek, reward.type, reward.amount);
+      
     } catch (error) {
       console.error("❌ [Rewards] Error claiming daily reward:", error);
     }
@@ -326,24 +319,19 @@ export function RewardsNFTsScreen() {
 
   const handleClaimChallenge = (challengeKey: string) => {
     try {
-      console.log("📤 [REWARDS-SYNC] Challenge claim:", challengeKey);
-      
-      setWeeklyChallenges(prevChallenges => 
-        prevChallenges.map(challenge => {
-          if (challenge.key === challengeKey && challenge.progress >= challenge.target && !challenge.claimed) {
-            // Update balances using context (auto-syncs)
-            if (challenge.reward.type === "BZ") {
-              addBZ(challenge.reward.amount);
-            } else if (challenge.reward.type === "BB") {
-              addBB(challenge.reward.amount);
-            } else if (challenge.reward.type === "XP") {
-              addXP(challenge.reward.amount);
-            }
+      setWeeklyChallenges(prev => 
+        prev.map(c => {
+          if (c.key === challengeKey && c.progress >= c.target && !c.claimed) {
+            console.log(`🎯 [Rewards] Claiming challenge: ${c.name}`);
             
-            console.log("✅ [REWARDS-SYNC] Challenge claimed via context");
-            return { ...challenge, claimed: true };
+            // Update Balances via Context
+            if (c.reward.type === "BZ") addBZ(c.reward.amount);
+            if (c.reward.type === "BB") addBB(c.reward.amount);
+            if (c.reward.type === "XP") addXP(c.reward.amount);
+            
+            return { ...c, claimed: true };
           }
-          return challenge;
+          return c;
         })
       );
     } catch (error) {
@@ -355,74 +343,54 @@ export function RewardsNFTsScreen() {
     try {
       if (nft.owned || !nft.requirementMet) return;
       
-      console.log("📤 [REWARDS-SYNC] NFT purchase:", nft.key, "price:", nft.price);
-      
-      // Update state using context (auto-syncs)
+      // Free NFT
       if (nft.price === 0) {
         const updated = [...ownedNFTs, nft.key];
         setOwnedNFTs(updated);
         localStorage.setItem("ownedNFTs", JSON.stringify(updated));
-        console.log("✅ [REWARDS-SYNC] Free NFT claimed via context");
         return;
       }
 
-      if (gameState.bb >= nft.price && gameState.subtractBB(nft.price)) {
+      // Paid NFT
+      if (bb >= nft.price && subtractBB(nft.price)) {
+        console.log(`🖼️ [Rewards] Purchased NFT: ${nft.name}`);
         const updated = [...ownedNFTs, nft.key];
         setOwnedNFTs(updated);
         localStorage.setItem("ownedNFTs", JSON.stringify(updated));
-        console.log("✅ [REWARDS-SYNC] NFT purchased via context");
       }
     } catch (error) {
       console.error("❌ [Rewards] Error purchasing NFT:", error);
     }
   };
 
-  const canClaimDaily = lastClaimDate !== new Date().toDateString();
-  const currentDayReward = dailyRewards[(dailyStreak % 7)];
+  const canClaimDaily = lastDailyClaimDate !== new Date().toDateString();
+  const currentDayReward = dailyRewards[(streak % 7)];
 
   const getProgressText = (nft: NFT): string => {
     if (nft.owned) return "";
-    
     switch (nft.key) {
-      case "early_adopter":
-        return "Always Available";
-      case "social_king":
-        return `${referralCount || 0} / 20 referrals`;
-      case "builder_pro":
-        return isStage2Complete() ? "Stage 2 Complete ✓" : "Stage 2 Incomplete";
-      case "tap_legend":
-        return `${((totalTapIncome || 0) / 1000000).toFixed(1)}M / 10M BZ`;
-      case "energy_master":
-        return areBoostersMaxed() ? "All Boosters Maxed ✓" : "Boosters Not Maxed";
-      case "golden_bunny":
-        return `${((totalTaps || 0) / 1000000).toFixed(1)}M / 5M taps`;
-      case "diamond_crystal":
-        return `${((xp || 0) / 1000).toFixed(0)}k / 500k XP`;
-      default:
-        return "";
+      case "early_adopter": return "Always Available";
+      case "social_king": return `${referralCount || 0} / 20 referrals`;
+      case "builder_pro": return isStage2Complete() ? "Stage 2 Complete ✓" : "Stage 2 Incomplete";
+      case "tap_legend": return `${((totalTapIncome || 0) / 1000000).toFixed(1)}M / 10M BZ`;
+      case "energy_master": return areBoostersMaxed() ? "All Boosters Maxed ✓" : "Boosters Not Maxed";
+      case "golden_bunny": return `${((totalTaps || 0) / 1000000).toFixed(1)}M / 5M taps`;
+      case "diamond_crystal": return `${((xp || 0) / 1000).toFixed(0)}k / 500k XP`;
+      default: return "";
     }
   };
 
   const getProgressPercent = (nft: NFT): number => {
     if (nft.owned || nft.requirementMet) return 100;
-    
     switch (nft.key) {
-      case "early_adopter":
-        return 100;
-      case "social_king":
-        return Math.min(((referralCount || 0) / 20) * 100, 100);
-      case "builder_pro":
-        return isStage2Complete() ? 100 : 0;
-      case "tap_legend":
-        return Math.min(((totalTapIncome || 0) / 10000000) * 100, 100);
-      case "energy_master":
-        return areBoostersMaxed() ? 100 : 0;
-      case "golden_bunny":
-        return Math.min(((totalTaps || 0) / 5000000) * 100, 100);
-      case "diamond_crystal":
-        return Math.min(((xp || 0) / 500000) * 100, 100);
-      default:
-        return 0;
+      case "early_adopter": return 100;
+      case "social_king": return Math.min(((referralCount || 0) / 20) * 100, 100);
+      case "builder_pro": return isStage2Complete() ? 100 : 0;
+      case "tap_legend": return Math.min(((totalTapIncome || 0) / 10000000) * 100, 100);
+      case "energy_master": return areBoostersMaxed() ? 100 : 0;
+      case "golden_bunny": return Math.min(((totalTaps || 0) / 5000000) * 100, 100);
+      case "diamond_crystal": return Math.min(((xp || 0) / 500000) * 100, 100);
+      default: return 0;
     }
   };
 
@@ -441,14 +409,6 @@ export function RewardsNFTsScreen() {
 
   return (
     <div className="p-6 space-y-6 max-w-2xl mx-auto pb-24">
-      {dbSyncError && (
-        <div className="bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg p-3 text-sm">
-          <p className="text-yellow-800 dark:text-yellow-200">
-            ⚠️ Offline – changes will sync when connection is restored
-          </p>
-        </div>
-      )}
-
       <div className="space-y-2">
         <h1 className="text-2xl font-bold">Rewards & NFTs</h1>
         <p className="text-sm text-muted-foreground">
@@ -468,7 +428,7 @@ export function RewardsNFTsScreen() {
                 Week {currentWeek}
               </Badge>
               <Badge variant="outline">
-                Day {(dailyStreak % 7) + 1}/7
+                Day {(streak % 7) + 1}/7
               </Badge>
             </div>
           </div>
@@ -476,8 +436,8 @@ export function RewardsNFTsScreen() {
           <div className="grid grid-cols-7 gap-2">
             {dailyRewards.map((reward, index) => {
               const dayNum = index + 1;
-              const isClaimed = dailyStreak >= dayNum;
-              const isCurrent = (dailyStreak % 7) + 1 === dayNum;
+              const isClaimed = streak >= dayNum;
+              const isCurrent = (streak % 7) + 1 === dayNum;
 
               return (
                 <div
