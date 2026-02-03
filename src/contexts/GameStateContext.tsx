@@ -73,6 +73,7 @@ interface GameState {
   markIdleClaimed: () => void;
   subtractEnergy: (amount: number) => void;
   useQuickCharge: () => void;
+  checkAndResetQuickCharge: () => void;
 }
 
 const GameStateContext = createContext<GameState | null>(null);
@@ -364,38 +365,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // QuickCharge 24h Rolling Reset
-  useEffect(() => {
-    const checkAndResetQuickCharge = () => {
-      const today = new Date().toDateString();
-      
-      if (quickChargeLastResetDate !== today) {
-        console.log("⚡ [QuickCharge] 24h passed - resetting uses to 5");
-        setQuickChargeUsesRemaining(5);
-        setQuickChargeLastResetDate(today);
-        
-        // Sync to DB immediately
-        if (telegramId && userId) {
-          syncPlayerState({
-            ...getFullStateForSync(),
-            quickChargeUsesRemaining: 5,
-            quickChargeCooldownUntil: null
-          }).then(result => {
-            console.log("⚡ [QuickCharge] Reset synced to DB:", result);
-          }).catch(err => {
-            console.error("❌ [QuickCharge] Reset sync failed:", err);
-          });
-        }
-      }
-    };
-    
-    // Check on mount and every minute
-    checkAndResetQuickCharge();
-    const interval = setInterval(checkAndResetQuickCharge, 60000);
-    
-    return () => clearInterval(interval);
-  }, [quickChargeLastResetDate, telegramId, userId]);
-
   // Energy Recovery Loop
   useEffect(() => {
     const interval = setInterval(() => {
@@ -541,6 +510,16 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const checkAndResetQuickCharge = () => {
+    const now = Date.now();
+    if (quickChargeCooldownUntil !== null && quickChargeCooldownUntil < now) {
+      setQuickChargeUsesRemaining(5);
+      setQuickChargeCooldownUntil(null);
+      setQuickChargeLastResetDate(new Date().toDateString());
+      console.log("🔄 [QuickCharge] Cooldown expired, resetting uses to 5");
+    }
+  };
+
   return (
     <GameStateContext.Provider value={{
       telegramId,
@@ -554,7 +533,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       addBZ, subtractBZ, addBB, subtractBB, addXP,
       setEnergy, setMaxEnergy, setBzPerHour, addReferral,
       incrementTotalTaps, incrementTaps, incrementUpgrades, incrementConversions,
-      markIdleClaimed, subtractEnergy, useQuickCharge
+      markIdleClaimed, subtractEnergy, useQuickCharge,
+      checkAndResetQuickCharge
     }}>
       {children}
     </GameStateContext.Provider>

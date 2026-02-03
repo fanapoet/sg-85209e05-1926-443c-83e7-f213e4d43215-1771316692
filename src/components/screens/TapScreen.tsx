@@ -24,6 +24,7 @@ export function TapScreen() {
     quickChargeUsesRemaining,
     quickChargeCooldownUntil,
     useQuickCharge: triggerQuickCharge,
+    checkAndResetQuickCharge,
     totalTaps,
     incrementTotalTaps
   } = useGameState();
@@ -32,6 +33,11 @@ export function TapScreen() {
   const [lastTapTime, setLastTapTime] = useState(0);
   const [canTap, setCanTap] = useState(true);
   const TAP_COOLDOWN = 110;
+
+  // Check and reset QuickCharge on mount (same pattern as daily rewards)
+  useEffect(() => {
+    checkAndResetQuickCharge();
+  }, [checkAndResetQuickCharge]);
 
   const getBoosterLevel = (key: string): number => {
     try {
