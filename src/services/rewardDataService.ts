@@ -227,18 +227,20 @@ export async function syncNFTsToDB(
         // Handle legacy string format: ["early_adopter"]
         if (typeof nft === 'string') {
           console.log(`📦 [NFT-SYNC] Converting legacy string format at index ${index}:`, nft);
-          const mappedId = mapNFTIdToDatabase(nft);
+          const mappedId = mapLegacyNFTId(nft);
           return {
             nftId: mappedId,
+            purchasePrice: 0,
             timestamp: Date.now()
           };
         }
         
         // Handle object format: [{ nftId: "...", purchasePrice: 0, timestamp: 123 }]
         if (nft && typeof nft === 'object' && nft.nftId) {
-          const mappedId = mapNFTIdToDatabase(nft.nftId);
+          const mappedId = mapLegacyNFTId(nft.nftId);
           return {
             nftId: mappedId,
+            purchasePrice: nft.purchasePrice || 0,
             timestamp: nft.timestamp || Date.now()
           };
         }
@@ -246,7 +248,7 @@ export async function syncNFTsToDB(
         console.warn(`⚠️ [NFT-SYNC] Invalid NFT at index ${index}:`, nft);
         return null;
       })
-      .filter((nft): nft is { nftId: string; timestamp: number } => {
+      .filter((nft): nft is { nftId: string; purchasePrice: number; timestamp: number } => {
         const isValid = nft !== null && nft.nftId && typeof nft.nftId === 'string' && nft.nftId.trim() !== '';
         if (!isValid) {
           console.warn("⚠️ [NFT-SYNC] Filtered out invalid NFT:", nft);
@@ -259,6 +261,7 @@ export async function syncNFTsToDB(
           user_id: userId,
           telegram_id: telegramId,
           nft_id: nft.nftId,
+          price_paid_bb: nft.purchasePrice,
           purchased_at: new Date(timestamp).toISOString()
         };
         console.log("📦 [NFT-SYNC] Prepared record:", record);
@@ -274,10 +277,12 @@ export async function syncNFTsToDB(
     }
 
     console.log("📤 [NFT-SYNC] Executing Supabase insert...");
-    // Cast to any to bypass stale TypeScript definitions (database.types.ts expects price_paid_bb)
     const { data, error } = await supabase
-      .from("user_nfts")
-      .insert(nftRecords as any)
+      .from('user_nfts')
+      .upsert(nftRecords, {
+        onConflict: 'user_id,nft_id',
+        ignoreDuplicates: false
+      })
       .select();
 
     console.log("📤 [NFT-SYNC] Supabase response:", { data, error });
