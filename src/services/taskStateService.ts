@@ -38,44 +38,28 @@ export interface TaskProgressRecord {
  * Calculate reset_at timestamp for task type
  */
 export function calculateResetAt(taskType: "daily" | "weekly" | "milestone"): string {
-  if (taskType === "milestone") return "2099-12-31T23:59:59Z";
+  if (taskType === "milestone") return "NEVER";
   
   const now = new Date();
   
   if (taskType === "daily") {
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    return today.toISOString();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
   }
   
   if (taskType === "weekly") {
     const dayOfWeek = now.getDay();
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset);
-    return monday.toISOString();
+    const yyyy = monday.getFullYear();
+    const weekNum = Math.ceil((monday.getTime() - new Date(yyyy, 0, 1).getTime()) / (7 * 24 * 60 * 60 * 1000));
+    return `${yyyy}-W${String(weekNum).padStart(2, "0")}`;
   }
   
   return now.toISOString();
-}
-
-/**
- * Calculate expires_at timestamp (reset_at + period duration)
- */
-function calculateExpiresAt(taskType: "daily" | "weekly" | "milestone", resetAt: string): string {
-  if (taskType === "milestone") return "2099-12-31T23:59:59Z";
-  
-  const reset = new Date(resetAt);
-  
-  if (taskType === "daily") {
-    reset.setDate(reset.getDate() + 1);
-    return reset.toISOString();
-  }
-  
-  if (taskType === "weekly") {
-    reset.setDate(reset.getDate() + 7);
-    return reset.toISOString();
-  }
-  
-  return resetAt;
 }
 
 /**
@@ -166,8 +150,6 @@ export async function upsertTaskProgress(data: TaskProgressData) {
 
     console.log("🔵 [TASKS-SYNC] DB Upsert: Found profile UUID:", profile.id);
 
-    const expiresAt = calculateExpiresAt(data.taskType, data.resetAt);
-    
     const upsertPayload = {
       telegram_id: tgUser.id,
       user_id: profile.id,
@@ -179,7 +161,6 @@ export async function upsertTaskProgress(data: TaskProgressData) {
       completed_at: data.completedAt,
       claimed_at: data.claimedAt,
       reset_at: data.resetAt,
-      expires_at: expiresAt,
       updated_at: new Date().toISOString()
     };
     
@@ -254,7 +235,6 @@ export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
       completed_at: data.completedAt,
       claimed_at: data.claimedAt,
       reset_at: data.resetAt,
-      expires_at: calculateExpiresAt(data.taskType, data.resetAt),
       updated_at: new Date().toISOString()
     }));
     
