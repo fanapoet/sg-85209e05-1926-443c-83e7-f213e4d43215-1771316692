@@ -13,6 +13,42 @@ function validateTimestamp(timestamp: number): number {
 /**
  * Map legacy NFT IDs to database schema IDs
  */
+function mapLegacyNFTId(nftId: string): string {
+  const mapping: Record<string, string> = {
+    // Legacy format → Database format
+    'early_adopter': 'NFT_EARLY',
+    'social_king': 'NFT_SOCIAL',
+    'builder_pro': 'NFT_BUILDER',
+    'tap_legend': 'NFT_TAPPER',
+    'energy_master': 'NFT_ENERGY',
+    'golden_bunny': 'NFT_GOLDEN',
+    'diamond_crystal': 'NFT_DIAMOND',
+    // Already correct format (pass through)
+    'NFT_EARLY': 'NFT_EARLY',
+    'NFT_SOCIAL': 'NFT_SOCIAL',
+    'NFT_BUILDER': 'NFT_BUILDER',
+    'NFT_TAPPER': 'NFT_TAPPER',
+    'NFT_ENERGY': 'NFT_ENERGY',
+    'NFT_GOLDEN': 'NFT_GOLDEN',
+    'NFT_DIAMOND': 'NFT_DIAMOND'
+  };
+  
+  const mapped = mapping[nftId];
+  if (!mapped) {
+    console.warn(`⚠️ [NFT-SYNC] Unknown NFT ID: ${nftId} - using as-is`);
+    return nftId;
+  }
+  
+  if (mapped !== nftId) {
+    console.log(`🔄 [NFT-SYNC] Mapping legacy ID: ${nftId} → ${mapped}`);
+  }
+  
+  return mapped;
+}
+
+/**
+ * Map legacy NFT IDs to database schema IDs
+ */
 function mapNFTIdToDatabase(nftId: string): string {
   const mapping: Record<string, string> = {
     // Legacy format → Database format

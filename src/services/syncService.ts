@@ -513,8 +513,7 @@ export async function purchaseNFT(
   userId: string,
   nftKey: string,
   cost: number,
-  currency: "BZ" | "BB",
-  pricePaidBb?: number
+  currency: "BZ" | "BB"
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Get current profile
@@ -551,13 +550,12 @@ export async function purchaseNFT(
       return { success: false, error: updateError.message };
     }
 
-    // Record NFT purchase in user_nfts (correct table)
+    // Record NFT purchase in user_nfts (only fields that exist in schema)
     const { error: nftError } = await supabase
       .from("user_nfts")
       .insert({
         user_id: userId,
-        nft_id: nftKey, // Assuming nftKey matches nft.id structure or is valid foreign key
-        price_paid_bb: pricePaidBb || (currency === "BB" ? cost : 0),
+        nft_id: nftKey,
         purchased_at: new Date().toISOString()
       } as any);
 
