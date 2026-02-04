@@ -20,6 +20,12 @@ import {
   type ReferralStats
 } from "@/services/referralService";
 import { getCurrentTelegramUser } from "@/services/authService";
+import { 
+  initializeTask, 
+  getTaskProgress, 
+  loadAndMergeTaskProgress, 
+  type TaskProgressData 
+} from "@/services/tasksService";
 
 interface Task {
   id: string;
@@ -49,6 +55,10 @@ export function TasksReferralsScreen() {
   
   // Track claimed tasks
   const [claimedTasks, setClaimedTasks] = useState<Record<string, number>>({});
+  
+  // New Sync State
+  const [taskProgress, setTaskProgress] = useState<Map<string, TaskProgressData>>(new Map());
+  const [isInitialized, setIsInitialized] = useState(false);
   
   // Referral state
   const [referralCode, setReferralCode] = useState<string>("");

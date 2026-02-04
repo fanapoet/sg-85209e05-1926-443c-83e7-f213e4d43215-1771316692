@@ -86,11 +86,12 @@ export async function getTaskProgress(telegramId: number): Promise<TaskProgressR
   try {
     console.log("📥 [Task State] Fetching for telegram_id:", telegramId);
 
+    // Cast to any to bypass stale types (missing telegram_id, task_type, etc)
     const { data, error } = await supabase
       .from("user_task_progress")
       .select("*")
       .eq("telegram_id", telegramId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false }) as any;
 
     if (error) {
       console.error("❌ [Task State] Fetch error:", error);
@@ -159,8 +160,8 @@ export async function upsertTaskProgress(data: TaskProgressData) {
 
     const expiresAt = calculateExpiresAt(data.taskType, data.resetAt);
 
-    const { data: result, error } = await supabase
-      .from("user_task_progress")
+    // Cast table to any to bypass complex type inference errors
+    const { data: result, error } = await (supabase.from("user_task_progress") as any)
       .upsert({
         telegram_id: tgUser.id,
         user_id: profile.id,
@@ -226,8 +227,8 @@ export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
       return { success: false, error: "Profile not found" };
     }
 
-    const { error } = await supabase
-      .from("user_task_progress")
+    // Cast table to any for batch upsert
+    const { error } = await (supabase.from("user_task_progress") as any)
       .upsert(records.map(data => ({
         telegram_id: tgUser.id,
         user_id: profile.id,
