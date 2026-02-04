@@ -1,6 +1,24 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
+ * Validate and convert timestamp to ISO string
+ */
+function toISOString(timestamp: number): string {
+  if (!timestamp || isNaN(timestamp) || timestamp <= 0) {
+    console.warn("⚠️ Invalid timestamp:", timestamp, "- using current time");
+    return new Date().toISOString();
+  }
+  
+  const date = new Date(timestamp);
+  if (isNaN(date.getTime())) {
+    console.warn("⚠️ Invalid date from timestamp:", timestamp, "- using current time");
+    return new Date().toISOString();
+  }
+  
+  return date.toISOString();
+}
+
+/**
  * Load daily claims from database
  */
 export async function loadDailyClaimsFromDB(
@@ -9,7 +27,6 @@ export async function loadDailyClaimsFromDB(
   try {
     console.log("📥 [DAILY-CLAIMS] Loading from DB for telegram_id:", telegramId);
 
-    // Cast to any to avoid "excessively deep" type error with complex schema inference
     const { data, error } = await (supabase
       .from("user_daily_claims") as any)
       .select("*")
@@ -27,18 +44,13 @@ export async function loadDailyClaimsFromDB(
     }
 
     // Convert DB format to app format
-    const claims = data.map((row: any) => {
-      const type = row.bz_claimed > 0 ? "BZ" : row.bb_claimed > 0 ? "BB" : "XP";
-      const amount = row.bz_claimed || Number(row.bb_claimed) || row.xp_claimed || 0;
-      
-      return {
-        day: row.day,
-        week: 1, // TODO: Add week field to DB query when available
-        type,
-        amount,
-        timestamp: new Date(row.claimed_at).getTime()
-      };
-    });
+    const claims = data.map((row: any) => ({
+      day: row.day,
+      week: 1, // Default to week 1 since DB doesn't track weeks
+      type: row.reward_type || "BZ",
+      amount: Number(row.reward_amount) || 0,
+      timestamp: new Date(row.claimed_at).getTime()
+    }));
 
     console.log(`✅ [DAILY-CLAIMS] Loaded ${claims.length} claims from DB`);
     return claims;
@@ -58,7 +70,6 @@ export async function loadNFTsFromDB(
   try {
     console.log("📥 [NFT] Loading from DB for telegram_id:", telegramId);
 
-    // Cast to any to avoid "excessively deep" type error
     const { data, error } = await (supabase
       .from("user_nfts") as any)
       .select("*")
@@ -77,7 +88,7 @@ export async function loadNFTsFromDB(
 
     const nfts = data.map((row: any) => ({
       nftId: row.nft_id,
-      purchasePrice: Number(row.price_paid_bb),
+      purchasePrice: 0, // DB doesn't store price, set to 0
       timestamp: new Date(row.purchased_at).getTime()
     }));
 
@@ -105,17 +116,23 @@ export async function syncDailyClaimsToDB(
     }
 
     console.log(`📤 [DAILY-CLAIMS-SYNC] Syncing ${claims.length} claims to DB...`);
+    console.log("📤 [DAILY-CLAIMS-SYNC] Sample claim:", claims[0]);
 
-    const upsertData = claims.map(claim => ({
-      user_id: userId,
-      telegram_id: telegramId,
-      day: claim.day,
-      week: claim.week,
-      bz_claimed: claim.type === "BZ" ? claim.amount : 0,
-      bb_claimed: claim.type === "BB" ? claim.amount : 0,
-      xp_claimed: claim.type === "XP" ? claim.amount : 0,
-      claimed_at: new Date(claim.timestamp).toISOString()
-    }));
+    const upsertData = claims.map(claim => {
+      const claimedAt = toISOString(claim.timestamp);
+      console.log(`📤 [DAILY-CLAIMS-SYNC] Converting timestamp ${claim.timestamp} → ${claimedAt}`);
+      
+      return {
+        user_id: userId,
+        telegram_id: telegramId,
+        day: claim.day,
+        reward_type: claim.type,
+        reward_amount: claim.amount,
+        claimed_at: claimedAt
+      };
+    });
+
+    console.log("📤 [DAILY-CLAIMS-SYNC] Upsert data sample:", upsertData[0]);
 
     const { error } = await (supabase
       .from("user_daily_claims") as any)
@@ -153,14 +170,21 @@ export async function syncNFTsToDB(
     }
 
     console.log(`📤 [NFT-SYNC] Syncing ${nfts.length} NFTs to DB...`);
+    console.log("📤 [NFT-SYNC] Sample NFT:", nfts[0]);
 
-    const upsertData = nfts.map(nft => ({
-      user_id: userId,
-      telegram_id: telegramId,
-      nft_id: nft.nftId,
-      price_paid_bb: nft.purchasePrice,
-      purchased_at: new Date(nft.timestamp).toISOString()
-    }));
+    const upsertData = nfts.map(nft => {
+      const purchasedAt = toISOString(nft.timestamp);
+      console.log(`📤 [NFT-SYNC] Converting timestamp ${nft.timestamp} → ${purchasedAt}`);
+      
+      return {
+        user_id: userId,
+        telegram_id: telegramId,
+        nft_id: nft.nftId,
+        purchased_at: purchasedAt
+      };
+    });
+
+    console.log("📤 [NFT-SYNC] Upsert data sample:", upsertData[0]);
 
     const { error } = await (supabase
       .from("user_nfts") as any)
@@ -184,25 +208,23 @@ export async function syncNFTsToDB(
 }
 
 /**
- * Merge local and server claims (deduplicate by day+week, keep all unique)
+ * Merge local and server claims (deduplicate by day, keep all unique)
  */
 export function mergeDailyClaims(
   localClaims: Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>,
   serverClaims: Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>
 ): Array<{ day: number; week: number; type: string; amount: number; timestamp: number }> {
-  const mergedMap = new Map<string, any>();
+  const mergedMap = new Map<number, any>();
 
-  // Add all local claims
+  // Add all local claims (keyed by day only)
   localClaims.forEach(claim => {
-    const key = `${claim.week}-${claim.day}`;
-    mergedMap.set(key, claim);
+    mergedMap.set(claim.day, claim);
   });
 
   // Add server claims (only if not already present)
   serverClaims.forEach(claim => {
-    const key = `${claim.week}-${claim.day}`;
-    if (!mergedMap.has(key)) {
-      mergedMap.set(key, claim);
+    if (!mergedMap.has(claim.day)) {
+      mergedMap.set(claim.day, claim);
     }
   });
 
