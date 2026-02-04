@@ -493,52 +493,76 @@ export function TasksReferralsScreen() {
 
   // Initialize tasks and load from database on mount
   useEffect(() => {
-    console.log("📋 [Tasks] SCREEN MOUNTED - STARTING INIT");
-    
-    // Initialize tasks in localStorage
-    tasks.forEach(task => {
-      initializeTask(task.id, task.type, task.target);
-    });
-    
-    // Load current progress from localStorage
-    const progressMap = new Map<string, TaskProgressData>();
-    const allProgress = getAllTaskProgress(); // We need to export this or use getTaskProgress loop
-    
-    tasks.forEach(task => {
-      const progress = getTaskProgress(task.id);
-      if (progress) {
-        progressMap.set(task.id, progress);
-        console.log(`[Tasks] Loaded local: ${task.id} -> ${progress.currentProgress}/${task.target} (Claimed: ${progress.claimed})`);
-      }
-    });
-    
-    setTaskProgress(progressMap);
-    setIsInitialized(true);
-    console.log("✅ [Tasks] Initialized UI from localStorage");
-    
-    // Background sync: Load from database and merge (fire-and-forget)
-    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
-    
-    if (tgUser?.id) {
-      console.log(`[Tasks] Starting DB sync for user ${tgUser.id}`);
-      loadAndMergeTaskProgress(tgUser.id).then(() => {
-        console.log("[Tasks] DB merge finished, refreshing UI...");
-        // Reload progress after merge
-        const updatedMap = new Map<string, TaskProgressData>();
-        tasks.forEach(task => {
-          const progress = getTaskProgress(task.id);
-          if (progress) {
-            updatedMap.set(task.id, progress);
-          }
-        });
-        setTaskProgress(updatedMap);
-        console.log("✅ [Tasks] UI refreshed after database sync");
-      }).catch(err => {
-        console.error("❌ [Tasks] Background merge failed:", err);
+    const initializeTasksWithAuth = async () => {
+      console.log("📋 [Tasks] SCREEN MOUNTED - STARTING INIT");
+      
+      // Initialize tasks in localStorage
+      tasks.forEach(task => {
+        initializeTask(task.id, task.type, task.target);
       });
-    } else {
-      console.warn("⚠️ [Tasks] No Telegram user found, skipping DB sync");
-    }
+      
+      // Load current progress from localStorage
+      const progressMap = new Map<string, TaskProgressData>();
+      
+      tasks.forEach(task => {
+        const progress = getTaskProgress(task.id);
+        if (progress) {
+          progressMap.set(task.id, progress);
+          console.log(`[Tasks] Loaded local: ${task.id} -> ${progress.currentProgress}/${task.target} (Claimed: ${progress.claimed})`);
+        }
+      });
+      
+      setTaskProgress(progressMap);
+      setIsInitialized(true);
+      console.log("✅ [Tasks] Initialized UI from localStorage");
+      
+      // Background sync: Ensure auth session, then load from database
+      const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+      
+      if (tgUser?.id) {
+        try {
+          // Check for existing auth session
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (!session) {
+            console.log("⚠️ [Tasks] No active session, attempting auth...");
+            // Try to authenticate using authService
+            const { ensureAuthenticated } = await import("@/services/authService");
+            const authResult = await ensureAuthenticated();
+            
+            if (!authResult.success) {
+              console.error("❌ [Tasks] Auth failed, skipping DB sync:", authResult.error);
+              return;
+            }
+            console.log("✅ [Tasks] Auth successful, proceeding with sync");
+          } else {
+            console.log("✅ [Tasks] Active session found, proceeding with sync");
+          }
+          
+          // Now sync with database
+          console.log(`[Tasks] Starting DB sync for user ${tgUser.id}`);
+          await loadAndMergeTaskProgress(tgUser.id);
+          console.log("✅ [Tasks] DB merge finished, refreshing UI...");
+          
+          // Reload progress after merge
+          const updatedMap = new Map<string, TaskProgressData>();
+          tasks.forEach(task => {
+            const progress = getTaskProgress(task.id);
+            if (progress) {
+              updatedMap.set(task.id, progress);
+            }
+          });
+          setTaskProgress(updatedMap);
+          console.log("✅ [Tasks] UI refreshed after database sync");
+        } catch (err) {
+          console.error("❌ [Tasks] Background merge failed:", err);
+        }
+      } else {
+        console.warn("⚠️ [Tasks] No Telegram user found, skipping DB sync");
+      }
+    };
+    
+    initializeTasksWithAuth();
   }, []);
 
   return (
