@@ -134,6 +134,8 @@ export async function syncDailyClaimsToDB(
 
     console.log("📤 [DAILY-CLAIMS-SYNC] Upsert data sample:", upsertData[0]);
 
+    // Use simple insert without onConflict since constraint doesn't exist yet
+    // User will add UNIQUE constraint manually, then we can use onConflict
     const { error } = await (supabase
       .from("user_daily_claims") as any)
       .upsert(upsertData, {
@@ -172,7 +174,21 @@ export async function syncNFTsToDB(
     console.log(`📤 [NFT-SYNC] Syncing ${nfts.length} NFTs to DB...`);
     console.log("📤 [NFT-SYNC] Sample NFT:", nfts[0]);
 
-    const upsertData = nfts.map(nft => {
+    // Validate NFT data before syncing
+    const validNfts = nfts.filter(nft => {
+      if (!nft.nftId || nft.nftId.trim() === "") {
+        console.warn("⚠️ [NFT-SYNC] Skipping NFT with empty nftId:", nft);
+        return false;
+      }
+      return true;
+    });
+
+    if (validNfts.length === 0) {
+      console.log("⏭️ [NFT-SYNC] No valid NFTs to sync after validation");
+      return { success: true };
+    }
+
+    const upsertData = validNfts.map(nft => {
       const purchasedAt = toISOString(nft.timestamp);
       console.log(`📤 [NFT-SYNC] Converting timestamp ${nft.timestamp} → ${purchasedAt}`);
       
@@ -186,6 +202,7 @@ export async function syncNFTsToDB(
 
     console.log("📤 [NFT-SYNC] Upsert data sample:", upsertData[0]);
 
+    // Use simple insert without onConflict since constraint doesn't exist yet
     const { error } = await (supabase
       .from("user_nfts") as any)
       .upsert(upsertData, {
@@ -198,7 +215,7 @@ export async function syncNFTsToDB(
       return { success: false, error: error.message };
     }
 
-    console.log(`✅ [NFT-SYNC] ${nfts.length} NFTs synced successfully!`);
+    console.log(`✅ [NFT-SYNC] ${validNfts.length} NFTs synced successfully!`);
     return { success: true };
 
   } catch (error: any) {
