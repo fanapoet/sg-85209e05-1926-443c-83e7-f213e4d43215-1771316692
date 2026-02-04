@@ -508,7 +508,6 @@ export function TasksReferralsScreen() {
         const progress = getTaskProgress(task.id);
         if (progress) {
           progressMap.set(task.id, progress);
-          console.log(`[Tasks] Loaded local: ${task.id} -> ${progress.currentProgress}/${task.target} (Claimed: ${progress.claimed})`);
         }
       });
       
@@ -516,30 +515,12 @@ export function TasksReferralsScreen() {
       setIsInitialized(true);
       console.log("✅ [Tasks] Initialized UI from localStorage");
       
-      // Background sync: Ensure auth session, then load from database
+      // Background sync: Load from database
       const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
       
       if (tgUser?.id) {
         try {
-          // Check for existing auth session
-          const { data: { session } } = await supabase.auth.getSession();
-          
-          if (!session) {
-            console.log("⚠️ [Tasks] No active session, attempting auth...");
-            // Try to authenticate using authService
-            const { ensureAuthenticated } = await import("@/services/authService");
-            const authResult = await ensureAuthenticated();
-            
-            if (!authResult.success) {
-              console.error("❌ [Tasks] Auth failed, skipping DB sync:", authResult.error);
-              return;
-            }
-            console.log("✅ [Tasks] Auth successful, proceeding with sync");
-          } else {
-            console.log("✅ [Tasks] Active session found, proceeding with sync");
-          }
-          
-          // Now sync with database
+          // Now sync with database (Public RLS allows this without session)
           console.log(`[Tasks] Starting DB sync for user ${tgUser.id}`);
           await loadAndMergeTaskProgress(tgUser.id);
           console.log("✅ [Tasks] DB merge finished, refreshing UI...");
