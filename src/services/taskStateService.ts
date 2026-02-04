@@ -84,7 +84,7 @@ function calculateExpiresAt(taskType: "daily" | "weekly" | "milestone", resetAt:
  */
 export async function getTaskProgress(telegramId: number): Promise<TaskProgressRecord[]> {
   try {
-    console.log("📥 [Task State] Fetching for telegram_id:", telegramId);
+    console.log("📥 [TASKS-SYNC] DB Fetch: Starting for telegram_id:", telegramId);
 
     const { data, error } = await (supabase as any)
       .from("user_task_progress")
@@ -93,18 +93,19 @@ export async function getTaskProgress(telegramId: number): Promise<TaskProgressR
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("❌ [Task State] Fetch error:", error);
+      console.error("❌ [TASKS-SYNC] DB Fetch: Error:", error);
       return [];
     }
 
     if (!data || data.length === 0) {
-      console.log("ℹ️ [Task State] No existing progress found");
+      console.log("ℹ️ [TASKS-SYNC] DB Fetch: No existing progress found");
       return [];
     }
 
-    console.log("✅ [Task State] Fetched successfully:", data.length, "tasks");
+    console.log("✅ [TASKS-SYNC] DB Fetch: Success -", data.length, "tasks");
+    console.log("🔵 [TASKS-SYNC] DB Fetch: Raw data:", JSON.stringify(data.slice(0, 2))); // Log first 2 records
     
-    return data.map(record => ({
+    const records = data.map(record => ({
       id: record.id,
       userId: record.user_id,
       telegramId: record.telegram_id,
@@ -120,8 +121,11 @@ export async function getTaskProgress(telegramId: number): Promise<TaskProgressR
       createdAt: record.created_at,
       updatedAt: record.updated_at
     }));
+    
+    console.log("✅ [TASKS-SYNC] DB Fetch: Mapped", records.length, "records");
+    return records;
   } catch (error) {
-    console.error("❌ [Task State] Fetch exception:", error);
+    console.error("❌ [TASKS-SYNC] DB Fetch: Exception:", error);
     return [];
   }
 }
@@ -132,14 +136,17 @@ export async function getTaskProgress(telegramId: number): Promise<TaskProgressR
  */
 export async function upsertTaskProgress(data: TaskProgressData) {
   try {
-    console.log("💾 [Task State] Upserting:", data.taskId);
+    console.log("💾 [TASKS-SYNC] DB Upsert: Starting for task:", data.taskId);
+    console.log("🔵 [TASKS-SYNC] DB Upsert: Data:", JSON.stringify(data));
 
     const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
     
     if (!tgUser) {
-      console.error("❌ [Task State] No Telegram user data");
+      console.error("❌ [TASKS-SYNC] DB Upsert: No Telegram user data");
       return { success: false, error: "No Telegram user data" };
     }
+    
+    console.log("🔵 [TASKS-SYNC] DB Upsert: Telegram user ID:", tgUser.id);
     
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
@@ -148,47 +155,53 @@ export async function upsertTaskProgress(data: TaskProgressData) {
       .maybeSingle();
     
     if (profileError) {
-      console.error("❌ [Task State] Profile lookup error:", profileError);
+      console.error("❌ [TASKS-SYNC] DB Upsert: Profile lookup error:", profileError);
       return { success: false, error: profileError.message };
     }
     
     if (!profile) {
-      console.error("❌ [Task State] Profile not found for telegram_id:", tgUser.id);
+      console.error("❌ [TASKS-SYNC] DB Upsert: Profile not found for telegram_id:", tgUser.id);
       return { success: false, error: "Profile not found" };
     }
 
+    console.log("🔵 [TASKS-SYNC] DB Upsert: Found profile UUID:", profile.id);
+
     const expiresAt = calculateExpiresAt(data.taskType, data.resetAt);
+    
+    const upsertPayload = {
+      telegram_id: tgUser.id,
+      user_id: profile.id,
+      task_id: data.taskId,
+      task_type: data.taskType,
+      current_progress: data.currentProgress,
+      is_completed: data.isCompleted,
+      is_claimed: data.claimed,
+      completed_at: data.completedAt,
+      claimed_at: data.claimedAt,
+      reset_at: data.resetAt,
+      expires_at: expiresAt,
+      updated_at: new Date().toISOString()
+    };
+    
+    console.log("🔵 [TASKS-SYNC] DB Upsert: Payload:", JSON.stringify(upsertPayload));
 
     const { data: result, error } = await (supabase as any)
       .from("user_task_progress")
-      .upsert({
-        telegram_id: tgUser.id,
-        user_id: profile.id,
-        task_id: data.taskId,
-        task_type: data.taskType,
-        current_progress: data.currentProgress,
-        is_completed: data.isCompleted,
-        is_claimed: data.claimed,
-        completed_at: data.completedAt,
-        claimed_at: data.claimedAt,
-        reset_at: data.resetAt,
-        expires_at: expiresAt,
-        updated_at: new Date().toISOString()
-      }, {
+      .upsert(upsertPayload, {
         onConflict: "user_id,task_id,reset_at"
       })
       .select()
       .maybeSingle();
 
     if (error) {
-      console.error("❌ [Task State] Upsert error:", error);
+      console.error("❌ [TASKS-SYNC] DB Upsert: Error:", error);
       return { success: false, error: error.message };
     }
 
-    console.log("✅ [Task State] Upserted successfully");
+    console.log("✅ [TASKS-SYNC] DB Upsert: Success for task:", data.taskId);
     return { success: true, data: result };
   } catch (error) {
-    console.error("❌ [Task State] Upsert exception:", error);
+    console.error("❌ [TASKS-SYNC] DB Upsert: Exception:", error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : "Unknown error" 
@@ -201,14 +214,16 @@ export async function upsertTaskProgress(data: TaskProgressData) {
  */
 export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
   try {
-    console.log("💾 [Task State] Batch upserting:", records.length, "tasks");
+    console.log("💾 [TASKS-SYNC] DB Batch: Starting for", records.length, "tasks");
 
     const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
     
     if (!tgUser) {
-      console.error("❌ [Task State] No Telegram user data");
+      console.error("❌ [TASKS-SYNC] DB Batch: No Telegram user data");
       return { success: false, error: "No Telegram user data" };
     }
+    
+    console.log("🔵 [TASKS-SYNC] DB Batch: Telegram user ID:", tgUser.id);
     
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
@@ -217,43 +232,49 @@ export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
       .maybeSingle();
     
     if (profileError) {
-      console.error("❌ [Task State] Profile lookup error:", profileError);
+      console.error("❌ [TASKS-SYNC] DB Batch: Profile lookup error:", profileError);
       return { success: false, error: profileError.message };
     }
     
     if (!profile) {
-      console.error("❌ [Task State] Profile not found for telegram_id:", tgUser.id);
+      console.error("❌ [TASKS-SYNC] DB Batch: Profile not found for telegram_id:", tgUser.id);
       return { success: false, error: "Profile not found" };
     }
 
+    console.log("🔵 [TASKS-SYNC] DB Batch: Found profile UUID:", profile.id);
+
+    const payloads = records.map(data => ({
+      telegram_id: tgUser.id,
+      user_id: profile.id,
+      task_id: data.taskId,
+      task_type: data.taskType,
+      current_progress: data.currentProgress,
+      is_completed: data.isCompleted,
+      is_claimed: data.claimed,
+      completed_at: data.completedAt,
+      claimed_at: data.claimedAt,
+      reset_at: data.resetAt,
+      expires_at: calculateExpiresAt(data.taskType, data.resetAt),
+      updated_at: new Date().toISOString()
+    }));
+    
+    console.log("🔵 [TASKS-SYNC] DB Batch: Upserting", payloads.length, "records");
+
     const { error } = await (supabase as any)
       .from("user_task_progress")
-      .upsert(records.map(data => ({
-        telegram_id: tgUser.id,
-        user_id: profile.id,
-        task_id: data.taskId,
-        task_type: data.taskType,
-        current_progress: data.currentProgress,
-        is_completed: data.isCompleted,
-        is_claimed: data.claimed,
-        completed_at: data.completedAt,
-        claimed_at: data.claimedAt,
-        reset_at: data.resetAt,
-        expires_at: calculateExpiresAt(data.taskType, data.resetAt),
-        updated_at: new Date().toISOString()
-      })), {
+      .upsert(payloads, {
         onConflict: "user_id,task_id,reset_at"
       });
 
     if (error) {
-      console.error("❌ [Task State] Batch upsert error:", error);
+      console.error("❌ [TASKS-SYNC] DB Batch: Error:", error);
       return { success: false, error: error.message };
     }
 
-    console.log("✅ [Task State] Batch upserted successfully:", records.length);
+    console.log("✅ [TASKS-SYNC] DB Batch: Success -", records.length, "tasks synced");
     return { success: true };
   } catch (error) {
-    console.error("❌ [Task State] Batch upsert exception:", error);
+    console.error("❌ [TASKS-SYNC] DB Batch: Exception:", error);
     return { 
       success: false, 
       error: error instanceof Error ? error.message : "Unknown error" 

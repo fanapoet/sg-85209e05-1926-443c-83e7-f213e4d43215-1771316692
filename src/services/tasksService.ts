@@ -89,6 +89,8 @@ export function updateTaskProgress(
   currentProgress: number,
   target: number
 ): TaskProgressData {
+  console.log(`🔵 [TASKS-SYNC] updateTaskProgress called: ${taskId}, progress: ${currentProgress}/${target}`);
+  
   const progress = getLocalTaskProgress();
   const existing = progress.get(taskId);
   
@@ -109,13 +111,20 @@ export function updateTaskProgress(
   progress.set(taskId, updated);
   saveLocalTaskProgress(progress);
   
-  console.log("✅ [Tasks] Progress updated locally:", taskId, currentProgress);
+  console.log("✅ [TASKS-SYNC] Progress updated locally:", taskId, currentProgress);
   
   // Background sync (fire-and-forget)
+  console.log("🔄 [TASKS-SYNC] Starting background DB sync for:", taskId);
   setTimeout(() => {
-    upsertTaskProgressToDB(updated).catch(err => 
-      console.warn("⚠️ [Tasks] Background sync failed:", err)
-    );
+    upsertTaskProgressToDB(updated).then(result => {
+      if (result.success) {
+        console.log("✅ [TASKS-SYNC] Background DB sync success:", taskId);
+      } else {
+        console.error("❌ [TASKS-SYNC] Background DB sync failed:", taskId, result.error);
+      }
+    }).catch(err => {
+      console.error("❌ [TASKS-SYNC] Background sync exception:", taskId, err);
+    });
   }, 1000);
   
   return updated;
@@ -128,11 +137,13 @@ export function claimTaskReward(
   taskId: string,
   taskType: "daily" | "weekly" | "milestone"
 ): TaskProgressData | null {
+  console.log(`🔵 [TASKS-SYNC] claimTaskReward called: ${taskId}`);
+  
   const progress = getLocalTaskProgress();
   const existing = progress.get(taskId);
   
   if (!existing || !existing.isCompleted || existing.claimed) {
-    console.warn("⚠️ [Tasks] Cannot claim:", { existing, reason: !existing ? "not found" : !existing.isCompleted ? "not completed" : "already claimed" });
+    console.warn("⚠️ [TASKS-SYNC] Cannot claim:", { existing, reason: !existing ? "not found" : !existing.isCompleted ? "not completed" : "already claimed" });
     return null;
   }
   
@@ -145,13 +156,20 @@ export function claimTaskReward(
   progress.set(taskId, updated);
   saveLocalTaskProgress(progress);
   
-  console.log("✅ [Tasks] Reward claimed locally:", taskId);
+  console.log("✅ [TASKS-SYNC] Reward claimed locally:", taskId);
   
   // Background sync (fire-and-forget)
+  console.log("🔄 [TASKS-SYNC] Starting background DB sync for claim:", taskId);
   setTimeout(() => {
-    upsertTaskProgressToDB(updated).catch(err => 
-      console.warn("⚠️ [Tasks] Background sync failed:", err)
-    );
+    upsertTaskProgressToDB(updated).then(result => {
+      if (result.success) {
+        console.log("✅ [TASKS-SYNC] Background claim sync success:", taskId);
+      } else {
+        console.error("❌ [TASKS-SYNC] Background claim sync failed:", taskId, result.error);
+      }
+    }).catch(err => {
+      console.error("❌ [TASKS-SYNC] Background claim exception:", taskId, err);
+    });
   }, 1000);
   
   return updated;
@@ -206,23 +224,39 @@ export function initializeTask(
  */
 export async function loadAndMergeTaskProgress(telegramId: number): Promise<void> {
   try {
-    console.log("🔄 [Tasks] Loading from database...");
+    console.log("🔵 [TASKS-SYNC] ========== LOAD AND MERGE START ==========");
+    console.log("🔵 [TASKS-SYNC] Telegram ID:", telegramId);
+    console.log("🔄 [TASKS-SYNC] Loading from database...");
     
     const serverTasks = await getTaskProgressFromDB(telegramId);
     
+    console.log("🔵 [TASKS-SYNC] Server response:", serverTasks.length, "tasks");
+    
     if (serverTasks.length === 0) {
-      console.log("ℹ️ [Tasks] No server data, using local state");
+      console.log("ℹ️ [TASKS-SYNC] No server data, using local state only");
+      console.log("🔵 [TASKS-SYNC] ========== LOAD AND MERGE END (NO SERVER DATA) ==========");
       return;
     }
     
-    console.log("✅ [Tasks] Loaded from server:", serverTasks.length, "tasks");
+    console.log("✅ [TASKS-SYNC] Loaded from server:", serverTasks.length, "tasks");
+    console.log("🔵 [TASKS-SYNC] Server tasks:", JSON.stringify(serverTasks.map(t => ({ 
+      id: t.taskId, 
+      progress: t.currentProgress, 
+      completed: t.isCompleted, 
+      claimed: t.isClaimed 
+    }))));
     
     const localProgress = getLocalTaskProgress();
+    console.log("🔵 [TASKS-SYNC] Local tasks before merge:", localProgress.size);
     let mergedCount = 0;
     
     // Merge server data with local using Math.max for progress
     serverTasks.forEach(serverTask => {
       const localTask = localProgress.get(serverTask.taskId);
+      
+      console.log(`🔵 [TASKS-SYNC] Merging task: ${serverTask.taskId}`);
+      console.log(`   Local: ${localTask ? `progress=${localTask.currentProgress}, claimed=${localTask.claimed}` : 'NOT FOUND'}`);
+      console.log(`   Server: progress=${serverTask.currentProgress}, claimed=${serverTask.isClaimed}`);
       
       if (!localTask) {
         // Server has data we don't have locally
@@ -237,11 +271,14 @@ export async function loadAndMergeTaskProgress(telegramId: number): Promise<void
           resetAt: serverTask.resetAt
         });
         mergedCount++;
+        console.log(`✅ [TASKS-SYNC] Added from server: ${serverTask.taskId}`);
       } else {
         // Merge: use Math.max for progress, keep claimed status if either is true
         const mergedProgress = Math.max(localTask.currentProgress, serverTask.currentProgress);
         const mergedCompleted = localTask.isCompleted || serverTask.isCompleted;
         const mergedClaimed = localTask.claimed || serverTask.isClaimed;
+        
+        console.log(`   Merged: progress=${mergedProgress}, completed=${mergedCompleted}, claimed=${mergedClaimed}`);
         
         if (mergedProgress !== localTask.currentProgress || 
             mergedCompleted !== localTask.isCompleted || 
@@ -256,22 +293,37 @@ export async function loadAndMergeTaskProgress(telegramId: number): Promise<void
             claimedAt: mergedClaimed ? (localTask.claimedAt || serverTask.claimedAt) : null
           });
           mergedCount++;
+          console.log(`✅ [TASKS-SYNC] Updated task: ${serverTask.taskId}`);
+        } else {
+          console.log(`ℹ️ [TASKS-SYNC] No changes needed: ${serverTask.taskId}`);
         }
       }
     });
     
     saveLocalTaskProgress(localProgress);
-    console.log("✅ [Tasks] Merge complete:", mergedCount, "tasks updated");
+    console.log("✅ [TASKS-SYNC] Merge complete:", mergedCount, "tasks updated");
+    console.log("🔵 [TASKS-SYNC] Final local tasks count:", localProgress.size);
     
     // Background sync local data back to server (fire-and-forget)
+    console.log("🔄 [TASKS-SYNC] Starting background batch sync to server...");
     setTimeout(() => {
       const allTasks = Array.from(localProgress.values());
-      batchUpsertTaskProgress(allTasks).catch(err =>
-        console.warn("⚠️ [Tasks] Background sync failed:", err)
-      );
+      console.log("🔵 [TASKS-SYNC] Batch syncing", allTasks.length, "tasks to server");
+      batchUpsertTaskProgress(allTasks).then(result => {
+        if (result.success) {
+          console.log("✅ [TASKS-SYNC] Background batch sync success");
+        } else {
+          console.error("❌ [TASKS-SYNC] Background batch sync failed:", result.error);
+        }
+      }).catch(err => {
+        console.error("❌ [TASKS-SYNC] Background batch sync exception:", err);
+      });
     }, 2000);
     
+    console.log("🔵 [TASKS-SYNC] ========== LOAD AND MERGE END ==========");
+    
   } catch (error) {
-    console.error("❌ [Tasks] Load and merge failed:", error);
+    console.error("❌ [TASKS-SYNC] Load and merge failed:", error);
+    console.log("🔵 [TASKS-SYNC] ========== LOAD AND MERGE END (ERROR) ==========");
   }
 }
