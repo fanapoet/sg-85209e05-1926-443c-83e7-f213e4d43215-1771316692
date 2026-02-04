@@ -95,7 +95,7 @@ export function RewardsNFTsScreen() {
     addBZ, 
     addBB, 
     addXP,
-    subtractBB
+    purchaseNFT
   } = useGameState();
   
   const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
@@ -113,7 +113,14 @@ export function RewardsNFTsScreen() {
     try {
       const savedNFTs = localStorage.getItem("ownedNFTs");
       if (savedNFTs) {
-        setOwnedNFTs(JSON.parse(savedNFTs));
+        const parsed = JSON.parse(savedNFTs);
+        // Handle both old format (strings) and new format (objects)
+        if (Array.isArray(parsed)) {
+          const nftIds = parsed.map((item: any) => 
+            typeof item === "string" ? item : item.nftId
+          );
+          setOwnedNFTs(nftIds);
+        }
       }
     } catch (e) {
       console.error("Failed to load NFTs", e);
@@ -223,74 +230,74 @@ export function RewardsNFTsScreen() {
 
   const nfts: NFT[] = [
     {
-      key: "early_adopter",
+      key: "NFT_EARLY",
       name: "Early Adopter",
       icon: "Star",
       description: "Welcome to Bunergy! Free for all players.",
       price: 0,
       requirement: "Free",
       requirementMet: true,
-      owned: ownedNFTs.includes("early_adopter")
+      owned: ownedNFTs.includes("NFT_EARLY")
     },
     {
-      key: "social_king",
+      key: "NFT_SOCIAL",
       name: "Social King",
       icon: "Users",
       description: "Master of connections and community.",
       price: 2,
       requirement: "20 referrals",
       requirementMet: (referralCount || 0) >= 20,
-      owned: ownedNFTs.includes("social_king")
+      owned: ownedNFTs.includes("NFT_SOCIAL")
     },
     {
-      key: "builder_pro",
+      key: "NFT_BUILDER",
       name: "Builder Pro",
       icon: "Hammer",
       description: "Expert in construction and upgrades.",
       price: 2,
       requirement: "Complete Stage 2",
       requirementMet: isStage2Complete(),
-      owned: ownedNFTs.includes("builder_pro")
+      owned: ownedNFTs.includes("NFT_BUILDER")
     },
     {
-      key: "tap_legend",
+      key: "NFT_TAPPER",
       name: "Tap Legend",
       icon: "Zap",
       description: "Legendary tapping power unleashed.",
       price: 4,
       requirement: "Earn 10M BZ from tapping",
       requirementMet: (totalTapIncome || 0) >= 10000000,
-      owned: ownedNFTs.includes("tap_legend")
+      owned: ownedNFTs.includes("NFT_TAPPER")
     },
     {
-      key: "energy_master",
+      key: "NFT_ENERGY",
       name: "Energy Master",
       icon: "Trophy",
       description: "Perfect energy management achieved.",
       price: 3,
       requirement: "Max all energy boosters",
       requirementMet: areBoostersMaxed(),
-      owned: ownedNFTs.includes("energy_master")
+      owned: ownedNFTs.includes("NFT_ENERGY")
     },
     {
-      key: "golden_bunny",
+      key: "NFT_GOLDEN",
       name: "Golden Bunny",
       icon: "Crown",
       description: "The ultimate tapping achievement.",
       price: 5,
       requirement: "5M taps total",
       requirementMet: (totalTaps || 0) >= 5000000,
-      owned: ownedNFTs.includes("golden_bunny")
+      owned: ownedNFTs.includes("NFT_GOLDEN")
     },
     {
-      key: "diamond_crystal",
+      key: "NFT_DIAMOND",
       name: "Diamond Crystal",
       icon: "Trophy",
       description: "Reached the pinnacle of experience.",
       price: 7,
       requirement: "500k+ XP",
       requirementMet: (xp || 0) >= 500000,
-      owned: ownedNFTs.includes("diamond_crystal")
+      owned: ownedNFTs.includes("NFT_DIAMOND")
     }
   ];
 
@@ -343,21 +350,13 @@ export function RewardsNFTsScreen() {
     try {
       if (nft.owned || !nft.requirementMet) return;
       
-      // Free NFT
-      if (nft.price === 0) {
-        const updated = [...ownedNFTs, nft.key];
-        setOwnedNFTs(updated);
-        localStorage.setItem("ownedNFTs", JSON.stringify(updated));
-        return;
-      }
-
-      // Paid NFT
-      if (bb >= nft.price && subtractBB(nft.price)) {
-        console.log(`🖼️ [Rewards] Purchased NFT: ${nft.name}`);
-        const updated = [...ownedNFTs, nft.key];
-        setOwnedNFTs(updated);
-        localStorage.setItem("ownedNFTs", JSON.stringify(updated));
-      }
+      // Use context method which handles both balance deduction and DB sync
+      purchaseNFT(nft.key, nft.price);
+      
+      // Update local UI state
+      const updated = [...ownedNFTs, nft.key];
+      setOwnedNFTs(updated);
+      localStorage.setItem("ownedNFTs", JSON.stringify(updated));
     } catch (error) {
       console.error("❌ [Rewards] Error purchasing NFT:", error);
     }
@@ -369,13 +368,13 @@ export function RewardsNFTsScreen() {
   const getProgressText = (nft: NFT): string => {
     if (nft.owned) return "";
     switch (nft.key) {
-      case "early_adopter": return "Always Available";
-      case "social_king": return `${referralCount || 0} / 20 referrals`;
-      case "builder_pro": return isStage2Complete() ? "Stage 2 Complete ✓" : "Stage 2 Incomplete";
-      case "tap_legend": return `${((totalTapIncome || 0) / 1000000).toFixed(1)}M / 10M BZ`;
-      case "energy_master": return areBoostersMaxed() ? "All Boosters Maxed ✓" : "Boosters Not Maxed";
-      case "golden_bunny": return `${((totalTaps || 0) / 1000000).toFixed(1)}M / 5M taps`;
-      case "diamond_crystal": return `${((xp || 0) / 1000).toFixed(0)}k / 500k XP`;
+      case "NFT_EARLY": return "Always Available";
+      case "NFT_SOCIAL": return `${referralCount || 0} / 20 referrals`;
+      case "NFT_BUILDER": return isStage2Complete() ? "Stage 2 Complete ✓" : "Stage 2 Incomplete";
+      case "NFT_TAPPER": return `${((totalTapIncome || 0) / 1000000).toFixed(1)}M / 10M BZ`;
+      case "NFT_ENERGY": return areBoostersMaxed() ? "All Boosters Maxed ✓" : "Boosters Not Maxed";
+      case "NFT_GOLDEN": return `${((totalTaps || 0) / 1000000).toFixed(1)}M / 5M taps`;
+      case "NFT_DIAMOND": return `${((xp || 0) / 1000).toFixed(0)}k / 500k XP`;
       default: return "";
     }
   };
@@ -383,20 +382,20 @@ export function RewardsNFTsScreen() {
   const getProgressPercent = (nft: NFT): number => {
     if (nft.owned || nft.requirementMet) return 100;
     switch (nft.key) {
-      case "early_adopter": return 100;
-      case "social_king": return Math.min(((referralCount || 0) / 20) * 100, 100);
-      case "builder_pro": return isStage2Complete() ? 100 : 0;
-      case "tap_legend": return Math.min(((totalTapIncome || 0) / 10000000) * 100, 100);
-      case "energy_master": return areBoostersMaxed() ? 100 : 0;
-      case "golden_bunny": return Math.min(((totalTaps || 0) / 5000000) * 100, 100);
-      case "diamond_crystal": return Math.min(((xp || 0) / 500000) * 100, 100);
+      case "NFT_EARLY": return 100;
+      case "NFT_SOCIAL": return Math.min(((referralCount || 0) / 20) * 100, 100);
+      case "NFT_BUILDER": return isStage2Complete() ? 100 : 0;
+      case "NFT_TAPPER": return Math.min(((totalTapIncome || 0) / 10000000) * 100, 100);
+      case "NFT_ENERGY": return areBoostersMaxed() ? 100 : 0;
+      case "NFT_GOLDEN": return Math.min(((totalTaps || 0) / 5000000) * 100, 100);
+      case "NFT_DIAMOND": return Math.min(((xp || 0) / 500000) * 100, 100);
       default: return 0;
     }
   };
 
   const shouldShowProgressBar = (nft: NFT): boolean => {
     if (nft.owned) return false;
-    return ["social_king", "tap_legend", "golden_bunny", "diamond_crystal"].includes(nft.key);
+    return ["NFT_SOCIAL", "NFT_TAPPER", "NFT_GOLDEN", "NFT_DIAMOND"].includes(nft.key);
   };
 
   if (loading) {
