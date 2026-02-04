@@ -596,6 +596,11 @@ export function startAutoSync(
     todayTaps: number;
     idleBzPerHour: number;
     buildParts?: Array<{ partId: string; level: number; isBuilding: boolean; buildEndsAt: number | null }>;
+    dailyStreak?: number;
+    currentRewardWeek?: number;
+    lastDailyClaimDate?: string | null;
+    dailyClaims?: Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>;
+    ownedNFTs?: Array<{ nftId: string; purchasePrice: number; timestamp: number }>;
   },
   intervalMs: number = 30000
 ) {
@@ -607,12 +612,19 @@ export function startAutoSync(
   }
 
   // Start periodic sync
-  autoSyncInterval = setInterval(() => {
+  autoSyncInterval = setInterval(async () => {
     const state = getGameState();
     
     console.log("⏰ [AUTO-SYNC] ========== PERIODIC SYNC TRIGGERED ==========");
     console.log("⏰ [AUTO-SYNC] Time:", new Date().toLocaleTimeString());
     console.log("⏰ [AUTO-SYNC] Build parts to sync:", state.buildParts?.length || 0);
+    console.log("⏰ [AUTO-SYNC] Daily claims to sync:", state.dailyClaims?.length || 0);
+    console.log("⏰ [AUTO-SYNC] Owned NFTs to sync:", state.ownedNFTs?.length || 0);
+    console.log("⏰ [AUTO-SYNC] Reward state:", {
+      dailyStreak: state.dailyStreak,
+      currentRewardWeek: state.currentRewardWeek,
+      lastDailyClaimDate: state.lastDailyClaimDate
+    });
     
     // Convert cooldown to safe timestamp
     const cooldownTimestamp = toTimestamp(state.quickChargeCooldownUntil);
@@ -635,21 +647,64 @@ export function startAutoSync(
       totalTaps: state.totalTaps,
       todayTaps: state.todayTaps,
       idleBzPerHour: state.idleBzPerHour,
-      buildParts: state.buildParts
+      buildParts: state.buildParts,
+      // ADD REWARD STATE
+      dailyStreak: state.dailyStreak,
+      currentRewardWeek: state.currentRewardWeek,
+      lastDailyClaimDate: state.lastDailyClaimDate
     };
     
     console.log("🔄 [AUTO-SYNC] Calling syncPlayerState...");
-    syncPlayerState(syncState)
-      .then(result => {
-        if (result.success) {
-          console.log("✅ [AUTO-SYNC] Sync completed successfully!");
-        } else {
-          console.error("❌ [AUTO-SYNC] Sync failed:", result.error);
-        }
-      })
-      .catch(err => {
-        console.error("❌ [AUTO-SYNC] Sync exception:", err);
-      });
+    const syncResult = await syncPlayerState(syncState);
+    
+    if (syncResult.success) {
+      console.log("✅ [AUTO-SYNC] Player state sync completed!");
+    } else {
+      console.error("❌ [AUTO-SYNC] Player state sync failed:", syncResult.error);
+    }
+
+    // Get Telegram user for reward syncs
+    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+    if (!tgUser?.id) {
+      console.warn("⚠️ [AUTO-SYNC] No Telegram user for reward syncs");
+      return;
+    }
+
+    // Get user profile for reward syncs
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", tgUser.id)
+      .maybeSingle();
+
+    if (!profile?.id) {
+      console.warn("⚠️ [AUTO-SYNC] Profile not found for reward syncs");
+      return;
+    }
+
+    // Sync daily claims history
+    if (state.dailyClaims && state.dailyClaims.length > 0) {
+      console.log("🎁 [AUTO-SYNC] Syncing daily claims...");
+      const { syncDailyClaimsToDB } = await import("./rewardDataService");
+      const claimsResult = await syncDailyClaimsToDB(tgUser.id, profile.id, state.dailyClaims);
+      if (claimsResult.success) {
+        console.log("✅ [AUTO-SYNC] Daily claims synced!");
+      } else {
+        console.error("❌ [AUTO-SYNC] Daily claims sync failed:", claimsResult.error);
+      }
+    }
+
+    // Sync owned NFTs
+    if (state.ownedNFTs && state.ownedNFTs.length > 0) {
+      console.log("🖼️ [AUTO-SYNC] Syncing owned NFTs...");
+      const { syncNFTsToDB } = await import("./rewardDataService");
+      const nftsResult = await syncNFTsToDB(tgUser.id, profile.id, state.ownedNFTs);
+      if (nftsResult.success) {
+        console.log("✅ [AUTO-SYNC] Owned NFTs synced!");
+      } else {
+        console.error("❌ [AUTO-SYNC] Owned NFTs sync failed:", nftsResult.error);
+      }
+    }
   }, intervalMs);
 
   // Return cleanup function

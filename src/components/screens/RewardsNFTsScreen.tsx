@@ -303,8 +303,8 @@ export function RewardsNFTsScreen() {
 
   const handleDailyClaim = async () => {
     try {
-      const today = new Date().toDateString();
-      if (lastDailyClaimDate === today) return;
+      const today = new Date().getTime();
+      if (lastDailyClaimDate && lastDailyClaimDate >= today) return;
 
       const nextDay = (streak % 7) + 1;
       const reward = dailyRewards[nextDay - 1];
@@ -362,7 +362,7 @@ export function RewardsNFTsScreen() {
     }
   };
 
-  const canClaimDaily = lastDailyClaimDate !== new Date().toDateString();
+  const canClaimDaily = lastDailyClaimDate && lastDailyClaimDate < new Date().getTime();
   const currentDayReward = dailyRewards[(streak % 7)];
 
   const getProgressText = (nft: NFT): string => {
