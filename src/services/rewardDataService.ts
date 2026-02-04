@@ -185,12 +185,33 @@ export async function syncNFTsToDB(
   }
 
   try {
-    // Validate and prepare NFT records
+    // Validate and prepare NFT records - handle both string and object formats
     const nftRecords = nfts
-      .filter(nft => {
-        const isValid = nft?.nftId && typeof nft.nftId === 'string' && nft.nftId.trim() !== '';
+      .map((nft, index) => {
+        // Handle legacy string format: ["early_adopter"]
+        if (typeof nft === 'string') {
+          console.log(`📦 [NFT-SYNC] Converting legacy string format at index ${index}:`, nft);
+          return {
+            nftId: nft,
+            timestamp: Date.now() // Use current time for legacy data
+          };
+        }
+        
+        // Handle object format: [{ nftId: "...", purchasePrice: 0, timestamp: 123 }]
+        if (nft && typeof nft === 'object' && nft.nftId) {
+          return {
+            nftId: nft.nftId,
+            timestamp: nft.timestamp || Date.now()
+          };
+        }
+        
+        console.warn(`⚠️ [NFT-SYNC] Invalid NFT at index ${index}:`, nft);
+        return null;
+      })
+      .filter((nft): nft is { nftId: string; timestamp: number } => {
+        const isValid = nft !== null && nft.nftId && typeof nft.nftId === 'string' && nft.nftId.trim() !== '';
         if (!isValid) {
-          console.warn("⚠️ [NFT-SYNC] Skipping invalid NFT:", nft);
+          console.warn("⚠️ [NFT-SYNC] Filtered out invalid NFT:", nft);
         }
         return isValid;
       })
