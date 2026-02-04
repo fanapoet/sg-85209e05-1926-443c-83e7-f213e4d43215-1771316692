@@ -11,6 +11,42 @@ function validateTimestamp(timestamp: number): number {
 }
 
 /**
+ * Map legacy NFT IDs to database schema IDs
+ */
+function mapNFTIdToDatabase(nftId: string): string {
+  const mapping: Record<string, string> = {
+    // Legacy format → Database format
+    'early_adopter': 'NFT_EARLY',
+    'social_king': 'NFT_SOCIAL',
+    'builder_pro': 'NFT_BUILDER',
+    'tap_legend': 'NFT_TAPPER',
+    'energy_master': 'NFT_ENERGY',
+    'golden_bunny': 'NFT_GOLDEN',
+    'diamond_crystal': 'NFT_DIAMOND',
+    // Already correct format (pass through)
+    'NFT_EARLY': 'NFT_EARLY',
+    'NFT_SOCIAL': 'NFT_SOCIAL',
+    'NFT_BUILDER': 'NFT_BUILDER',
+    'NFT_TAPPER': 'NFT_TAPPER',
+    'NFT_ENERGY': 'NFT_ENERGY',
+    'NFT_GOLDEN': 'NFT_GOLDEN',
+    'NFT_DIAMOND': 'NFT_DIAMOND'
+  };
+  
+  const mapped = mapping[nftId];
+  if (!mapped) {
+    console.warn(`⚠️ [NFT-SYNC] Unknown NFT ID: ${nftId} - using as-is`);
+    return nftId;
+  }
+  
+  if (mapped !== nftId) {
+    console.log(`🔄 [NFT-SYNC] Mapping legacy ID: ${nftId} → ${mapped}`);
+  }
+  
+  return mapped;
+}
+
+/**
  * Validate and convert timestamp to ISO string
  */
 function toISOString(timestamp: number): string {
@@ -191,16 +227,18 @@ export async function syncNFTsToDB(
         // Handle legacy string format: ["early_adopter"]
         if (typeof nft === 'string') {
           console.log(`📦 [NFT-SYNC] Converting legacy string format at index ${index}:`, nft);
+          const mappedId = mapNFTIdToDatabase(nft);
           return {
-            nftId: nft,
-            timestamp: Date.now() // Use current time for legacy data
+            nftId: mappedId,
+            timestamp: Date.now()
           };
         }
         
         // Handle object format: [{ nftId: "...", purchasePrice: 0, timestamp: 123 }]
         if (nft && typeof nft === 'object' && nft.nftId) {
+          const mappedId = mapNFTIdToDatabase(nft.nftId);
           return {
-            nftId: nft.nftId,
+            nftId: mappedId,
             timestamp: nft.timestamp || Date.now()
           };
         }
