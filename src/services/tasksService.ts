@@ -17,13 +17,47 @@ export type { TaskProgressData };
 const STORAGE_KEY = "bunergy_task_progress";
 
 /**
+ * Calculate reset date string (YYYY-MM-DD)
+ * Uses LOCAL time to match user's day
+ */
+function getResetDateString(taskType: "daily" | "weekly" | "milestone"): string {
+  if (taskType === "milestone") return "NEVER";
+  
+  const now = new Date();
+  
+  if (taskType === "daily") {
+    // Return YYYY-MM-DD
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+  
+  if (taskType === "weekly") {
+    // Return YYYY-Www
+    const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return `${d.getUTCFullYear()}-W${weekNo}`;
+  }
+  
+  return "NEVER";
+}
+
+/**
  * Check if task needs reset
  */
-function shouldResetTask(taskType: "daily" | "weekly" | "milestone", lastResetAt: string): boolean {
+function shouldResetTask(taskType: "daily" | "weekly" | "milestone", lastResetKey: string): boolean {
   if (taskType === "milestone") return false;
   
-  const currentResetAt = calculateResetAt(taskType);
-  return currentResetAt !== lastResetAt;
+  const currentKey = getResetDateString(taskType);
+  
+  // Debug log to catch reset issues
+  if (currentKey !== lastResetKey) {
+    console.log(`[Tasks] Resetting ${taskType} task. Old: ${lastResetKey}, New: ${currentKey}`);
+    return true;
+  }
+  
+  return false;
 }
 
 /**
@@ -32,7 +66,10 @@ function shouldResetTask(taskType: "daily" | "weekly" | "milestone", lastResetAt
 function getLocalTaskProgress(): Map<string, TaskProgressData> {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return new Map();
+    if (!stored) {
+      console.log("[Tasks] No local storage found, returning empty map");
+      return new Map();
+    }
     
     const data = JSON.parse(stored);
     const map = new Map<string, TaskProgressData>();
@@ -41,7 +78,10 @@ function getLocalTaskProgress(): Map<string, TaskProgressData> {
     Object.entries(data).forEach(([key, value]: [string, any]) => {
       const task = value as TaskProgressData;
       
-      if (shouldResetTask(task.taskType, task.resetAt)) {
+      // MIGRATION: If resetAt is ISO string (old format), force reset to use new format
+      const isOldFormat = task.resetAt && task.resetAt.includes("T");
+      
+      if (isOldFormat || shouldResetTask(task.taskType, task.resetAt)) {
         // Task needs reset - create fresh entry
         map.set(key, {
           ...task,
@@ -50,7 +90,7 @@ function getLocalTaskProgress(): Map<string, TaskProgressData> {
           claimed: false,
           completedAt: null,
           claimedAt: null,
-          resetAt: calculateResetAt(task.taskType)
+          resetAt: getResetDateString(task.taskType)
         });
       } else {
         // Task is current
@@ -75,6 +115,7 @@ function saveLocalTaskProgress(progress: Map<string, TaskProgressData>): void {
       obj[key] = value;
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+    console.log(`[Tasks] Saved ${progress.size} tasks to localStorage`);
   } catch (error) {
     console.error("❌ [Tasks] Failed to save to localStorage:", error);
   }
@@ -89,14 +130,20 @@ export function updateTaskProgress(
   currentProgress: number,
   target: number
 ): TaskProgressData {
-  console.log(`🔵 [TASKS-SYNC] updateTaskProgress called: ${taskId}, progress: ${currentProgress}/${target}`);
+  console.log(`[Tasks] updateTaskProgress: ${taskId}, ${currentProgress}/${target}`);
   
   const progress = getLocalTaskProgress();
   const existing = progress.get(taskId);
   
-  const resetAt = calculateResetAt(taskType);
+  const resetAt = getResetDateString(taskType);
   const isCompleted = currentProgress >= target;
   
+  // Don't update if already claimed and completed (unless force update needed)
+  if (existing?.claimed) {
+     // Keep existing state if claimed
+     return existing;
+  }
+
   const updated: TaskProgressData = {
     taskId,
     taskType,
@@ -111,21 +158,16 @@ export function updateTaskProgress(
   progress.set(taskId, updated);
   saveLocalTaskProgress(progress);
   
-  console.log("✅ [TASKS-SYNC] Progress updated locally:", taskId, currentProgress);
-  
-  // Background sync (fire-and-forget)
-  console.log("🔄 [TASKS-SYNC] Starting background DB sync for:", taskId);
+  // Background sync
   setTimeout(() => {
     upsertTaskProgressToDB(updated).then(result => {
       if (result.success) {
-        console.log("✅ [TASKS-SYNC] Background DB sync success:", taskId);
+        console.log(`[Tasks] Sync success: ${taskId}`);
       } else {
-        console.error("❌ [TASKS-SYNC] Background DB sync failed:", taskId, result.error);
+        console.error(`[Tasks] Sync failed: ${taskId}`, result.error);
       }
-    }).catch(err => {
-      console.error("❌ [TASKS-SYNC] Background sync exception:", taskId, err);
-    });
-  }, 1000);
+    }).catch(err => console.error(`[Tasks] Sync error: ${taskId}`, err));
+  }, 100);
   
   return updated;
 }
@@ -137,40 +179,38 @@ export function claimTaskReward(
   taskId: string,
   taskType: "daily" | "weekly" | "milestone"
 ): TaskProgressData | null {
-  console.log(`🔵 [TASKS-SYNC] claimTaskReward called: ${taskId}`);
+  console.log(`[Tasks] claimTaskReward: ${taskId}`);
   
   const progress = getLocalTaskProgress();
   const existing = progress.get(taskId);
   
   if (!existing || !existing.isCompleted || existing.claimed) {
-    console.warn("⚠️ [TASKS-SYNC] Cannot claim:", { existing, reason: !existing ? "not found" : !existing.isCompleted ? "not completed" : "already claimed" });
+    console.warn(`[Tasks] Cannot claim ${taskId}:`, existing);
     return null;
   }
   
   const updated: TaskProgressData = {
     ...existing,
     claimed: true,
-    claimedAt: new Date().toISOString()
+    claimedAt: new Date().toISOString(),
+    resetAt: getResetDateString(taskType) // Ensure reset key is preserved
   };
   
   progress.set(taskId, updated);
   saveLocalTaskProgress(progress);
   
-  console.log("✅ [TASKS-SYNC] Reward claimed locally:", taskId);
+  console.log(`[Tasks] Claimed locally: ${taskId}`);
   
-  // Background sync (fire-and-forget)
-  console.log("🔄 [TASKS-SYNC] Starting background DB sync for claim:", taskId);
+  // Background sync
   setTimeout(() => {
     upsertTaskProgressToDB(updated).then(result => {
       if (result.success) {
-        console.log("✅ [TASKS-SYNC] Background claim sync success:", taskId);
+        console.log(`[Tasks] Claim sync success: ${taskId}`);
       } else {
-        console.error("❌ [TASKS-SYNC] Background claim sync failed:", taskId, result.error);
+        console.error(`[Tasks] Claim sync failed: ${taskId}`, result.error);
       }
-    }).catch(err => {
-      console.error("❌ [TASKS-SYNC] Background claim exception:", taskId, err);
-    });
-  }, 1000);
+    }).catch(err => console.error(`[Tasks] Claim sync error: ${taskId}`, err));
+  }, 100);
   
   return updated;
 }
@@ -202,7 +242,9 @@ export function initializeTask(
   const progress = getLocalTaskProgress();
   
   if (!progress.has(taskId)) {
-    const resetAt = calculateResetAt(taskType);
+    const resetAt = getResetDateString(taskType);
+    console.log(`[Tasks] Initializing new task: ${taskId} (${resetAt})`);
+    
     progress.set(taskId, {
       taskId,
       taskType,
@@ -214,7 +256,6 @@ export function initializeTask(
       resetAt
     });
     saveLocalTaskProgress(progress);
-    console.log("✅ [Tasks] Initialized:", taskId);
   }
 }
 

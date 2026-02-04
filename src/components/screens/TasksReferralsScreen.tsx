@@ -173,6 +173,14 @@ export function TasksReferralsScreen() {
   useEffect(() => {
     if (!isInitialized) return;
 
+    // Daily Check-in (Auto-complete on load)
+    const checkInTask = taskProgress.get("daily_check_in");
+    if (!checkInTask || (!checkInTask.isCompleted && !checkInTask.claimed)) {
+      console.log("[Tasks] Auto-completing daily check-in");
+      const updated = updateTaskProgress("daily_check_in", "daily", 1, 1);
+      setTaskProgress(prev => new Map(prev).set("daily_check_in", updated));
+    }
+
     // Daily Taps
     if (todayTaps > 0) {
       const updated = updateTaskProgress("daily_taps", "daily", todayTaps, 100);
@@ -484,7 +492,7 @@ export function TasksReferralsScreen() {
 
   // Initialize tasks and load from database on mount
   useEffect(() => {
-    console.log("📋 [Tasks] Initializing...");
+    console.log("📋 [Tasks] SCREEN MOUNTED - STARTING INIT");
     
     // Initialize tasks in localStorage
     tasks.forEach(task => {
@@ -493,21 +501,27 @@ export function TasksReferralsScreen() {
     
     // Load current progress from localStorage
     const progressMap = new Map<string, TaskProgressData>();
+    const allProgress = getAllTaskProgress(); // We need to export this or use getTaskProgress loop
+    
     tasks.forEach(task => {
       const progress = getTaskProgress(task.id);
       if (progress) {
         progressMap.set(task.id, progress);
+        console.log(`[Tasks] Loaded local: ${task.id} -> ${progress.currentProgress}/${task.target} (Claimed: ${progress.claimed})`);
       }
     });
     
     setTaskProgress(progressMap);
     setIsInitialized(true);
-    console.log("✅ [Tasks] Initialized from localStorage");
+    console.log("✅ [Tasks] Initialized UI from localStorage");
     
     // Background sync: Load from database and merge (fire-and-forget)
     const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+    
     if (tgUser?.id) {
+      console.log(`[Tasks] Starting DB sync for user ${tgUser.id}`);
       loadAndMergeTaskProgress(tgUser.id).then(() => {
+        console.log("[Tasks] DB merge finished, refreshing UI...");
         // Reload progress after merge
         const updatedMap = new Map<string, TaskProgressData>();
         tasks.forEach(task => {
@@ -517,10 +531,12 @@ export function TasksReferralsScreen() {
           }
         });
         setTaskProgress(updatedMap);
-        console.log("✅ [Tasks] UI updated after database merge");
+        console.log("✅ [Tasks] UI refreshed after database sync");
       }).catch(err => {
-        console.warn("⚠️ [Tasks] Background merge failed:", err);
+        console.error("❌ [Tasks] Background merge failed:", err);
       });
+    } else {
+      console.warn("⚠️ [Tasks] No Telegram user found, skipping DB sync");
     }
   }, []);
 
