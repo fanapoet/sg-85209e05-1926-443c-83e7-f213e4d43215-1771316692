@@ -260,62 +260,67 @@ export async function syncNFTsToDB(
     // Validate and prepare NFT records - handle both string and object formats
     const nftRecords = nfts
       .map((nft, index) => {
-        // Handle legacy string format: ["early_adopter"]
-        if (typeof nft === 'string') {
-          console.log(`📦 [NFT-SYNC] Converting legacy string format at index ${index}:`, nft);
-          const mappedId = mapLegacyNFTId(nft);
-          return {
-            nftId: mappedId,
-            purchasePrice: 0,
-            timestamp: Date.now()
-          };
+        // Handle legacy string format vs new object format
+        const nftId = typeof nft === "string" ? nft : (nft as any).nftId;
+        const purchasePrice = typeof nft === "string" ? 0 : (nft as any).purchasePrice || 0;
+        const timestamp = typeof nft === "string" 
+          ? Date.now() 
+          : validateTimestamp((nft as any).timestamp);
+
+        console.log(`📦 [NFT-SYNC] Processing NFT ${index}:`, { nftId, purchasePrice, timestamp });
+
+        // Basic validation
+        if (!nftId || typeof nftId !== "string") {
+          console.warn(`⚠️ [NFT-SYNC] Invalid NFT ID at index ${index}:`, nft);
+          return null;
         }
-        
-        // Handle object format: [{ nftId: "...", purchasePrice: 0, timestamp: 123 }]
-        if (nft && typeof nft === 'object' && nft.nftId) {
-          const mappedId = mapLegacyNFTId(nft.nftId);
-          return {
-            nftId: mappedId,
-            purchasePrice: nft.purchasePrice || 0,
-            timestamp: nft.timestamp || Date.now()
-          };
-        }
-        
-        console.warn(`⚠️ [NFT-SYNC] Invalid NFT at index ${index}:`, nft);
-        return null;
-      })
-      .filter((nft): nft is { nftId: string; purchasePrice: number; timestamp: number } => {
-        const isValid = nft !== null && nft.nftId && typeof nft.nftId === 'string' && nft.nftId.trim() !== '';
-        if (!isValid) {
-          console.warn("⚠️ [NFT-SYNC] Filtered out invalid NFT:", nft);
-        }
-        return isValid;
-      })
-      .map(nft => {
-        const timestamp = validateTimestamp(nft.timestamp);
+
         const record = {
           user_id: userId,
-          telegram_id: telegramId,
-          nft_id: nft.nftId,
-          purchased_at: new Date(timestamp).toISOString()
+          nft_id: nftId,
+          price_paid_bb: purchasePrice,
+          purchased_at: new Date(timestamp).toISOString(),
+          telegram_id: telegramId
         };
+
         console.log("📦 [NFT-SYNC] Prepared record:", record);
         return record;
-      });
+      })
+      .filter((r): r is NonNullable<typeof r> => r !== null);
 
-    console.log(`📤 [NFT-SYNC] Prepared ${nftRecords.length} valid records for insert`);
-    console.log("📤 [NFT-SYNC] Records to insert:", JSON.stringify(nftRecords, null, 2));
+    // ✅ DEDUPLICATE: Keep only the latest entry for each unique nft_id
+    const deduplicatedRecords = nftRecords.reduce((acc, record) => {
+      const existing = acc.find(r => r.nft_id === record.nft_id);
+      if (!existing) {
+        acc.push(record);
+      } else {
+        // Keep the record with the latest purchased_at timestamp
+        const existingTime = new Date(existing.purchased_at).getTime();
+        const newTime = new Date(record.purchased_at).getTime();
+        if (newTime > existingTime) {
+          // Replace with newer record
+          const index = acc.indexOf(existing);
+          acc[index] = record;
+          console.log(`🔄 [NFT-SYNC] Replaced duplicate ${record.nft_id} with newer timestamp`);
+        } else {
+          console.log(`⏭️ [NFT-SYNC] Skipped older duplicate for ${record.nft_id}`);
+        }
+      }
+      return acc;
+    }, [] as typeof nftRecords);
 
-    if (nftRecords.length === 0) {
-      console.log("⚠️ [NFT-SYNC] All NFTs filtered out (invalid data)");
+    console.log(`📊 [NFT-SYNC] After deduplication: ${nftRecords.length} → ${deduplicatedRecords.length} records`);
+
+    if (deduplicatedRecords.length === 0) {
+      console.log("⚠️ [NFT-SYNC] All NFTs filtered out or deduplicated - nothing to sync");
       return { success: true };
     }
 
-    console.log("📤 [NFT-SYNC] Executing Supabase insert...");
-    // Cast to any to bypass stale types expecting price_paid_bb
+    console.log("📤 [NFT-SYNC] Upserting to database:", deduplicatedRecords);
+
     const { data, error } = await (supabase
-      .from('user_nfts') as any)
-      .upsert(nftRecords, {
+      .from("user_nfts") as any)
+      .upsert(deduplicatedRecords, {
         onConflict: 'user_id,nft_id',
         ignoreDuplicates: false
       })
@@ -328,7 +333,7 @@ export async function syncNFTsToDB(
       return { success: false, error: error.message };
     }
 
-    console.log(`✅ [NFT-SYNC] ${nftRecords.length} NFTs synced successfully!`);
+    console.log(`✅ [NFT-SYNC] ${deduplicatedRecords.length} NFTs synced successfully!`);
     console.log("✅ [NFT-SYNC] Inserted data:", data);
     return { success: true };
   } catch (error: any) {

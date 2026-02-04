@@ -511,62 +511,34 @@ export async function syncBuildPart(
  */
 export async function purchaseNFT(
   userId: string,
-  nftKey: string,
-  cost: number,
-  currency: "BZ" | "BB"
+  telegramId: number,
+  nftId: string,
+  price_paid_bb: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Get current profile
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("nfts_owned, bz_balance, bb_balance")
-      .eq("id", userId)
-      .single();
+    console.log(`🛍️ [NFT-PURCHASE] Processing purchase for ${nftId} (${price_paid_bb} BB)`);
 
-    if (profileError || !profile) {
-      return { success: false, error: "Profile not found" };
-    }
-
-    // Update profile with new NFT and deduct cost
-    const currentNfts = Array.isArray(profile.nfts_owned) ? profile.nfts_owned : [];
-    const updates: any = {
-      nfts_owned: [...currentNfts, nftKey],
-      updated_at: new Date().toISOString()
-    };
-
-    if (currency === "BZ") {
-      updates.bz_balance = Number(profile.bz_balance) - cost;
-    } else {
-      const currentBB = Number(profile.bb_balance);
-      updates.bb_balance = Number((currentBB - cost).toFixed(6));
-    }
-
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update(updates)
-      .eq("id", userId);
-
-    if (updateError) {
-      return { success: false, error: updateError.message };
-    }
-
-    // Record NFT purchase in user_nfts (only fields that exist in schema)
-    const { error: nftError } = await supabase
-      .from("user_nfts")
+    // 1. Sync directly to DB
+    // Note: We don't deduct balance here as it's handled by the caller/optimistically
+    const { error } = await supabase
+      .from('user_nfts')
       .insert({
         user_id: userId,
-        nft_id: nftKey,
-        purchased_at: new Date().toISOString()
-      } as any);
+        telegram_id: telegramId,
+        nft_id: nftId,
+        price_paid_bb: price_paid_bb
+      });
 
-    if (nftError) {
-      console.error("❌ [Sync] NFT purchase record failed:", nftError);
+    if (error) {
+      console.error("❌ [NFT-PURCHASE] DB insert failed:", error);
+      return { success: false, error: error.message };
     }
 
-    console.log("✅ [Sync] NFT purchased and synced");
+    console.log("✅ [NFT-PURCHASE] Successfully synced to DB");
     return { success: true };
+
   } catch (error: any) {
-    console.error("❌ [Sync] NFT purchase exception:", error);
+    console.error("❌ [NFT-PURCHASE] NFT purchase exception:", error);
     return { success: false, error: error.message };
   }
 }
