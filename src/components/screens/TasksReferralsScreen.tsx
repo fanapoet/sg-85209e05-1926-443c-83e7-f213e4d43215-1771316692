@@ -23,6 +23,7 @@ import { getCurrentTelegramUser } from "@/services/authService";
 import { 
   initializeTask, 
   getTaskProgress, 
+  getAllTaskProgress,
   loadAndMergeTaskProgress, 
   updateTaskProgress,
   claimTaskReward,

@@ -406,6 +406,29 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           }
         }
         
+        // Sync Task Progress
+        if (telegramId) {
+          console.log("📋 [MANUAL SYNC] Syncing task progress...");
+          const { getAllTaskProgress, loadAndMergeTaskProgress } = await import("@/services/tasksService");
+          const { batchUpsertTaskProgress } = await import("@/services/taskStateService");
+          
+          // Get all current task progress from localStorage
+          const allTasks = getAllTaskProgress();
+          console.log("📋 [MANUAL SYNC] Task progress array:", allTasks.length, "tasks");
+          
+          if (allTasks.length > 0) {
+            // Batch upsert to database
+            const tasksResult = await batchUpsertTaskProgress(allTasks);
+            if (tasksResult.success) {
+              console.log("✅ [MANUAL SYNC] Task progress synced!");
+            } else {
+              console.error("❌ [MANUAL SYNC] Task progress sync failed:", tasksResult.error);
+            }
+          } else {
+            console.log("ℹ️ [MANUAL SYNC] No task progress to sync");
+          }
+        }
+        
         toast({ 
           title: "✅ Sync Successful", 
           description: "Game progress saved to server." 
