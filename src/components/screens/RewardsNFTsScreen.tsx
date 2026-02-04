@@ -119,7 +119,16 @@ export function RewardsNFTsScreen() {
           const nftIds = parsed.map((item: any) => 
             typeof item === "string" ? item : item.nftId
           );
-          setOwnedNFTs(nftIds);
+          
+          // ✅ DEDUPLICATE: Use Set to ensure uniqueness
+          const uniqueNFTs = Array.from(new Set(nftIds));
+          setOwnedNFTs(uniqueNFTs);
+          
+          // ✅ CLEANUP: Save deduplicated version back to localStorage
+          if (uniqueNFTs.length !== nftIds.length) {
+            console.log(`🧹 [NFT-CLEANUP] Removed ${nftIds.length - uniqueNFTs.length} duplicate NFTs from localStorage`);
+            localStorage.setItem("ownedNFTs", JSON.stringify(uniqueNFTs));
+          }
         }
       }
     } catch (e) {
