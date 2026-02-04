@@ -394,6 +394,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         // Sync NFT purchases
         if (telegramId && userId && ownedNFTs.length > 0) {
           console.log("🖼️ [MANUAL SYNC] Syncing NFT purchases...");
+          console.log("🖼️ [MANUAL SYNC] ownedNFTs array:", ownedNFTs);
           const { syncNFTsToDB } = await import("@/services/rewardDataService");
           const nftsResult = await syncNFTsToDB(telegramId, userId, ownedNFTs);
           if (nftsResult.success) {
