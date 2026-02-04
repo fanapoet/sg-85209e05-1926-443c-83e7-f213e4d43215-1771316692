@@ -357,9 +357,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       buildParts: buildPartsData,
       dailyStreak: dailyStreak,
       currentRewardWeek: currentRewardWeek,
-      lastDailyClaimDate: lastDailyClaimDate
+      lastDailyClaimDate: lastDailyClaimDate,
+      dailyClaims: claimedDailyRewards,
+      ownedNFTs: ownedNFTs
     };
-  }, [bz, bb, xp, tier, energy, maxEnergy, boosters, quickChargeUsesRemaining, quickChargeCooldownUntil, totalTaps, todayTaps, bzPerHour, dailyStreak, currentRewardWeek, lastDailyClaimDate]);
+  }, [bz, bb, xp, tier, energy, maxEnergy, boosters, quickChargeUsesRemaining, quickChargeCooldownUntil, totalTaps, todayTaps, bzPerHour, dailyStreak, currentRewardWeek, lastDailyClaimDate, claimedDailyRewards, ownedNFTs]);
 
   // Manual Sync Function
   const manualSync = async () => {

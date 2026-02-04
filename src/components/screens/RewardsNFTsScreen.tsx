@@ -303,8 +303,15 @@ export function RewardsNFTsScreen() {
 
   const handleDailyClaim = async () => {
     try {
-      const today = new Date().getTime();
-      if (lastDailyClaimDate && lastDailyClaimDate >= today) return;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Check if already claimed today
+      if (lastDailyClaimDate) {
+        const lastClaim = new Date(lastDailyClaimDate);
+        lastClaim.setHours(0, 0, 0, 0);
+        if (lastClaim.getTime() === today.getTime()) return;
+      }
 
       const nextDay = (streak % 7) + 1;
       const reward = dailyRewards[nextDay - 1];
@@ -346,6 +353,16 @@ export function RewardsNFTsScreen() {
     }
   };
 
+  // Helper to check if claimed today
+  const isClaimedToday = () => {
+    if (!lastDailyClaimDate) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const lastClaim = new Date(lastDailyClaimDate);
+    lastClaim.setHours(0, 0, 0, 0);
+    return lastClaim.getTime() === today.getTime();
+  };
+
   const handlePurchaseNFT = async (nft: NFT) => {
     try {
       if (nft.owned || !nft.requirementMet) return;
@@ -362,7 +379,7 @@ export function RewardsNFTsScreen() {
     }
   };
 
-  const canClaimDaily = lastDailyClaimDate && lastDailyClaimDate < new Date().getTime();
+  const canClaimDaily = !isClaimedToday();
   const currentDayReward = dailyRewards[(streak % 7)];
 
   const getProgressText = (nft: NFT): string => {
