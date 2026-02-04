@@ -1,6 +1,16 @@
 import { supabase } from "@/integrations/supabase/client";
 
 /**
+ * Validate timestamp
+ */
+function validateTimestamp(timestamp: number): number {
+  if (!timestamp || isNaN(timestamp) || timestamp <= 0) {
+    return Date.now();
+  }
+  return timestamp;
+}
+
+/**
  * Validate and convert timestamp to ISO string
  */
 function toISOString(timestamp: number): string {
@@ -158,66 +168,69 @@ export async function syncDailyClaimsToDB(
 }
 
 /**
- * Sync NFTs to database (UPSERT all local NFTs)
+ * Sync NFT purchases to database
  */
 export async function syncNFTsToDB(
   telegramId: number,
   userId: string,
   nfts: Array<{ nftId: string; purchasePrice: number; timestamp: number }>
 ): Promise<{ success: boolean; error?: string }> {
+  console.log("📤 [NFT-SYNC] Syncing NFT purchases...");
+  console.log("📤 [NFT-SYNC] Input params:", { telegramId, userId, nftsCount: nfts.length });
+  console.log("📤 [NFT-SYNC] Raw NFT array:", JSON.stringify(nfts, null, 2));
+
+  if (!nfts || nfts.length === 0) {
+    console.log("⚠️ [NFT-SYNC] No NFTs to sync (array empty)");
+    return { success: true };
+  }
+
   try {
-    if (nfts.length === 0) {
-      console.log("⏭️ [NFT-SYNC] No NFTs to sync");
-      return { success: true };
-    }
-
-    console.log(`📤 [NFT-SYNC] Syncing ${nfts.length} NFTs to DB...`);
-    console.log("📤 [NFT-SYNC] Sample NFT:", nfts[0]);
-
-    // Validate NFT data before syncing
-    const validNfts = nfts.filter(nft => {
-      if (!nft.nftId || nft.nftId.trim() === "") {
-        console.warn("⚠️ [NFT-SYNC] Skipping NFT with empty nftId:", nft);
-        return false;
-      }
-      return true;
-    });
-
-    if (validNfts.length === 0) {
-      console.log("⏭️ [NFT-SYNC] No valid NFTs to sync after validation");
-      return { success: true };
-    }
-
-    const upsertData = validNfts.map(nft => {
-      const purchasedAt = toISOString(nft.timestamp);
-      console.log(`📤 [NFT-SYNC] Converting timestamp ${nft.timestamp} → ${purchasedAt}`);
-      
-      return {
-        user_id: userId,
-        telegram_id: telegramId,
-        nft_id: nft.nftId,
-        purchased_at: purchasedAt
-      };
-    });
-
-    console.log("📤 [NFT-SYNC] Upsert data sample:", upsertData[0]);
-
-    // Use simple insert without onConflict since constraint doesn't exist yet
-    const { error } = await (supabase
-      .from("user_nfts") as any)
-      .upsert(upsertData, {
-        onConflict: "user_id,nft_id",
-        ignoreDuplicates: false
+    // Validate and prepare NFT records
+    const nftRecords = nfts
+      .filter(nft => {
+        const isValid = nft?.nftId && typeof nft.nftId === 'string' && nft.nftId.trim() !== '';
+        if (!isValid) {
+          console.warn("⚠️ [NFT-SYNC] Skipping invalid NFT:", nft);
+        }
+        return isValid;
+      })
+      .map(nft => {
+        const timestamp = validateTimestamp(nft.timestamp);
+        const record = {
+          user_id: userId,
+          telegram_id: telegramId,
+          nft_id: nft.nftId,
+          purchased_at: new Date(timestamp).toISOString()
+        };
+        console.log("📦 [NFT-SYNC] Prepared record:", record);
+        return record;
       });
+
+    console.log(`📤 [NFT-SYNC] Prepared ${nftRecords.length} valid records for insert`);
+    console.log("📤 [NFT-SYNC] Records to insert:", JSON.stringify(nftRecords, null, 2));
+
+    if (nftRecords.length === 0) {
+      console.log("⚠️ [NFT-SYNC] All NFTs filtered out (invalid data)");
+      return { success: true };
+    }
+
+    console.log("📤 [NFT-SYNC] Executing Supabase insert...");
+    // Cast to any to bypass stale TypeScript definitions (database.types.ts expects price_paid_bb)
+    const { data, error } = await supabase
+      .from("user_nfts")
+      .insert(nftRecords as any)
+      .select();
+
+    console.log("📤 [NFT-SYNC] Supabase response:", { data, error });
 
     if (error) {
       console.error("❌ [NFT-SYNC] Sync failed:", error);
       return { success: false, error: error.message };
     }
 
-    console.log(`✅ [NFT-SYNC] ${validNfts.length} NFTs synced successfully!`);
+    console.log(`✅ [NFT-SYNC] ${nftRecords.length} NFTs synced successfully!`);
+    console.log("✅ [NFT-SYNC] Inserted data:", data);
     return { success: true };
-
   } catch (error: any) {
     console.error("❌ [NFT-SYNC] Sync exception:", error);
     return { success: false, error: error.message };
