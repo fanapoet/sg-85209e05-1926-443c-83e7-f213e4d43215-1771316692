@@ -297,7 +297,6 @@ export async function syncNFTsToDB(
           user_id: userId,
           telegram_id: telegramId,
           nft_id: nft.nftId,
-          price_paid_bb: nft.purchasePrice,
           purchased_at: new Date(timestamp).toISOString()
         };
         console.log("📦 [NFT-SYNC] Prepared record:", record);
