@@ -312,8 +312,9 @@ export async function syncNFTsToDB(
     }
 
     console.log("📤 [NFT-SYNC] Executing Supabase insert...");
-    const { data, error } = await supabase
-      .from('user_nfts')
+    // Cast to any to bypass stale types expecting price_paid_bb
+    const { data, error } = await (supabase
+      .from('user_nfts') as any)
       .upsert(nftRecords, {
         onConflict: 'user_id,nft_id',
         ignoreDuplicates: false
