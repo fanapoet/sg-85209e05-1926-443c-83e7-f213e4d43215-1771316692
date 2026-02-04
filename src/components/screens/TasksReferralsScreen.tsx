@@ -24,6 +24,8 @@ import {
   initializeTask, 
   getTaskProgress, 
   loadAndMergeTaskProgress, 
+  updateTaskProgress,
+  claimTaskReward,
   type TaskProgressData 
 } from "@/services/tasksService";
 
@@ -167,7 +169,59 @@ export function TasksReferralsScreen() {
     }
   }, []);
 
+  // Sync GameState metrics to Task Service (Local-First + Background Sync)
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    // Daily Taps
+    if (todayTaps > 0) {
+      const updated = updateTaskProgress("daily_taps", "daily", todayTaps, 100);
+      setTaskProgress(prev => new Map(prev).set("daily_taps", updated));
+    }
+
+    // Daily Idle
+    if (hasClaimedIdleToday) {
+      const updated = updateTaskProgress("daily_idle", "daily", 1, 1);
+      setTaskProgress(prev => new Map(prev).set("daily_idle", updated));
+    }
+
+    // Weekly Upgrades (using total for now)
+    if (totalUpgrades > 0) {
+      const updated = updateTaskProgress("weekly_upgrade", "weekly", totalUpgrades, 10);
+      setTaskProgress(prev => new Map(prev).set("weekly_upgrade", updated));
+    }
+
+    // Weekly Convert
+    if (totalConversions > 0) {
+      const updated = updateTaskProgress("weekly_convert", "weekly", totalConversions, 500000);
+      setTaskProgress(prev => new Map(prev).set("weekly_convert", updated));
+    }
+
+    // Weekly Invite
+    if (referralCount > 0) {
+      const updated = updateTaskProgress("weekly_invite", "weekly", referralCount, 3);
+      setTaskProgress(prev => new Map(prev).set("weekly_invite", updated));
+    }
+
+    // Milestones
+    if (totalTaps > 0) {
+      const updated = updateTaskProgress("milestone_taps", "milestone", totalTaps, 10000);
+      setTaskProgress(prev => new Map(prev).set("milestone_taps", updated));
+    }
+
+    if (referralCount > 0) {
+      const updated = updateTaskProgress("milestone_invite", "milestone", referralCount, 25);
+      setTaskProgress(prev => new Map(prev).set("milestone_invite", updated));
+    }
+
+  }, [todayTaps, hasClaimedIdleToday, totalUpgrades, totalConversions, referralCount, totalTaps, isInitialized]);
+
   const isClaimed = (task: Task) => {
+    // Check local sync state first
+    const progress = taskProgress.get(task.id);
+    if (progress?.claimed) return true;
+
+    // Fallback to legacy claimed tasks (migration support)
     const claimedTime = claimedTasks[task.id];
     if (!claimedTime) return false;
 
@@ -183,10 +237,18 @@ export function TasksReferralsScreen() {
   const handleClaim = (task: Task) => {
     if (isClaimed(task)) return;
 
+    // 1. Process Reward
     if (task.reward.type === "BZ") addBZ(task.reward.amount);
     if (task.reward.type === "BB") addBB(task.reward.amount);
     if (task.reward.type === "XP") addXP(task.reward.amount);
 
+    // 2. Update Sync Service (Local + Background DB)
+    const updated = claimTaskReward(task.id, task.type);
+    if (updated) {
+      setTaskProgress(prev => new Map(prev).set(task.id, updated));
+    }
+
+    // 3. Update Legacy State (Double write for safety)
     const newClaimed = { ...claimedTasks, [task.id]: Date.now() };
     setClaimedTasks(newClaimed);
     localStorage.setItem("bunergy_claimed_tasks", JSON.stringify(newClaimed));
@@ -356,8 +418,12 @@ export function TasksReferralsScreen() {
   ];
 
   const renderTaskCard = (task: Task) => {
-    const claimed = isClaimed(task);
-    const progress = Math.min(task.current || 0, task.target);
+    // Use synced progress if available, otherwise fallback to context/props
+    const syncedData = taskProgress.get(task.id);
+    const currentProgress = syncedData ? syncedData.currentProgress : (task.current || 0);
+    const claimed = isClaimed(task); // Checks both synced and legacy state
+    
+    const progress = Math.min(currentProgress, task.target);
     const progressPercent = (progress / task.target) * 100;
     const isCompleted = progress >= task.target;
 
