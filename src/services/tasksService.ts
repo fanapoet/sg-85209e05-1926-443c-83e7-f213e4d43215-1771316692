@@ -1,192 +1,277 @@
-import { supabase } from "@/integrations/supabase/client";
-
 /**
- * Tasks Service
- * Handles task progress, completion, and reward claiming
+ * Tasks Service - LOCAL-FIRST with Background Sync
+ * All state in localStorage, database sync happens in background
+ * FOLLOWS EXACT PATTERN FROM rewardsService.ts
  */
 
-export interface TaskProgressData {
-  userId: string;
-  taskId: string;
-  currentProgress: number;
-  isCompleted?: boolean;
-  claimed?: boolean;
-}
+import { 
+  getTaskProgress as getTaskProgressFromDB,
+  upsertTaskProgress as upsertTaskProgressToDB,
+  batchUpsertTaskProgress,
+  calculateResetAt,
+  type TaskProgressData
+} from "./taskStateService";
 
-export interface UserTaskProgress {
-  id: string;
-  taskId: string;
-  currentProgress: number;
-  isCompleted: boolean;
-  claimed: boolean;
-  completedAt: string | null;
-  claimedAt: string | null;
-  createdAt: string;
+export type { TaskProgressData };
+
+const STORAGE_KEY = "bunergy_task_progress";
+
+/**
+ * Check if task needs reset
+ */
+function shouldResetTask(taskType: "daily" | "weekly" | "milestone", lastResetAt: string): boolean {
+  if (taskType === "milestone") return false;
+  
+  const currentResetAt = calculateResetAt(taskType);
+  return currentResetAt !== lastResetAt;
 }
 
 /**
- * Update task progress
+ * Get all task progress from localStorage
  */
-export async function updateTaskProgress(data: TaskProgressData) {
+function getLocalTaskProgress(): Map<string, TaskProgressData> {
   try {
-    console.log("💾 [Task Progress] Updating:", data);
-
-    const { data: result, error } = await supabase
-      .from("user_task_progress")
-      .upsert({
-        user_id: data.userId,
-        task_id: data.taskId,
-        current_progress: data.currentProgress,
-        is_completed: data.isCompleted || false,
-        claimed: data.claimed || false,
-        completed_at: data.isCompleted ? new Date().toISOString() : null,
-        claimed_at: data.claimed ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-        reset_at: new Date().toISOString() // For daily/weekly resets
-      }, {
-        onConflict: "user_id,task_id,reset_at"
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("❌ [Task Progress] Database error:", error);
-      return { success: false, error: error.message };
-    }
-
-    console.log("✅ [Task Progress] Updated successfully:", result.id);
-    return { success: true, data: result };
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return new Map();
+    
+    const data = JSON.parse(stored);
+    const map = new Map<string, TaskProgressData>();
+    
+    // Clean up stale tasks that need reset
+    Object.entries(data).forEach(([key, value]: [string, any]) => {
+      const task = value as TaskProgressData;
+      
+      if (shouldResetTask(task.taskType, task.resetAt)) {
+        // Task needs reset - create fresh entry
+        map.set(key, {
+          ...task,
+          currentProgress: 0,
+          isCompleted: false,
+          claimed: false,
+          completedAt: null,
+          claimedAt: null,
+          resetAt: calculateResetAt(task.taskType)
+        });
+      } else {
+        // Task is current
+        map.set(key, task);
+      }
+    });
+    
+    return map;
   } catch (error) {
-    console.error("❌ [Task Progress] Unexpected error:", error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Unknown error" 
-    };
+    console.error("❌ [Tasks] Failed to load from localStorage:", error);
+    return new Map();
   }
 }
 
 /**
- * Mark task as completed
+ * Save task progress to localStorage
  */
-export async function completeTask(userId: string, taskId: string) {
+function saveLocalTaskProgress(progress: Map<string, TaskProgressData>): void {
   try {
-    console.log("💾 [Task] Marking completed:", { userId, taskId });
-
-    const { data: result, error } = await supabase
-      .from("user_task_progress")
-      .update({
-        is_completed: true,
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq("user_id", userId)
-      .eq("task_id", taskId)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("❌ [Task] Complete error:", error);
-      return { success: false, error: error.message };
-    }
-
-    console.log("✅ [Task] Marked completed:", result.id);
-    return { success: true, data: result };
+    const obj: Record<string, TaskProgressData> = {};
+    progress.forEach((value, key) => {
+      obj[key] = value;
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
   } catch (error) {
-    console.error("❌ [Task] Complete error:", error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Unknown error" 
-    };
+    console.error("❌ [Tasks] Failed to save to localStorage:", error);
   }
 }
 
 /**
- * Claim task reward
+ * Update task progress (local-first, background sync)
  */
-export async function claimTaskReward(userId: string, taskId: string) {
-  try {
-    console.log("💾 [Task] Claiming reward:", { userId, taskId });
+export function updateTaskProgress(
+  taskId: string,
+  taskType: "daily" | "weekly" | "milestone",
+  currentProgress: number,
+  target: number
+): TaskProgressData {
+  const progress = getLocalTaskProgress();
+  const existing = progress.get(taskId);
+  
+  const resetAt = calculateResetAt(taskType);
+  const isCompleted = currentProgress >= target;
+  
+  const updated: TaskProgressData = {
+    taskId,
+    taskType,
+    currentProgress,
+    isCompleted,
+    claimed: existing?.claimed || false,
+    completedAt: isCompleted && !existing?.completedAt ? new Date().toISOString() : existing?.completedAt || null,
+    claimedAt: existing?.claimedAt || null,
+    resetAt
+  };
+  
+  progress.set(taskId, updated);
+  saveLocalTaskProgress(progress);
+  
+  console.log("✅ [Tasks] Progress updated locally:", taskId, currentProgress);
+  
+  // Background sync (fire-and-forget)
+  setTimeout(() => {
+    upsertTaskProgressToDB(updated).catch(err => 
+      console.warn("⚠️ [Tasks] Background sync failed:", err)
+    );
+  }, 1000);
+  
+  return updated;
+}
 
-    const { data: result, error } = await supabase
-      .from("user_task_progress")
-      .update({
-        claimed: true,
-        claimed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq("user_id", userId)
-      .eq("task_id", taskId)
-      .eq("is_completed", true)
-      .select()
-      .single();
+/**
+ * Claim task reward (local-first, background sync)
+ */
+export function claimTaskReward(
+  taskId: string,
+  taskType: "daily" | "weekly" | "milestone"
+): TaskProgressData | null {
+  const progress = getLocalTaskProgress();
+  const existing = progress.get(taskId);
+  
+  if (!existing || !existing.isCompleted || existing.claimed) {
+    console.warn("⚠️ [Tasks] Cannot claim:", { existing, reason: !existing ? "not found" : !existing.isCompleted ? "not completed" : "already claimed" });
+    return null;
+  }
+  
+  const updated: TaskProgressData = {
+    ...existing,
+    claimed: true,
+    claimedAt: new Date().toISOString()
+  };
+  
+  progress.set(taskId, updated);
+  saveLocalTaskProgress(progress);
+  
+  console.log("✅ [Tasks] Reward claimed locally:", taskId);
+  
+  // Background sync (fire-and-forget)
+  setTimeout(() => {
+    upsertTaskProgressToDB(updated).catch(err => 
+      console.warn("⚠️ [Tasks] Background sync failed:", err)
+    );
+  }, 1000);
+  
+  return updated;
+}
 
-    if (error) {
-      console.error("❌ [Task] Claim error:", error);
-      return { success: false, error: error.message };
-    }
+/**
+ * Get task progress
+ */
+export function getTaskProgress(taskId: string): TaskProgressData | undefined {
+  const progress = getLocalTaskProgress();
+  return progress.get(taskId);
+}
 
-    console.log("✅ [Task] Reward claimed:", result.id);
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("❌ [Task] Claim error:", error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Unknown error" 
-    };
+/**
+ * Get all current task progress
+ */
+export function getAllTaskProgress(): TaskProgressData[] {
+  const progress = getLocalTaskProgress();
+  return Array.from(progress.values());
+}
+
+/**
+ * Initialize task if not exists
+ */
+export function initializeTask(
+  taskId: string,
+  taskType: "daily" | "weekly" | "milestone",
+  target: number
+): void {
+  const progress = getLocalTaskProgress();
+  
+  if (!progress.has(taskId)) {
+    const resetAt = calculateResetAt(taskType);
+    progress.set(taskId, {
+      taskId,
+      taskType,
+      currentProgress: 0,
+      isCompleted: false,
+      claimed: false,
+      completedAt: null,
+      claimedAt: null,
+      resetAt
+    });
+    saveLocalTaskProgress(progress);
+    console.log("✅ [Tasks] Initialized:", taskId);
   }
 }
 
 /**
- * Get all user task progress
+ * Load task progress from database and merge with local (Math.max)
+ * FOLLOWS EXACT PATTERN FROM rewardsService.ts
  */
-export async function getUserTaskProgress(userId: string): Promise<UserTaskProgress[]> {
+export async function loadAndMergeTaskProgress(telegramId: number): Promise<void> {
   try {
-    const { data, error } = await supabase
-      .from("user_task_progress")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("❌ [Task] Fetch error:", error);
-      return [];
+    console.log("🔄 [Tasks] Loading from database...");
+    
+    const serverTasks = await getTaskProgressFromDB(telegramId);
+    
+    if (serverTasks.length === 0) {
+      console.log("ℹ️ [Tasks] No server data, using local state");
+      return;
     }
-
-    return (data || []).map(record => ({
-      id: record.id,
-      taskId: record.task_id,
-      currentProgress: record.current_progress,
-      isCompleted: record.is_completed,
-      claimed: record.claimed,
-      completedAt: record.completed_at,
-      claimedAt: record.claimed_at,
-      createdAt: record.created_at
-    }));
+    
+    console.log("✅ [Tasks] Loaded from server:", serverTasks.length, "tasks");
+    
+    const localProgress = getLocalTaskProgress();
+    let mergedCount = 0;
+    
+    // Merge server data with local using Math.max for progress
+    serverTasks.forEach(serverTask => {
+      const localTask = localProgress.get(serverTask.taskId);
+      
+      if (!localTask) {
+        // Server has data we don't have locally
+        localProgress.set(serverTask.taskId, {
+          taskId: serverTask.taskId,
+          taskType: serverTask.taskType as "daily" | "weekly" | "milestone",
+          currentProgress: serverTask.currentProgress,
+          isCompleted: serverTask.isCompleted,
+          claimed: serverTask.isClaimed,
+          completedAt: serverTask.completedAt,
+          claimedAt: serverTask.claimedAt,
+          resetAt: serverTask.resetAt
+        });
+        mergedCount++;
+      } else {
+        // Merge: use Math.max for progress, keep claimed status if either is true
+        const mergedProgress = Math.max(localTask.currentProgress, serverTask.currentProgress);
+        const mergedCompleted = localTask.isCompleted || serverTask.isCompleted;
+        const mergedClaimed = localTask.claimed || serverTask.isClaimed;
+        
+        if (mergedProgress !== localTask.currentProgress || 
+            mergedCompleted !== localTask.isCompleted || 
+            mergedClaimed !== localTask.claimed) {
+          
+          localProgress.set(serverTask.taskId, {
+            ...localTask,
+            currentProgress: mergedProgress,
+            isCompleted: mergedCompleted,
+            claimed: mergedClaimed,
+            completedAt: mergedCompleted ? (localTask.completedAt || serverTask.completedAt) : null,
+            claimedAt: mergedClaimed ? (localTask.claimedAt || serverTask.claimedAt) : null
+          });
+          mergedCount++;
+        }
+      }
+    });
+    
+    saveLocalTaskProgress(localProgress);
+    console.log("✅ [Tasks] Merge complete:", mergedCount, "tasks updated");
+    
+    // Background sync local data back to server (fire-and-forget)
+    setTimeout(() => {
+      const allTasks = Array.from(localProgress.values());
+      batchUpsertTaskProgress(allTasks).catch(err =>
+        console.warn("⚠️ [Tasks] Background sync failed:", err)
+      );
+    }, 2000);
+    
   } catch (error) {
-    console.error("❌ [Task] Fetch error:", error);
-    return [];
-  }
-}
-
-/**
- * Get active tasks from database
- */
-export async function getActiveTasks() {
-  try {
-    const { data, error } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("is_active", true)
-      .order("created_at", { ascending: true });
-
-    if (error) {
-      console.error("❌ [Tasks] Fetch error:", error);
-      return [];
-    }
-
-    return data || [];
-  } catch (error) {
-    console.error("❌ [Tasks] Fetch error:", error);
-    return [];
+    console.error("❌ [Tasks] Load and merge failed:", error);
   }
 }

@@ -406,6 +406,48 @@ export function TasksReferralsScreen() {
     checkMilestones();
   }, [referralCount]);
 
+  // Initialize tasks and load from database on mount
+  useEffect(() => {
+    console.log("📋 [Tasks] Initializing...");
+    
+    // Initialize tasks in localStorage
+    tasks.forEach(task => {
+      initializeTask(task.id, task.type, task.target);
+    });
+    
+    // Load current progress from localStorage
+    const progressMap = new Map<string, TaskProgressData>();
+    tasks.forEach(task => {
+      const progress = getTaskProgress(task.id);
+      if (progress) {
+        progressMap.set(task.id, progress);
+      }
+    });
+    
+    setTaskProgress(progressMap);
+    setIsInitialized(true);
+    console.log("✅ [Tasks] Initialized from localStorage");
+    
+    // Background sync: Load from database and merge (fire-and-forget)
+    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+    if (tgUser?.id) {
+      loadAndMergeTaskProgress(tgUser.id).then(() => {
+        // Reload progress after merge
+        const updatedMap = new Map<string, TaskProgressData>();
+        tasks.forEach(task => {
+          const progress = getTaskProgress(task.id);
+          if (progress) {
+            updatedMap.set(task.id, progress);
+          }
+        });
+        setTaskProgress(updatedMap);
+        console.log("✅ [Tasks] UI updated after database merge");
+      }).catch(err => {
+        console.warn("⚠️ [Tasks] Background merge failed:", err);
+      });
+    }
+  }, []);
+
   return (
     <div className="pb-24 p-4 max-w-2xl mx-auto space-y-6">
       <div className="space-y-2">
