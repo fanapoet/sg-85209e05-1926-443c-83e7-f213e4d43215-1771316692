@@ -206,6 +206,19 @@ export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
     
     console.log("🔵 [TASKS-SYNC] DB Batch: Telegram user ID:", tgUser.id);
     
+    // Check current auth session
+    const { data: session, error: sessionError } = await supabase.auth.getSession();
+    console.log("🔐 [TASKS-SYNC] DB Batch: Auth session check:", {
+      hasSession: !!session?.session,
+      userId: session?.session?.user?.id,
+      error: sessionError
+    });
+    
+    if (!session?.session) {
+      console.error("❌ [TASKS-SYNC] DB Batch: No active auth session!");
+      return { success: false, error: "No active auth session" };
+    }
+    
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id")
@@ -223,6 +236,8 @@ export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
     }
 
     console.log("🔵 [TASKS-SYNC] DB Batch: Found profile UUID:", profile.id);
+    console.log("🔐 [TASKS-SYNC] DB Batch: Auth user UUID:", session.session.user.id);
+    console.log("🔐 [TASKS-SYNC] DB Batch: UUIDs match?", profile.id === session.session.user.id);
 
     const payloads = records.map(data => ({
       telegram_id: tgUser.id,
@@ -232,13 +247,14 @@ export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
       current_progress: data.currentProgress,
       is_completed: data.isCompleted,
       is_claimed: data.claimed,
-      completed_at: data.completedAt,
-      claimed_at: data.claimedAt,
+      completed_at: data.completedAt ? new Date(data.completedAt).toISOString() : null,
+      claimed_at: data.claimedAt ? new Date(data.claimedAt).toISOString() : null,
       reset_at: data.resetAt,
       updated_at: new Date().toISOString()
     }));
     
     console.log("🔵 [TASKS-SYNC] DB Batch: Upserting", payloads.length, "records");
+    console.log("🔵 [TASKS-SYNC] DB Batch: First payload:", JSON.stringify(payloads[0]));
 
     const { error } = await (supabase as any)
       .from("user_task_progress")
@@ -248,6 +264,7 @@ export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
 
     if (error) {
       console.error("❌ [TASKS-SYNC] DB Batch: Error:", error);
+      console.error("❌ [TASKS-SYNC] DB Batch: Error details:", JSON.stringify(error));
       return { success: false, error: error.message };
     }
 
