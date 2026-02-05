@@ -14,6 +14,7 @@ export function CompactDashboard() {
     bzPerHour,
     tier,
     manualSync,
+    setProfileOpen,
   } = useGameState();
 
   const router = useRouter();
@@ -51,7 +52,7 @@ export function CompactDashboard() {
   };
 
   const handleProfileClick = () => {
-    router.push("/profile");
+    setProfileOpen(true);
   };
 
   return (

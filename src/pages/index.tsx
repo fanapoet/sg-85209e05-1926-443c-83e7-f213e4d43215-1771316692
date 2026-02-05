@@ -13,6 +13,7 @@ import { RewardsNFTsScreen } from "@/components/screens/RewardsNFTsScreen";
 import { TasksReferralsScreen } from "@/components/screens/TasksReferralsScreen";
 import { TelegramDebugPanel } from "@/components/TelegramDebugPanel";
 import { Button } from "@/components/ui/button";
+import { ProfileModal } from "@/components/ProfileModal";
 
 type TabKey = "tap" | "boost" | "build" | "convert" | "xp" | "rewards" | "tasks";
 
@@ -167,6 +168,9 @@ export default function Home() {
 
         {/* Debug Panel */}
         {showDebug && <TelegramDebugPanel onClose={() => setShowDebug(false)} />}
+        
+        {/* Profile Modal */}
+        <ProfileModal />
       </div>
     </>
   );

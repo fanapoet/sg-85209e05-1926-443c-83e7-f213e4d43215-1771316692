@@ -21,6 +21,17 @@ import { useToast } from "@/hooks/use-toast";
 
 type Tier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
 
+// Add TelegramUser interface
+export interface TelegramUser {
+  id: number;
+  first_name: string;
+  last_name?: string;
+  username?: string;
+  language_code?: string;
+  is_premium?: boolean;
+  photo_url?: string;
+}
+
 interface Boosters {
   incomePerTap: number;
   energyPerTap: number;
@@ -31,6 +42,9 @@ interface Boosters {
 interface GameState {
   telegramId: number | null;
   userId: string | null;
+  telegramUser: TelegramUser | null;
+  isProfileOpen: boolean;
+  setProfileOpen: (isOpen: boolean) => void;
   bz: number;
   bb: number;
   energy: number;
@@ -125,6 +139,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   // User Identity
   const [telegramId, setTelegramId] = useState<number | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
+  const [telegramUser, setTelegramUser] = useState<TelegramUser | null>(null);
+  const [isProfileOpen, setProfileOpen] = useState(false);
 
   // Core Currency & Stats
   const [bz, setBz] = useState(() => safeGetItem("bunergy_bz", 5000));
@@ -223,6 +239,14 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     
     const init = async () => {
       console.log("🚀 [GameState] Initializing...");
+      
+      // Capture Telegram User Data directly from WebApp if available
+      if (typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user) {
+        const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
+        console.log("👤 [GameState] Captured Telegram User:", tgUser);
+        setTelegramUser(tgUser as TelegramUser);
+      }
+
       const authResult = await initializeUser();
       
       if (authResult.success && authResult.profile) {
@@ -786,7 +810,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       addReward,
       claimReward,
       performDailyClaim,
-      purchaseNFT
+      purchaseNFT,
+      telegramUser,
+      isProfileOpen,
+      setProfileOpen
     }}>
       {children}
     </GameStateContext.Provider>
