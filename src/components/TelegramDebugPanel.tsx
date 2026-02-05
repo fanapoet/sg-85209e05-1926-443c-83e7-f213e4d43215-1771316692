@@ -35,7 +35,7 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
 
     console.error = (...args: any[]) => {
       const message = args.join(" ");
-      if (message.includes("Sync") || message.includes("sync") || message.includes("Rewards")) {
+      if (message.includes("Sync") || message.includes("sync") || message.includes("Rewards") || message.includes("Tasks")) {
         setLogs(prev => [...prev.slice(-20), {
           timestamp: new Date().toLocaleTimeString(),
           message,
