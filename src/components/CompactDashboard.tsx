@@ -1,18 +1,20 @@
 import { useGameState } from "@/contexts/GameStateContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Users, Zap, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Zap, TrendingUp } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export function CompactDashboard() {
   const { 
-    bz, bb, energy, maxEnergy, bzPerHour, tier, referralCount,
-    isSyncing, lastSyncTime, isOnline, manualSync
+    bz, bb, energy, maxEnergy, bzPerHour, tier, xp,
+    isSyncing, manualSync
   } = useGameState();
+  const { toast } = useToast();
 
   const formatBZ = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 });
   const formatBB = (value: number) => value.toFixed(6);
   const formatRate = (value: number) => value.toFixed(1);
+  const formatXP = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 });
 
   const tierColors: Record<string, string> = {
     Bronze: "bg-orange-800",
@@ -32,100 +34,146 @@ export function CompactDashboard() {
 
   const energyPercent = (energy / maxEnergy) * 100;
   const bonus = tierBonus[tier] || 0;
-  
-  const getTimeSinceSync = () => {
-    if (lastSyncTime === 0) return "Never";
-    const seconds = Math.floor((Date.now() - lastSyncTime) / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    return `${hours}h ago`;
+
+  const handleSyncDotClick = () => {
+    manualSync();
+    toast({
+      title: "Synced!",
+      duration: 1500,
+    });
   };
 
+  // Get total taps from localStorage (for display)
+  const getTotalTaps = () => {
+    if (typeof window === "undefined") return 0;
+    const stored = localStorage.getItem("bunergy_player_state");
+    if (!stored) return 0;
+    try {
+      const state = JSON.parse(stored);
+      return state.totalTaps || 0;
+    } catch {
+      return 0;
+    }
+  };
+
+  const totalTaps = getTotalTaps();
+
   return (
-    <div className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 p-4 rounded-b-2xl shadow-lg border-b-2 border-purple-600">
-      {/* Top Row: Profile, Currencies & Sync */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-12 w-12 border-2 border-purple-400">
-            <AvatarFallback className="bg-gradient-to-br from-purple-600 to-pink-600 text-white font-bold">
+    <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 px-6 py-4 rounded-b-3xl shadow-lg border-b-2 border-orange-200 dark:border-gray-700 sticky top-0 z-50">
+      {/* Top Row: BZ | Bunny Icon | Tier + Dot + Avatar */}
+      <div className="flex items-center justify-between mb-2">
+        {/* Left: BZ */}
+        <div className="flex flex-col">
+          <div className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
+            {formatBZ(bz)} <span className="text-xl font-medium text-amber-700 dark:text-amber-400">BZ</span>
+          </div>
+        </div>
+
+        {/* Center: Bunny Icon */}
+        <div className="flex-shrink-0">
+          <img 
+            src="/bunny-character-new.png" 
+            alt="Bunny" 
+            className="w-20 h-20 object-contain drop-shadow-lg"
+          />
+        </div>
+
+        {/* Right: Tier Badge + Green Dot + Avatar */}
+        <div className="flex items-center gap-2">
+          {/* Green Sync Dot (Touchable) */}
+          <button
+            onClick={handleSyncDotClick}
+            disabled={isSyncing}
+            className="relative group"
+            aria-label="Manual sync"
+          >
+            <div className={`w-4 h-4 rounded-full ${isSyncing ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'} shadow-lg cursor-pointer transition-transform group-active:scale-90`} />
+          </button>
+
+          {/* Tier Badge */}
+          <Badge className={`${tierColors[tier]} text-white text-sm px-3 py-1 font-bold shadow-md`}>
+            {tier}
+          </Badge>
+
+          {/* Avatar */}
+          <Avatar className="h-12 w-12 border-3 border-white dark:border-gray-700 shadow-lg">
+            <AvatarFallback className="bg-gradient-to-br from-orange-400 to-amber-500 text-white font-bold text-lg">
               B
             </AvatarFallback>
           </Avatar>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-yellow-300 font-bold text-lg">{formatBZ(bz)} BZ</span>
-              <Badge className={`${tierColors[tier]} text-white text-xs px-2 py-0.5`}>
-                {tier}
-              </Badge>
-            </div>
-            <div className="text-purple-200 text-sm">
-              {formatBB(bb)} BB
-            </div>
-          </div>
-        </div>
-
-        {/* Sync Button & Status */}
-        <div className="flex flex-col items-end gap-1">
-          <Button
-            size="sm"
-            variant={isOnline ? "default" : "destructive"}
-            onClick={() => {
-              console.log("🔴 [UI] SYNC BUTTON CLICKED!");
-              alert("Sync button clicked! Check if manualSync runs...");
-              manualSync();
-            }}
-            disabled={isSyncing}
-            className="h-8 px-3 text-xs"
-          >
-            <RefreshCw className={`h-3 w-3 mr-1 ${isSyncing ? "animate-spin" : ""}`} />
-            {isSyncing ? "Syncing..." : "Sync"}
-          </Button>
-          <div className="text-xs text-purple-300">
-            {isOnline ? `✓ ${getTimeSinceSync()}` : "⚠ Offline"}
-          </div>
         </div>
       </div>
 
-      {/* Energy Bar */}
+      {/* Second Row: BB */}
       <div className="mb-3">
-        <div className="flex justify-between items-center mb-1">
-          <div className="flex items-center gap-1">
-            <Zap className="h-4 w-4 text-yellow-400" />
-            <span className="text-white text-sm font-medium">Energy</span>
-          </div>
-          <span className="text-white text-sm font-bold">
-            {Math.floor(energy)} / {maxEnergy}
+        <div className="text-2xl font-bold text-gray-900 dark:text-white">
+          {formatBB(bb)} <span className="text-lg font-medium text-amber-700 dark:text-amber-400">BB</span>
+        </div>
+      </div>
+
+      {/* Third Row: XP | Energy | BZ/h | Bonus */}
+      <div className="flex items-center justify-between text-sm mb-4 text-gray-700 dark:text-gray-300">
+        {/* XP */}
+        <div className="flex items-center gap-1">
+          <span className="font-medium text-amber-800 dark:text-amber-400">XP:</span>
+          <span className="font-bold text-gray-900 dark:text-white">{formatXP(xp)}</span>
+        </div>
+
+        {/* Energy */}
+        <div className="flex items-center gap-1">
+          <Zap className="h-4 w-4 text-yellow-500" />
+          <span className="font-bold text-gray-900 dark:text-white">
+            {Math.floor(energy)}/{maxEnergy}
           </span>
         </div>
-        <div className="h-2 bg-purple-950 rounded-full overflow-hidden">
+
+        {/* BZ/h */}
+        <div className="flex items-center gap-1">
+          <TrendingUp className="h-4 w-4 text-orange-500" />
+          <span className="font-bold text-gray-900 dark:text-white">
+            {formatRate(bzPerHour)} <span className="text-xs text-amber-700 dark:text-amber-400">BZ/h</span>
+          </span>
+        </div>
+
+        {/* Tier Bonus */}
+        <div className="font-bold text-green-600 dark:text-green-400">
+          +{bonus}%
+        </div>
+      </div>
+
+      {/* Energy Bar Section: Taps + Energy Bar */}
+      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl p-4 shadow-md border border-orange-200 dark:border-gray-700">
+        <div className="flex items-center justify-between mb-3">
+          {/* Taps */}
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-orange-500" />
+            <div>
+              <div className="text-xs text-gray-600 dark:text-gray-400 font-medium">Taps</div>
+              <div className="text-xl font-bold text-gray-900 dark:text-white">
+                {formatBZ(totalTaps)}
+              </div>
+            </div>
+          </div>
+
+          {/* Energy Label */}
+          <div className="text-right">
+            <div className="text-xs text-gray-600 dark:text-gray-400 font-medium">Energy</div>
+            <div className="flex items-center gap-1 justify-end">
+              <Zap className="h-4 w-4 text-yellow-500" />
+              <span className="text-lg font-bold text-gray-900 dark:text-white">
+                {Math.floor(energy)}/{maxEnergy}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Energy Progress Bar */}
+        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
           <div 
-            className="h-full bg-gradient-to-r from-yellow-400 to-orange-500 transition-all duration-300"
+            className="h-full bg-gradient-to-r from-yellow-400 via-orange-400 to-amber-500 transition-all duration-300 shadow-md"
             style={{ width: `${Math.min(energyPercent, 100)}%` }}
           />
         </div>
-      </div>
-
-      {/* Stats Row */}
-      <div className="flex items-center justify-between text-xs">
-        <div className="flex items-center gap-4">
-          <div>
-            <span className="text-purple-300">BZ/h: </span>
-            <span className="text-white font-medium">
-              {formatRate(bzPerHour)} {bonus > 0 && <span className="text-green-400">(+{bonus}%)</span>}
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Users className="h-3 w-3 text-purple-300" />
-            <span className="text-white font-medium">{referralCount}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Debug Info (remove in production) */}
-      <div className="mt-2 text-xs text-purple-400 opacity-75">
-        🔍 Debug: Sync every 30s | Last: {getTimeSinceSync()} | Online: {isOnline ? "Yes" : "No"}
       </div>
     </div>
   );
