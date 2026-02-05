@@ -675,6 +675,33 @@ export function startAutoSync(
         console.error("❌ [AUTO-SYNC] Owned NFTs sync failed:", nftsResult.error);
       }
     }
+
+    // ✅ NEW: Sync task progress (following exact Rewards pattern)
+    try {
+      console.log("📋 [AUTO-SYNC] Syncing task progress...");
+      const { getAllTaskProgress } = await import("./tasksService");
+      const { batchUpsertTaskProgress } = await import("./taskStateService");
+      
+      // Get all task progress from localStorage
+      const allTaskProgress = getAllTaskProgress();
+      
+      if (allTaskProgress && allTaskProgress.length > 0) {
+        console.log(`📋 [AUTO-SYNC] Found ${allTaskProgress.length} tasks to sync`);
+        
+        // Batch upsert to database
+        const tasksResult = await batchUpsertTaskProgress(allTaskProgress);
+        
+        if (tasksResult.success) {
+          console.log("✅ [AUTO-SYNC] Task progress synced!");
+        } else {
+          console.error("❌ [AUTO-SYNC] Task progress sync failed:", tasksResult.error);
+        }
+      } else {
+        console.log("ℹ️ [AUTO-SYNC] No task progress to sync");
+      }
+    } catch (error) {
+      console.error("❌ [AUTO-SYNC] Task sync exception:", error);
+    }
   }, intervalMs);
 
   // Return cleanup function
