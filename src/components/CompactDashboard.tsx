@@ -1,178 +1,171 @@
 import { useGameState } from "@/contexts/GameStateContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Zap, TrendingUp } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { TrendingUp, Zap } from "lucide-react";
+import { useState } from "react";
+import { useRouter } from "next/router";
 
 export function CompactDashboard() {
-  const { 
-    bz, bb, energy, maxEnergy, bzPerHour, tier, xp,
-    isSyncing, manualSync
+  const {
+    bz,
+    bb,
+    xp,
+    energy,
+    maxEnergy,
+    tier,
+    bzPerHour,
+    manualSync,
   } = useGameState();
-  const { toast } = useToast();
 
-  const formatBZ = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 });
-  const formatBB = (value: number) => value.toFixed(6);
-  const formatRate = (value: number) => value.toFixed(1);
-  const formatXP = (value: number) => value.toLocaleString("en-US", { maximumFractionDigits: 0 });
-
-  const tierColors: Record<string, string> = {
-    Bronze: "bg-orange-800",
-    Silver: "bg-gray-400",
-    Gold: "bg-yellow-500",
-    Platinum: "bg-cyan-400",
-    Diamond: "bg-purple-500"
+  // Calculate tier bonus based on tier
+  const getTierBonus = (tier: string): number => {
+    const bonuses: Record<string, number> = {
+      Bronze: 0,
+      Silver: 5,
+      Gold: 10,
+      Platinum: 15,
+      Diamond: 20,
+    };
+    return bonuses[tier] || 0;
   };
 
-  const tierBonus: Record<string, number> = {
-    Bronze: 0,
-    Silver: 5,
-    Gold: 15,
-    Platinum: 25,
-    Diamond: 40
-  };
+  const tierBonus = getTierBonus(tier);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showSyncToast, setShowSyncToast] = useState(false);
+  const router = useRouter();
 
-  const energyPercent = (energy / maxEnergy) * 100;
-  const bonus = tierBonus[tier] || 0;
-
-  const handleSyncDotClick = () => {
-    manualSync();
-    toast({
-      title: "Synced!",
-      duration: 1500,
-    });
-  };
-
-  // Get total taps from localStorage (for display)
-  const getTotalTaps = () => {
-    if (typeof window === "undefined") return 0;
-    const stored = localStorage.getItem("bunergy_player_state");
-    if (!stored) return 0;
+  const handleSyncDot = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
     try {
-      const state = JSON.parse(stored);
-      return state.totalTaps || 0;
-    } catch {
-      return 0;
+      await manualSync();
+      setShowSyncToast(true);
+      setTimeout(() => setShowSyncToast(false), 1500);
+    } catch (error) {
+      console.error("Manual sync failed:", error);
+    } finally {
+      setTimeout(() => setIsSyncing(false), 1000);
     }
   };
 
-  const totalTaps = getTotalTaps();
+  const handleProfileClick = () => {
+    router.push("/profile");
+  };
+
+  const formatNumber = (num: number): string => {
+    return new Intl.NumberFormat("en-US").format(Math.floor(num));
+  };
+
+  const formatBB = (num: number): string => {
+    return num.toFixed(6);
+  };
+
+  const formatRate = (num: number): string => {
+    return num.toFixed(1);
+  };
+
+  const getTierColor = (tier: string) => {
+    const colors: Record<string, string> = {
+      Bronze: "bg-orange-700/20 text-orange-300 border-orange-500/30",
+      Silver: "bg-slate-400/20 text-slate-200 border-slate-400/30",
+      Gold: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
+      Platinum: "bg-cyan-400/20 text-cyan-200 border-cyan-400/30",
+      Diamond: "bg-blue-400/20 text-blue-200 border-blue-400/30",
+    };
+    return colors[tier] || colors.Bronze;
+  };
 
   return (
-    <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 px-6 py-4 rounded-b-3xl shadow-lg border-b-2 border-orange-200 dark:border-gray-700 sticky top-0 z-50">
-      {/* Top Row: BZ | Bunny Icon | Tier + Dot + Avatar */}
-      <div className="flex items-center justify-between mb-2">
-        {/* Left: BZ */}
-        <div className="flex flex-col">
-          <div className="text-3xl font-black text-gray-900 dark:text-white tracking-tight">
-            {formatBZ(bz)} <span className="text-xl font-medium text-amber-700 dark:text-amber-400">BZ</span>
-          </div>
+    <div className="sticky top-0 z-50 bg-gradient-to-b from-amber-600 via-orange-500 to-amber-600 dark:from-amber-800 dark:via-orange-700 dark:to-amber-800 shadow-lg">
+      {/* Sync Toast */}
+      {showSyncToast && (
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-green-500 text-white px-4 py-1.5 rounded-full text-sm font-medium shadow-lg z-[60] animate-in fade-in slide-in-from-top-2 duration-200">
+          Synced!
         </div>
+      )}
 
-        {/* Center: Bunny Icon */}
-        <div className="flex-shrink-0">
-          <img 
-            src="/bunny-character-new.png" 
-            alt="Bunny" 
-            className="w-20 h-20 object-contain drop-shadow-lg"
-          />
-        </div>
-
-        {/* Right: Tier Badge + Green Dot + Avatar */}
-        <div className="flex items-center gap-2">
-          {/* Green Sync Dot (Touchable) */}
-          <button
-            onClick={handleSyncDotClick}
-            disabled={isSyncing}
-            className="relative group"
-            aria-label="Manual sync"
-          >
-            <div className={`w-4 h-4 rounded-full ${isSyncing ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'} shadow-lg cursor-pointer transition-transform group-active:scale-90`} />
-          </button>
-
-          {/* Tier Badge */}
-          <Badge className={`${tierColors[tier]} text-white text-sm px-3 py-1 font-bold shadow-md`}>
-            {tier}
-          </Badge>
-
-          {/* Avatar */}
-          <Avatar className="h-12 w-12 border-3 border-white dark:border-gray-700 shadow-lg">
-            <AvatarFallback className="bg-gradient-to-br from-orange-400 to-amber-500 text-white font-bold text-lg">
-              B
-            </AvatarFallback>
-          </Avatar>
-        </div>
-      </div>
-
-      {/* Second Row: BB */}
-      <div className="mb-3">
-        <div className="text-2xl font-bold text-gray-900 dark:text-white">
-          {formatBB(bb)} <span className="text-lg font-medium text-amber-700 dark:text-amber-400">BB</span>
-        </div>
-      </div>
-
-      {/* Third Row: XP | Energy | BZ/h | Bonus */}
-      <div className="flex items-center justify-between text-sm mb-4 text-gray-700 dark:text-gray-300">
-        {/* XP */}
-        <div className="flex items-center gap-1">
-          <span className="font-medium text-amber-800 dark:text-amber-400">XP:</span>
-          <span className="font-bold text-gray-900 dark:text-white">{formatXP(xp)}</span>
-        </div>
-
-        {/* Energy */}
-        <div className="flex items-center gap-1">
-          <Zap className="h-4 w-4 text-yellow-500" />
-          <span className="font-bold text-gray-900 dark:text-white">
-            {Math.floor(energy)}/{maxEnergy}
-          </span>
-        </div>
-
-        {/* BZ/h */}
-        <div className="flex items-center gap-1">
-          <TrendingUp className="h-4 w-4 text-orange-500" />
-          <span className="font-bold text-gray-900 dark:text-white">
-            {formatRate(bzPerHour)} <span className="text-xs text-amber-700 dark:text-amber-400">BZ/h</span>
-          </span>
-        </div>
-
-        {/* Tier Bonus */}
-        <div className="font-bold text-green-600 dark:text-green-400">
-          +{bonus}%
-        </div>
-      </div>
-
-      {/* Energy Bar Section: Taps + Energy Bar */}
-      <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-2xl p-4 shadow-md border border-orange-200 dark:border-gray-700">
-        <div className="flex items-center justify-between mb-3">
-          {/* Taps */}
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-orange-500" />
-            <div>
-              <div className="text-xs text-gray-600 dark:text-gray-400 font-medium">Taps</div>
-              <div className="text-xl font-bold text-gray-900 dark:text-white">
-                {formatBZ(totalTaps)}
-              </div>
-            </div>
+      <div className="px-4 py-3 space-y-2">
+        {/* First Line: All Stats */}
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-4">
+            <span className="font-bold text-amber-950 dark:text-amber-50">
+              {formatNumber(bz)} <span className="text-xs opacity-70">BZ</span>
+            </span>
+            <span className="font-bold text-amber-950 dark:text-amber-50">
+              {formatBB(bb)} <span className="text-xs opacity-70">BB</span>
+            </span>
+            <span className="text-amber-900 dark:text-amber-100">
+              XP: {formatNumber(xp)}
+            </span>
           </div>
 
-          {/* Energy Label */}
-          <div className="text-right">
-            <div className="text-xs text-gray-600 dark:text-gray-400 font-medium">Energy</div>
-            <div className="flex items-center gap-1 justify-end">
-              <Zap className="h-4 w-4 text-yellow-500" />
-              <span className="text-lg font-bold text-gray-900 dark:text-white">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1 text-amber-900 dark:text-amber-100">
+              <Zap className="w-3.5 h-3.5" />
+              <span className="font-medium">
                 {Math.floor(energy)}/{maxEnergy}
               </span>
             </div>
+            <div className="flex items-center gap-1.5 text-amber-900 dark:text-amber-100">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span className="font-medium">{formatRate(bzPerHour)} BZ/h</span>
+            </div>
+            <div className="font-bold text-green-600 dark:text-green-400">
+              +{tierBonus}%
+            </div>
           </div>
         </div>
 
-        {/* Energy Progress Bar */}
-        <div className="h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
-          <div 
-            className="h-full bg-gradient-to-r from-yellow-400 via-orange-400 to-amber-500 transition-all duration-300 shadow-md"
-            style={{ width: `${Math.min(energyPercent, 100)}%` }}
-          />
+        {/* Second Line: Logo | Tier + Profile */}
+        <div className="flex items-center justify-between">
+          {/* Bunergy Logo */}
+          <div className="w-16 h-16">
+            <img
+              src="/bunergy-icon.png"
+              alt="Bunergy"
+              className="w-full h-full object-contain"
+            />
+          </div>
+
+          {/* Tier Badge + Profile */}
+          <div className="flex items-center gap-3">
+            {/* Green Sync Dot + Tier Badge */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSyncDot}
+                disabled={isSyncing}
+                className="focus:outline-none active:scale-95 transition-transform"
+                aria-label="Manual sync"
+              >
+                <div
+                  className={`w-3 h-3 rounded-full ${
+                    isSyncing
+                      ? "bg-yellow-400 animate-pulse"
+                      : "bg-green-500"
+                  }`}
+                />
+              </button>
+              <div
+                className={`px-3 py-1.5 rounded-lg border font-semibold text-sm ${getTierColor(
+                  tier
+                )}`}
+              >
+                {tier}
+              </div>
+            </div>
+
+            {/* Profile Avatar (clickable) */}
+            <button
+              onClick={handleProfileClick}
+              className="focus:outline-none active:scale-95 transition-transform"
+              aria-label="View profile"
+            >
+              <Avatar className="w-12 h-12 border-2 border-amber-950/20 dark:border-amber-50/20">
+                <AvatarFallback className="bg-gradient-to-br from-orange-400 to-amber-600 text-white font-bold text-lg">
+                  {tier.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          </div>
         </div>
       </div>
     </div>
