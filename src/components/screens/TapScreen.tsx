@@ -27,13 +27,18 @@ export function TapScreen() {
     checkAndResetQuickCharge,
     totalTaps,
     incrementTotalTaps,
-    energyRecoveryRate
+    boosters // Added to calculate recovery rate
   } = useGameState();
 
   const [floatingNumbers, setFloatingNumbers] = useState<FloatingNumber[]>([]);
   const [lastTapTime, setLastTapTime] = useState(0);
   const [canTap, setCanTap] = useState(true);
   const TAP_COOLDOWN = 110;
+
+  // Calculate energy recovery rate locally
+  const baseRecovery = 0.3;
+  const recoveryMultiplier = 1 + (boosters.recoveryRate - 1) * (0.05 / 0.3);
+  const energyRecoveryRate = baseRecovery * recoveryMultiplier;
 
   // Derived QuickCharge state
   const quickChargeUsesLeft = quickChargeUsesRemaining;
@@ -249,7 +254,7 @@ export function TapScreen() {
           {!canUseQuickCharge && (
             <span className="ml-2 text-xs">
               ({quickChargeUsesLeft === 0 
-                ? formatCooldown(cooldownRemaining)
+                ? formatCooldown(quickChargeCooldownRemaining)
                 : "≥50% Energy Required"
               })
             </span>
