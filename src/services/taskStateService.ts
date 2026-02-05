@@ -236,8 +236,6 @@ export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
     }
 
     console.log("🔵 [TASKS-SYNC] DB Batch: Found profile UUID:", profile.id);
-    console.log("🔐 [TASKS-SYNC] DB Batch: Auth user UUID:", session.session.user.id);
-    console.log("🔐 [TASKS-SYNC] DB Batch: UUIDs match?", profile.id === session.session.user.id);
 
     const payloads = records.map(data => ({
       telegram_id: tgUser.id,
