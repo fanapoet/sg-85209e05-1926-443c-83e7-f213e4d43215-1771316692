@@ -15,6 +15,7 @@ export function CompactDashboard() {
     tier,
     manualSync,
     setProfileOpen,
+    telegramUser,
   } = useGameState();
 
   const router = useRouter();
@@ -106,18 +107,15 @@ export function CompactDashboard() {
           <span className="text-[10px] font-medium text-amber-700 dark:text-amber-300">BB</span>
         </div>
 
-        {/* Profile Avatar - Smaller */}
-        <button
+        {/* Profile Avatar */}
+        <Avatar 
+          className="w-5 h-5 cursor-pointer hover:scale-110 transition-transform border border-slate-600"
           onClick={handleProfileClick}
-          className="flex-shrink-0 transition-transform hover:scale-105 active:scale-95"
-          aria-label="Profile"
         >
-          <Avatar className="w-7 h-7 border border-orange-300 dark:border-orange-600">
-            <AvatarFallback className="bg-gradient-to-br from-orange-400 to-pink-400 text-white text-[10px] font-bold">
-              {tier.charAt(0)}
-            </AvatarFallback>
-          </Avatar>
-        </button>
+          <AvatarFallback className="bg-gradient-to-br from-pink-400 via-purple-400 to-blue-400 text-white text-[10px] font-bold">
+            {telegramUser.first_name?.[0]?.toUpperCase() || "U"}
+          </AvatarFallback>
+        </Avatar>
       </div>
 
       {/* Line 3: XP | Energy | BZ/h | Tier Bonus - COMPACT FOOTER */}

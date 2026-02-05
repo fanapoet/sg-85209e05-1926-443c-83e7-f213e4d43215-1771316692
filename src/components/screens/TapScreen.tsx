@@ -26,13 +26,34 @@ export function TapScreen() {
     useQuickCharge: triggerQuickCharge,
     checkAndResetQuickCharge,
     totalTaps,
-    incrementTotalTaps
+    incrementTotalTaps,
+    energyRecoveryRate
   } = useGameState();
 
   const [floatingNumbers, setFloatingNumbers] = useState<FloatingNumber[]>([]);
   const [lastTapTime, setLastTapTime] = useState(0);
   const [canTap, setCanTap] = useState(true);
   const TAP_COOLDOWN = 110;
+
+  // Derived QuickCharge state
+  const quickChargeUsesLeft = quickChargeUsesRemaining;
+  const quickChargeCooldownRemaining = quickChargeCooldownUntil && Date.now() < quickChargeCooldownUntil
+    ? quickChargeCooldownUntil - Date.now()
+    : 0;
+
+  const canUseQuickCharge = 
+    energy < maxEnergy * 0.5 && 
+    quickChargeUsesLeft > 0 && 
+    quickChargeCooldownRemaining <= 0;
+
+  const isOnCooldown = !canTap; // Simple alias for UI state
+
+  const formatCooldown = (ms: number): string => {
+    const totalSeconds = Math.ceil(ms / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  };
 
   // Check and reset QuickCharge on mount (same pattern as daily rewards)
   useEffect(() => {
@@ -125,9 +146,6 @@ export function TapScreen() {
   const quickChargeAvailable = quickChargeUsesRemaining > 0 && 
     (!quickChargeCooldownUntil || Date.now() >= quickChargeCooldownUntil);
   const quickChargeDisabled = energy >= maxEnergy * 0.5 || !quickChargeAvailable;
-  const quickChargeCooldownRemaining = quickChargeCooldownUntil && Date.now() < quickChargeCooldownUntil
-    ? quickChargeCooldownUntil - Date.now()
-    : 0;
 
   useEffect(() => {
     if (quickChargeCooldownRemaining > 0) {
@@ -139,109 +157,111 @@ export function TapScreen() {
   const energyPercent = Math.min(100, (energy / maxEnergy) * 100);
 
   return (
-    <div className="h-[calc(100vh-180px)] flex flex-col">
-      {/* Top Stats */}
-      <div className="px-6 pt-4 pb-2">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-left">
-            <p className="text-sm text-muted-foreground">Taps</p>
-            <p className="text-2xl font-bold text-primary">{totalTaps.toLocaleString()}</p>
+    <div className="flex-1 flex flex-col items-center justify-between py-4 px-4 overflow-hidden">
+      {/* Energy Display - Reduced Size */}
+      <div className="w-full max-w-sm">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-1.5">
+            <Zap className="w-4 h-4 text-yellow-400" />
+            <span className="text-base font-bold text-white">
+              {Math.floor(energy)}/{maxEnergy}
+            </span>
           </div>
-          <div className="text-right">
-            <p className="text-sm text-muted-foreground">Energy</p>
-            <p className="text-2xl font-bold">{Math.floor(energy)}/{maxEnergy}</p>
-          </div>
+          <span className="text-xs text-slate-400">
+            +{energyRecoveryRate.toFixed(1)}/sec
+          </span>
         </div>
-        <Progress value={energyPercent} className="h-3 mb-2" />
+        
+        {/* Energy Progress Bar - Reduced Height */}
+        <div className="relative w-full h-3 bg-slate-800/60 rounded-full overflow-hidden border border-slate-700/50">
+          <div 
+            className="absolute inset-0 bg-gradient-to-r from-yellow-500 to-amber-500 transition-all duration-300 ease-out rounded-full"
+            style={{ width: `${energyPercent}%` }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-white/20 to-transparent rounded-full" />
+        </div>
       </div>
 
-      {/* Center Circle - Takes remaining space */}
-      <div className="flex-1 flex items-center justify-center px-6">
-        <div className="relative" style={{ width: '280px', height: '280px' }}>
+      {/* Tap Circle - Centered with Proper Spacing */}
+      <div className="flex-1 flex items-center justify-center my-8">
+        <div className="relative">
+          {/* Tap Button */}
           <button
             onClick={handleTap}
-            disabled={energy < energyCostPerTap}
-            className="w-full h-full rounded-full bg-gradient-to-br from-pink-200 via-purple-200 to-blue-200 dark:from-pink-900 dark:via-purple-900 dark:to-blue-900 border-4 border-primary shadow-2xl active:scale-95 transition-transform disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden"
-            style={{ touchAction: 'manipulation' }}
+            disabled={energy < energyCostPerTap || isOnCooldown}
+            className={`
+              relative w-48 h-48 rounded-full
+              bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600
+              shadow-2xl shadow-amber-500/50
+              transform transition-all duration-150
+              ${energy < energyCostPerTap || isOnCooldown
+                ? "opacity-50 cursor-not-allowed scale-95"
+                : "hover:scale-105 active:scale-95 cursor-pointer"
+              }
+            `}
           >
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="relative w-32 h-32 mb-2">
-                <Image
-                  src="/bunergy-icon.png"
-                  alt="Tap"
-                  fill
-                  className="object-contain drop-shadow-2xl"
-                  priority
-                />
-              </div>
+            <div className="absolute inset-0 rounded-full bg-gradient-to-t from-black/20 to-transparent" />
+            <div className="absolute inset-0 flex items-center justify-center">
               <div className="text-center">
-                <p className="text-3xl font-bold drop-shadow-lg">
-                  +{tapReward.toLocaleString()}
-                </p>
-                {tierBonus > 0 && (
-                  <p className="text-sm text-green-600 dark:text-green-400 font-semibold drop-shadow">
-                    (+{tierBonus}%)
-                  </p>
-                )}
+                <Zap className="w-16 h-16 mx-auto mb-2 text-white drop-shadow-lg" />
+                <div className="text-2xl font-bold text-white drop-shadow-lg">
+                  TAP
+                </div>
+                <div className="text-sm text-white/90 drop-shadow mt-1">
+                  +{tapReward} {tierBonus > 0 && `(+${tierBonus}%)`}
+                </div>
               </div>
             </div>
-
-            {floatingNumbers.map(num => (
-              <div
-                key={num.id}
-                className="absolute text-2xl font-bold text-primary animate-float pointer-events-none"
-                style={{
-                  left: `${num.x}px`,
-                  top: `${num.y}px`,
-                  animation: 'float 1s ease-out forwards'
-                }}
-              >
-                +{num.value.toLocaleString()}
-                {num.tierBonus > 0 && (
-                  <span className="text-sm text-green-600 dark:text-green-400 ml-1">
-                    (+{num.tierBonus}%)
-                  </span>
-                )}
-              </div>
-            ))}
           </button>
+
+          {/* Floating Numbers */}
+          {floatingNumbers.map((num) => (
+            <div
+              key={num.id}
+              className="absolute left-1/2 top-0 -translate-x-1/2 pointer-events-none animate-float-up"
+              style={{
+                left: `${50 + (Math.random() - 0.5) * 40}%`,
+              }}
+            >
+              <div className="text-2xl font-bold text-yellow-400 drop-shadow-lg">
+                +{num.value}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* QuickCharge Button */}
-      <div className="px-6 pb-24">
+      {/* QuickCharge Button - Proper Distance from Tap Circle */}
+      <div className="w-full max-w-sm mb-4">
         <Button
           onClick={handleQuickCharge}
-          disabled={quickChargeDisabled}
-          variant={quickChargeDisabled ? "secondary" : "default"}
-          className="w-full"
-          size="lg"
+          disabled={!canUseQuickCharge}
+          className={`
+            w-full h-12 text-base font-semibold
+            ${canUseQuickCharge
+              ? "bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+              : "bg-slate-700"
+            }
+          `}
         >
-          <Zap className="mr-2 h-5 w-5" />
-          {quickChargeCooldownRemaining > 0 ? (
-            `QuickCharge (${formatTime(quickChargeCooldownRemaining)})`
-          ) : energy >= maxEnergy * 0.5 ? (
-            "Need < 50% Energy"
-          ) : quickChargeUsesRemaining === 0 ? (
-            "QuickCharge (0/5)"
-          ) : (
-            `QuickCharge (${quickChargeUsesRemaining}/5)`
+          <Zap className="w-5 h-5 mr-2" />
+          QuickCharge
+          {!canUseQuickCharge && (
+            <span className="ml-2 text-xs">
+              ({quickChargeUsesLeft === 0 
+                ? formatCooldown(cooldownRemaining)
+                : "≥50% Energy Required"
+              })
+            </span>
           )}
         </Button>
+        
+        {quickChargeUsesLeft > 0 && (
+          <div className="text-center mt-2 text-xs text-slate-400">
+            {quickChargeUsesLeft} use{quickChargeUsesLeft !== 1 ? "s" : ""} remaining
+          </div>
+        )}
       </div>
-
-      <style jsx>{`
-        @keyframes float {
-          0% {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-          100% {
-            opacity: 0;
-            transform: translateY(-100px) scale(1.5);
-          }
-        }
-      `}</style>
     </div>
   );
 }

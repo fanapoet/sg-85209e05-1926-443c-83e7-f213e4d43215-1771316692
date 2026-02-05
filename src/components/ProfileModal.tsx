@@ -5,8 +5,21 @@ import { X, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export function ProfileModal() {
-  const { isProfileOpen, setProfileOpen, telegramUser, tier } = useGameState();
+  const { 
+    isProfileOpen, 
+    setProfileOpen, 
+    telegramUser, 
+    tier,
+    bz,
+    bb,
+    xp,
+    bzPerHour
+  } = useGameState();
   const { toast } = useToast();
+
+  // Derived state
+  const referralCount = 0; // Placeholder until connected to context
+  const idleIncomePerHour = bzPerHour;
 
   if (!isProfileOpen) return null;
 
@@ -79,21 +92,76 @@ export function ProfileModal() {
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-amber-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-amber-100 dark:border-gray-700">
-            <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">Language</p>
-            <p className="font-semibold text-gray-900 dark:text-white uppercase">
-              {user.language_code || "en"}
-            </p>
+        {/* Language & Status */}
+        <div className="grid grid-cols-2 gap-3 mb-6">
+          <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+            <div className="text-xs text-slate-400 mb-1">Language</div>
+            <div className="text-sm font-medium text-white">
+              {telegramUser.language_code?.toUpperCase() || "EN"}
+            </div>
           </div>
-          <div className="bg-amber-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-amber-100 dark:border-gray-700">
-            <p className="text-xs text-amber-600 dark:text-amber-400 mb-1">Status</p>
-            <p className="font-semibold text-gray-900 dark:text-white flex items-center gap-1">
-              {user.is_premium ? (
-                <><span>Premium</span><span className="text-sm">⭐</span></>
-              ) : "Standard"}
-            </p>
+          <div className="bg-slate-700/50 rounded-lg p-3 text-center">
+            <div className="text-xs text-slate-400 mb-1">Status</div>
+            <div className="text-sm font-medium text-white flex items-center justify-center gap-1">
+              {telegramUser.is_premium ? (
+                <>Premium <span className="text-yellow-400">⭐</span></>
+              ) : (
+                "Free"
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* User Balances & Stats */}
+        <div className="bg-gradient-to-br from-amber-900/30 to-slate-800/30 rounded-xl p-4 mb-6 border border-amber-700/20">
+          <div className="text-xs text-amber-400/80 font-semibold mb-3 uppercase tracking-wide">
+            Game Progress
+          </div>
+          
+          {/* Balances */}
+          <div className="grid grid-cols-2 gap-3 mb-3">
+            <div className="bg-slate-700/40 rounded-lg p-2.5">
+              <div className="text-[10px] text-slate-400 mb-0.5">BunZap</div>
+              <div className="text-base font-bold text-amber-400">
+                {bz.toLocaleString()}
+              </div>
+            </div>
+            <div className="bg-slate-700/40 rounded-lg p-2.5">
+              <div className="text-[10px] text-slate-400 mb-0.5">BunBun</div>
+              <div className="text-base font-bold text-amber-400">
+                {bb.toFixed(6)}
+              </div>
+            </div>
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-slate-700/40 rounded-lg p-2 text-center">
+              <div className="text-[10px] text-slate-400 mb-0.5">XP</div>
+              <div className="text-sm font-semibold text-white">
+                {xp.toLocaleString()}
+              </div>
+            </div>
+            <div className="bg-slate-700/40 rounded-lg p-2 text-center">
+              <div className="text-[10px] text-slate-400 mb-0.5">Tier</div>
+              <div className="text-sm font-semibold text-white">
+                {tier}
+              </div>
+            </div>
+            <div className="bg-slate-700/40 rounded-lg p-2 text-center">
+              <div className="text-[10px] text-slate-400 mb-0.5">Referrals</div>
+              <div className="text-sm font-semibold text-white">
+                {referralCount}
+              </div>
+            </div>
+          </div>
+
+          {/* Income Rate */}
+          <div className="mt-3 bg-slate-700/40 rounded-lg p-2.5 flex items-center justify-between">
+            <div className="text-xs text-slate-400">Hourly Income</div>
+            <div className="text-sm font-bold text-green-400">
+              {idleIncomePerHour.toFixed(1)} BZ/h
+            </div>
           </div>
         </div>
 
