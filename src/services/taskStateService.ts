@@ -206,19 +206,6 @@ export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
     
     console.log("🔵 [TASKS-SYNC] DB Batch: Telegram user ID:", tgUser.id);
     
-    // Check current auth session
-    const { data: session, error: sessionError } = await supabase.auth.getSession();
-    console.log("🔐 [TASKS-SYNC] DB Batch: Auth session check:", {
-      hasSession: !!session?.session,
-      userId: session?.session?.user?.id,
-      error: sessionError
-    });
-    
-    if (!session?.session) {
-      console.error("❌ [TASKS-SYNC] DB Batch: No active auth session!");
-      return { success: false, error: "No active auth session" };
-    }
-    
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id")
