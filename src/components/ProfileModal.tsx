@@ -13,7 +13,8 @@ export function ProfileModal() {
     bz,
     bb,
     xp,
-    bzPerHour
+    bzPerHour,
+    referralCount
   } = useGameState();
   
   const { toast } = useToast();

@@ -13,7 +13,8 @@ export function TapScreen() {
     boosters, 
     quickChargeUsesRemaining,
     quickChargeCooldownUntil,
-    useQuickCharge: triggerQuickCharge 
+    useQuickCharge: triggerQuickCharge,
+    subtractEnergy
   } = useGameState();
 
   const [canTap, setCanTap] = useState(true);
