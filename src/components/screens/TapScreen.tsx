@@ -70,7 +70,9 @@ export function TapScreen() {
     const bonusAmount = Math.floor(baseTapReward * (tierBonus / 100));
     const totalReward = baseTapReward + bonusAmount;
 
-    addBZ(totalReward, energyPerTap);
+    // Fix: Call addBZ and subtractEnergy separately
+    addBZ(totalReward);
+    subtractEnergy(energyPerTap);
 
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
