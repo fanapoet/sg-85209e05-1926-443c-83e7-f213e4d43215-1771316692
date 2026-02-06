@@ -8,12 +8,13 @@ export function TapScreen() {
     energy, 
     maxEnergy, 
     addBZ, 
-    tier,
     boosters,
     quickChargeCooldownUntil,
-    useQuickCharge: triggerQuickCharge, // Alias to avoid "Rules of Hooks" linter error
+    useQuickCharge: triggerQuickCharge,
     subtractEnergy,
     totalTaps,
+    incrementTotalTaps,
+    tier,
     quickChargeUsesRemaining
   } = useGameState();
 
@@ -21,15 +22,14 @@ export function TapScreen() {
   const [floatingNumbers, setFloatingNumbers] = useState<Array<{ id: number; value: number; x: number; y: number }>>([]);
   const [quickChargeCooldownRemaining, setQuickChargeCooldownRemaining] = useState(0);
 
-  const energyPerTap = boosters.energyPerTap;
+  const energyCostPerTap = boosters.energyPerTap;
   const incomePerTap = boosters.incomePerTap;
 
   const formatNumber = (num: number) => num.toLocaleString();
 
-  // Calculate energy recovery rate (base 0.3 + booster)
-  const baseRecoveryRate = 0.3;
-  const recoveryRateBonus = boosters.recoveryRate * 0.1;
-  const totalRecoveryRate = baseRecoveryRate + recoveryRateBonus;
+  // Calculate energy recovery rate for display
+  // Base 0.3, roughly +0.1 per level for display approximation
+  const displayRecoveryRate = 0.3 + ((boosters.recoveryRate - 1) * 0.1);
 
   // Tier Bonus Calculation
   const tierBonuses = {
@@ -41,10 +41,14 @@ export function TapScreen() {
   };
   const tierBonus = tierBonuses[tier];
 
-  // Tap Reward Calculation
-  const baseTapReward = 10 * incomePerTap;
-  const bonusAmount = Math.floor(baseTapReward * (tierBonus / 100));
-  const tapReward = baseTapReward + bonusAmount;
+  // Tap Reward Calculation Function
+  const calculateTapReward = () => {
+    const baseTapReward = 10 * incomePerTap;
+    const bonusAmount = Math.floor(baseTapReward * (tierBonus / 100));
+    return baseTapReward + bonusAmount;
+  };
+
+  const tapReward = calculateTapReward();
 
   const formatCooldown = (seconds: number): string => {
     if (seconds <= 0) return "Ready";
@@ -71,21 +75,22 @@ export function TapScreen() {
     quickChargeCooldownRemaining <= 0;
 
   const handleTap = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!canTap || energy < energyPerTap) return;
+    if (!canTap || energy < energyCostPerTap) return;
 
-    // Execute Tap
-    addBZ(tapReward);
-    subtractEnergy(energyPerTap);
+    const reward = calculateTapReward();
+    addBZ(reward);
+    subtractEnergy(energyCostPerTap);
+    incrementTotalTaps();
 
     // Visual Effects
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const id = Date.now() + Math.random();
-    setFloatingNumbers(prev => [...prev, { id, value: tapReward, x, y }]);
+    const floatingId = Date.now();
+    setFloatingNumbers(prev => [...prev, { id: floatingId, value: reward, x, y }]);
     setTimeout(() => {
-      setFloatingNumbers(prev => prev.filter(num => num.id !== id));
+      setFloatingNumbers(prev => prev.filter(num => num.id !== floatingId));
     }, 1000);
 
     setCanTap(false);
@@ -103,13 +108,13 @@ export function TapScreen() {
     <div className="min-h-screen bg-gradient-to-b from-amber-50 via-orange-50 to-amber-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 pb-20">
       <div className="container mx-auto px-4 py-6 max-w-md">
         
-        {/* Top Stats Row: Lifetime Taps (Left) | Energy Bar (Right) */}
+        {/* Top Stats Row */}
         <div className="flex items-center justify-between gap-4 mb-8">
           
           {/* LEFT: Lifetime Taps */}
           <div className="flex flex-col items-start bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg px-4 py-2 border border-amber-200/50 dark:border-amber-700/50 min-w-[100px]">
             <div className="text-xs text-gray-600 dark:text-gray-400">Total Taps</div>
-            <div className="text-lg font-bold text-amber-600 dark:text-amber-400">
+            <div className="text-sm font-bold text-amber-600 dark:text-amber-400">
               {formatNumber(totalTaps)}
             </div>
           </div>
@@ -124,10 +129,10 @@ export function TapScreen() {
                 </span>
               </div>
               <span className="text-[10px] text-muted-foreground">
-                +{totalRecoveryRate.toFixed(1)}/s
+                +{displayRecoveryRate.toFixed(1)}/s
               </span>
             </div>
-            {/* Smaller Energy Bar Height (h-2) */}
+            {/* Small Energy Bar Height (h-2) */}
             <div className="relative w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
               <div
                 className="absolute top-0 left-0 h-full bg-gradient-to-r from-amber-400 to-orange-500 rounded-full transition-all duration-300"
@@ -138,12 +143,12 @@ export function TapScreen() {
         </div>
 
         {/* Center: Tap Circle */}
-        {/* Added my-12 for vertical spacing from top elements */}
-        <div className="relative flex flex-col items-center justify-center my-12">
+        {/* Added my-8 for vertical spacing from top elements */}
+        <div className="relative flex flex-col items-center justify-center my-8">
           <div
             onClick={handleTap}
             className={`relative w-64 h-64 rounded-full bg-gradient-to-br from-amber-400 via-orange-500 to-amber-600 shadow-2xl flex flex-col items-center justify-center cursor-pointer transform transition-all duration-150 active:scale-95 ${
-              canTap && energy >= energyPerTap ? "hover:scale-105" : "opacity-50 cursor-not-allowed"
+              canTap && energy >= energyCostPerTap ? "hover:scale-105" : "opacity-50 cursor-not-allowed"
             }`}
           >
             {/* Bunergy Logo Icon */}
