@@ -11,7 +11,7 @@ export function TapScreen() {
     tier,
     boosters,
     quickChargeCooldownUntil,
-    useQuickCharge, // Renamed from triggerQuickCharge
+    useQuickCharge: triggerQuickCharge, // Alias to avoid "Rules of Hooks" linter error
     subtractEnergy,
     totalTaps,
     quickChargeUsesRemaining
@@ -94,7 +94,7 @@ export function TapScreen() {
 
   const handleQuickCharge = () => {
     if (canUseQuickCharge) {
-      useQuickCharge();
+      triggerQuickCharge();
       setQuickChargeCooldownRemaining(3600);
     }
   };
