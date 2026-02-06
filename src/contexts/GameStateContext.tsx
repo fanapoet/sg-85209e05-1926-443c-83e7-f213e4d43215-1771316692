@@ -482,6 +482,42 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const stateRef = useRef(getFullStateForSync);
   useEffect(() => { stateRef.current = getFullStateForSync; }, [getFullStateForSync]);
 
+  // DAILY RESET CHECKER
+  useEffect(() => {
+    const checkDailyReset = () => {
+      const today = new Date().toDateString();
+      if (lastResetDate !== today) {
+        console.log("🔄 [Daily Reset] New day detected! Resetting daily stats.");
+        
+        // Reset In-Memory State
+        setTodayTaps(0);
+        setHasClaimedIdleToday(false);
+        setLastResetDate(today);
+        setQuickChargeUsesRemaining(5);
+        setQuickChargeLastResetDate(today);
+        
+        // Persist Reset to LocalStorage immediately
+        safeSetItem("bunergy_todayTaps", 0);
+        safeSetItem("bunergy_hasClaimedIdleToday", false);
+        safeSetItem("bunergy_lastResetDate", today);
+        safeSetItem("bunergy_qc_uses", 5);
+        safeSetItem("bunergy_qc_last_reset", today);
+
+        toast({
+          title: "☀️ New Day Started!",
+          description: "Daily tasks and energy charges have been reset.",
+        });
+      }
+    };
+    
+    // Check on mount
+    checkDailyReset();
+    
+    // Check every minute (to handle midnight crossover while app is open)
+    const interval = setInterval(checkDailyReset, 60000); 
+    return () => clearInterval(interval);
+  }, [lastResetDate, toast]);
+
   // Start automatic periodic sync (every 30 seconds)
   useEffect(() => {
     if (!mounted) return;
