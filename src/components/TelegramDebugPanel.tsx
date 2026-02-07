@@ -20,12 +20,18 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
 
     console.log = (...args: any[]) => {
       const message = args.join(" ");
-      if (message.includes("[MANUAL SYNC]") || message.includes("[AUTO-SYNC]") || 
-          message.includes("[Tap]") || message.includes("[Sync]") || 
-          message.includes("[BOOSTER]") || message.includes("[REWARDS-SYNC]") || 
-          message.includes("[TASKS-SYNC]") || message.includes("[Tasks]") ||
+      // Capture all relevant logs including Daily Reset
+      if (message.includes("[MANUAL SYNC]") || 
+          message.includes("[AUTO-SYNC]") || 
+          message.includes("[Tap]") || 
+          message.includes("[Sync]") || 
+          message.includes("[BOOSTER]") || 
+          message.includes("[REWARDS-SYNC]") || 
+          message.includes("[TASKS-SYNC]") || 
+          message.includes("[Tasks]") ||
           message.includes("[Daily Reset]")) {
-        setLogs(prev => [...prev.slice(-20), {
+        
+        setLogs(prev => [...prev.slice(-49), {
           timestamp: new Date().toLocaleTimeString(),
           message,
           type: message.includes("✅") || message.includes("SUCCESS") ? "success" : 
@@ -37,8 +43,10 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
 
     console.error = (...args: any[]) => {
       const message = args.join(" ");
-      if (message.includes("Sync") || message.includes("sync") || message.includes("Rewards") || message.includes("Tasks")) {
-        setLogs(prev => [...prev.slice(-20), {
+      if (message.includes("Sync") || message.includes("sync") || 
+          message.includes("Rewards") || message.includes("Tasks") || 
+          message.includes("Daily Reset")) {
+        setLogs(prev => [...prev.slice(-49), {
           timestamp: new Date().toLocaleTimeString(),
           message,
           type: "error"
