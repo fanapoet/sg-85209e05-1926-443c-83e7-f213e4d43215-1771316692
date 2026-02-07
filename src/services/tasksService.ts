@@ -61,6 +61,43 @@ function shouldResetTask(taskType: "daily" | "weekly" | "milestone", lastResetKe
 }
 
 /**
+ * Validate if timestamp matches the reset period
+ */
+function isTimestampValidForResetPeriod(
+  timestamp: string | null, 
+  resetAt: string,
+  taskType: "daily" | "weekly" | "milestone"
+): boolean {
+  if (!timestamp || taskType === "milestone") return true;
+  
+  try {
+    const ts = new Date(timestamp);
+    
+    if (taskType === "daily") {
+      // Extract YYYY-MM-DD from timestamp
+      const tsDate = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, '0')}-${String(ts.getDate()).padStart(2, '0')}`;
+      return tsDate === resetAt;
+    }
+    
+    if (taskType === "weekly") {
+      // Calculate week number from timestamp
+      const d = new Date(Date.UTC(ts.getFullYear(), ts.getMonth(), ts.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+      const weekStr = `${d.getUTCFullYear()}-W${weekNo}`;
+      return weekStr === resetAt;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("[Tasks] Timestamp validation error:", error);
+    return false;
+  }
+}
+
+/**
  * Get all task progress from localStorage
  */
 function getLocalTaskProgress(): Map<string, TaskProgressData> {
@@ -322,10 +359,28 @@ export async function loadAndMergeTaskProgress(telegramId: number): Promise<void
         const mergedCompleted = localTask.isCompleted || serverTask.isCompleted;
         const mergedClaimed = localTask.claimed || serverTask.isClaimed;
         
-        // CRITICAL: For timestamps, prefer local if it exists, otherwise use server
-        // This prevents old server timestamps from overwriting fresh local state
-        const mergedCompletedAt = mergedCompleted ? (localTask.completedAt || serverTask.completedAt) : null;
-        const mergedClaimedAt = mergedClaimed ? (localTask.claimedAt || serverTask.claimedAt) : null;
+        // CRITICAL FIX: Validate timestamps against reset period
+        // If localStorage has old timestamps from different period, discard them and use server data
+        const localCompletedValid = isTimestampValidForResetPeriod(
+          localTask.completedAt, 
+          serverTask.resetAt, 
+          serverTask.taskType as "daily" | "weekly" | "milestone"
+        );
+        const localClaimedValid = isTimestampValidForResetPeriod(
+          localTask.claimedAt, 
+          serverTask.resetAt, 
+          serverTask.taskType as "daily" | "weekly" | "milestone"
+        );
+        
+        console.log(`   Local timestamps valid: completedAt=${localCompletedValid}, claimedAt=${localClaimedValid}`);
+        
+        // Use local timestamp only if it's valid for the current reset period
+        const mergedCompletedAt = mergedCompleted ? 
+          (localCompletedValid && localTask.completedAt ? localTask.completedAt : serverTask.completedAt) : 
+          null;
+        const mergedClaimedAt = mergedClaimed ? 
+          (localClaimedValid && localTask.claimedAt ? localTask.claimedAt : serverTask.claimedAt) : 
+          null;
         
         console.log(`   Merged: progress=${mergedProgress}, completed=${mergedCompleted}, claimed=${mergedClaimed}`);
         console.log(`   Merged timestamps: completedAt=${mergedCompletedAt}, claimedAt=${mergedClaimedAt}`);
