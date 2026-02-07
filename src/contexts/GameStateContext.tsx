@@ -489,51 +489,48 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const checkDailyReset = () => {
       const now = new Date();
       const currentDate = now.toDateString();
-      const currentTime = now.toISOString();
-      const currentUTCDate = now.toUTCString();
+      const currentTime = now.toLocaleTimeString();
       
-      // Log the check (intercepted by Debug Panel)
-      console.log(`[Daily Reset] 🔍 Check at ${now.toLocaleTimeString()}`);
-      console.log(`[Daily Reset] Current: "${currentDate}" | Last: "${lastResetDate}" | Needs Reset: ${currentDate !== lastResetDate}`);
-      console.log(`[Daily Reset] UTC: ${currentUTCDate}`);
+      console.log(`[Daily Reset] 🔍 Checking at ${currentTime}: current="${currentDate}" vs last="${lastResetDate}"`);
 
       if (currentDate !== lastResetDate) {
-        console.log(`[Daily Reset] 🔄 NEW DAY DETECTED! Resetting daily stats. Previous: ${lastResetDate}`);
+        console.log(`[Daily Reset] 🔄 NEW DAY DETECTED! Resetting daily stats.`);
+        console.log(`[Daily Reset] Previous: "${lastResetDate}" → Current: "${currentDate}"`);
 
-        // Reset State
+        // Reset ALL daily counters
+        const newDate = currentDate;
+        
         setTodayTaps(0);
         setHasClaimedIdleToday(false);
         setQuickChargeUsesRemaining(5);
         setQuickChargeCooldownUntil(null);
-        setQuickChargeLastResetDate(currentDate);
-        setLastResetDate(currentDate);
+        setQuickChargeLastResetDate(newDate);
+        setLastResetDate(newDate);
 
-        // Update LocalStorage explicitly
+        // IMMEDIATELY write to localStorage
         safeSetItem("bunergy_todayTaps", 0);
         safeSetItem("bunergy_hasClaimedIdleToday", false);
         safeSetItem("bunergy_qc_uses", 5);
         safeSetItem("bunergy_qc_cooldown", null);
-        safeSetItem("bunergy_qc_last_reset", currentDate);
-        safeSetItem("bunergy_lastResetDate", currentDate);
+        safeSetItem("bunergy_qc_last_reset", newDate);
+        safeSetItem("bunergy_lastResetDate", newDate);
 
-        console.log(`[Daily Reset] ✅ Reset complete! New date: ${currentDate}`);
-        console.log(`[Daily Reset] ✅ todayTaps: 0, hasClaimedIdleToday: false, quickChargeUsesRemaining: 5`);
+        console.log(`[Daily Reset] ✅ Reset complete! New date: "${newDate}"`);
+        console.log(`[Daily Reset] ✅ Counters: todayTaps=0, hasClaimedIdleToday=false, quickCharge=5`);
 
         toast({
           title: "🌅 New Day!",
           description: "Daily tasks and limits have been reset.",
         });
       } else {
-        console.log(`[Daily Reset] ℹ️ Same day, no reset needed`);
+        console.log(`[Daily Reset] ℹ️ Same day - no reset needed`);
       }
     };
 
-    // Check immediately on mount
-    console.log("[Daily Reset] 🚀 Running first check on mount...");
+    console.log("[Daily Reset] 🚀 Running initial check on mount...");
     checkDailyReset();
+    
     console.log("[Daily Reset] ⏰ Setting up 1-minute interval...");
-
-    // Check every minute (60000ms)
     const interval = setInterval(() => {
       console.log("[Daily Reset] ⏰ Interval tick - running check...");
       checkDailyReset();
