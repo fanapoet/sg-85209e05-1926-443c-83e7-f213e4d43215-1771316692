@@ -28,7 +28,8 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
         setLogs(prev => [...prev.slice(-20), {
           timestamp: new Date().toLocaleTimeString(),
           message,
-          type: "info"
+          type: message.includes("✅") || message.includes("SUCCESS") ? "success" : 
+                message.includes("❌") || message.includes("Error") || message.includes("failed") ? "error" : "info"
         }]);
       }
       originalLog.apply(console, args);
