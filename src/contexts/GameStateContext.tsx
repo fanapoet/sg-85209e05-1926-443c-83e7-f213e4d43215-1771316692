@@ -484,6 +484,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
   // DAILY RESET CHECKER
   useEffect(() => {
+    console.log("[Daily Reset] ✅ Daily reset checker mounted and active");
+    
     const checkDailyReset = () => {
       const currentDate = new Date().toDateString();
       const currentTime = new Date().toISOString();
@@ -497,8 +499,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         // Reset State
         setTodayTaps(0);
         setHasClaimedIdleToday(false);
-        setQuickChargeUsesRemaining(5); // Reset to default 5 uses
-        setQuickChargeCooldownUntil(null); // Clear cooldown
+        setQuickChargeUsesRemaining(5);
+        setQuickChargeCooldownUntil(null);
         setQuickChargeLastResetDate(currentDate);
         setLastResetDate(currentDate);
 
@@ -519,13 +521,20 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    // Check every minute
-    const interval = setInterval(checkDailyReset, 60000);
-
     // Check immediately on mount
     checkDailyReset();
+    console.log("[Daily Reset] First check completed, setting up interval...");
 
-    return () => clearInterval(interval);
+    // Check every minute (60000ms)
+    const interval = setInterval(() => {
+      console.log("[Daily Reset] ⏰ Interval tick - running check...");
+      checkDailyReset();
+    }, 60000);
+
+    return () => {
+      console.log("[Daily Reset] ⚠️ Checker unmounted, clearing interval");
+      clearInterval(interval);
+    };
   }, [lastResetDate, toast]);
 
   // Start automatic periodic sync (every 30 seconds)
