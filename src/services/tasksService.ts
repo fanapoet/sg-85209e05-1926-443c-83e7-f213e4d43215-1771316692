@@ -82,9 +82,10 @@ function getLocalTaskProgress(): Map<string, TaskProgressData> {
       const isOldFormat = task.resetAt && task.resetAt.includes("T");
       
       if (isOldFormat || shouldResetTask(task.taskType, task.resetAt)) {
-        // Task needs reset - create fresh entry
+        // Task needs reset - create fresh entry with NO old data
         map.set(key, {
-          ...task,
+          taskId: task.taskId,
+          taskType: task.taskType,
           currentProgress: 0,
           isCompleted: false,
           claimed: false,
@@ -284,15 +285,30 @@ export async function loadAndMergeTaskProgress(telegramId: number): Promise<void
       id: t.taskId, 
       progress: t.currentProgress, 
       completed: t.isCompleted, 
-      claimed: t.isClaimed 
+      claimed: t.isClaimed,
+      resetAt: t.resetAt
     }))));
     
     const localProgress = getLocalTaskProgress();
     console.log("🔵 [TASKS-SYNC] Local tasks before merge:", localProgress.size);
     let mergedCount = 0;
     
-    // Merge server data with local using Math.max for progress
-    serverTasks.forEach(serverTask => {
+    // Filter server tasks to only current reset period
+    const currentServerTasks = serverTasks.filter(serverTask => {
+      const currentResetKey = getResetDateString(serverTask.taskType as "daily" | "weekly" | "milestone");
+      const isCurrentPeriod = serverTask.resetAt === currentResetKey;
+      
+      if (!isCurrentPeriod) {
+        console.log(`ℹ️ [TASKS-SYNC] Skipping old period task: ${serverTask.taskId} (${serverTask.resetAt} vs ${currentResetKey})`);
+      }
+      
+      return isCurrentPeriod;
+    });
+    
+    console.log("🔵 [TASKS-SYNC] Current period tasks:", currentServerTasks.length, "of", serverTasks.length);
+    
+    // Merge current period server data with local using Math.max for progress
+    currentServerTasks.forEach(serverTask => {
       const localTask = localProgress.get(serverTask.taskId);
       
       console.log(`🔵 [TASKS-SYNC] Merging task: ${serverTask.taskId}`);
