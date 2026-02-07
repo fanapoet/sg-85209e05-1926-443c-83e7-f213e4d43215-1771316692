@@ -23,7 +23,8 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
       if (message.includes("[MANUAL SYNC]") || message.includes("[AUTO-SYNC]") || 
           message.includes("[Tap]") || message.includes("[Sync]") || 
           message.includes("[BOOSTER]") || message.includes("[REWARDS-SYNC]") || 
-          message.includes("[TASKS-SYNC]") || message.includes("[Tasks]")) {
+          message.includes("[TASKS-SYNC]") || message.includes("[Tasks]") ||
+          message.includes("[Daily Reset]")) {
         setLogs(prev => [...prev.slice(-20), {
           timestamp: new Date().toLocaleTimeString(),
           message,
