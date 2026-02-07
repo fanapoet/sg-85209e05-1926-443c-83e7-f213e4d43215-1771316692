@@ -487,11 +487,15 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     console.log("[Daily Reset] ✅ Daily reset checker mounted and active");
     
     const checkDailyReset = () => {
-      const currentDate = new Date().toDateString();
-      const currentTime = new Date().toISOString();
+      const now = new Date();
+      const currentDate = now.toDateString();
+      const currentTime = now.toISOString();
+      const currentUTCDate = now.toUTCString();
       
       // Log the check (intercepted by Debug Panel)
-      console.log(`[Daily Reset] Check: current="${currentDate}", last="${lastResetDate}", needsReset=${currentDate !== lastResetDate}`);
+      console.log(`[Daily Reset] 🔍 Check at ${now.toLocaleTimeString()}`);
+      console.log(`[Daily Reset] Current: "${currentDate}" | Last: "${lastResetDate}" | Needs Reset: ${currentDate !== lastResetDate}`);
+      console.log(`[Daily Reset] UTC: ${currentUTCDate}`);
 
       if (currentDate !== lastResetDate) {
         console.log(`[Daily Reset] 🔄 NEW DAY DETECTED! Resetting daily stats. Previous: ${lastResetDate}`);
@@ -513,17 +517,21 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         safeSetItem("bunergy_lastResetDate", currentDate);
 
         console.log(`[Daily Reset] ✅ Reset complete! New date: ${currentDate}`);
+        console.log(`[Daily Reset] ✅ todayTaps: 0, hasClaimedIdleToday: false, quickChargeUsesRemaining: 5`);
 
         toast({
-          title: "New Day!",
+          title: "🌅 New Day!",
           description: "Daily tasks and limits have been reset.",
         });
+      } else {
+        console.log(`[Daily Reset] ℹ️ Same day, no reset needed`);
       }
     };
 
     // Check immediately on mount
+    console.log("[Daily Reset] 🚀 Running first check on mount...");
     checkDailyReset();
-    console.log("[Daily Reset] First check completed, setting up interval...");
+    console.log("[Daily Reset] ⏰ Setting up 1-minute interval...");
 
     // Check every minute (60000ms)
     const interval = setInterval(() => {
