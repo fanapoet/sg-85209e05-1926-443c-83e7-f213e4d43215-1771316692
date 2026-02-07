@@ -204,12 +204,17 @@ export async function syncDailyClaimsToDB(
       const claimedAt = toISOString(claim.timestamp);
       console.log(`📤 [DAILY-CLAIMS-SYNC] Converting timestamp ${claim.timestamp} → ${claimedAt}`);
       
+      // Convert BB to micros (6 decimals) if type is BB, otherwise use integer
+      const rewardAmount = claim.type === "BB" 
+        ? Math.floor(claim.amount * 1_000_000) // Convert BB to micros
+        : claim.amount; // Keep BZ as integer
+      
       return {
         user_id: userId,
         telegram_id: telegramId,
         day: claim.day,
         reward_type: claim.type,
-        reward_amount: claim.amount,
+        reward_amount: rewardAmount,
         claimed_at: claimedAt
       };
     });
