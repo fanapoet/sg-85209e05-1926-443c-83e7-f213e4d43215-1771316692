@@ -57,7 +57,7 @@ export function CompactDashboard() {
   };
 
   return (
-    <div className="bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 border-b border-amber-200 dark:border-gray-700 px-3 py-1.5 shadow-sm">
+    <div className="sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b">
       {/* Line 1: BZ | Logo | Tier Badge - COMPACT HEADER */}
       <div className="flex items-center justify-between mb-0.5">
         {/* BZ Balance - Smaller Text */}

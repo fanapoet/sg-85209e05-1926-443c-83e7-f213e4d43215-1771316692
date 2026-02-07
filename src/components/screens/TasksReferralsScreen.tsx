@@ -234,12 +234,20 @@ export function TasksReferralsScreen() {
     const claimedTime = claimedTasks[task.id];
     if (!claimedTime) return false;
 
+    // Daily tasks: check if claimed today
     if (task.type === "daily") {
       const claimedDate = new Date(claimedTime).toDateString();
       const today = new Date().toDateString();
       return claimedDate === today;
     }
 
+    // Weekly tasks: check if 7 days passed
+    if (task.type === "weekly") {
+      const daysSinceClaim = (Date.now() - claimedTime) / (1000 * 60 * 60 * 24);
+      return daysSinceClaim < 7;
+    }
+
+    // Milestone tasks: claimed once forever
     return true;
   };
 
