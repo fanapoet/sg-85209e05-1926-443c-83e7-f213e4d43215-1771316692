@@ -486,8 +486,17 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkDailyReset = () => {
       const today = new Date().toDateString();
+      console.log("🔍 [Daily Reset Check]", {
+        currentDate: today,
+        lastResetDate: lastResetDate,
+        needsReset: lastResetDate !== today,
+        currentTime: new Date().toISOString()
+      });
+      
       if (lastResetDate !== today) {
         console.log("🔄 [Daily Reset] New day detected! Resetting daily stats.");
+        console.log("🔄 [Daily Reset] Previous date:", lastResetDate);
+        console.log("🔄 [Daily Reset] Current date:", today);
         
         // Reset In-Memory State
         setTodayTaps(0);
@@ -503,6 +512,13 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         safeSetItem("bunergy_qc_uses", 5);
         safeSetItem("bunergy_qc_last_reset", today);
 
+        console.log("✅ [Daily Reset] Reset complete! New values:", {
+          todayTaps: 0,
+          hasClaimedIdleToday: false,
+          quickChargeUsesRemaining: 5,
+          lastResetDate: today
+        });
+
         toast({
           title: "☀️ New Day Started!",
           description: "Daily tasks and energy charges have been reset.",
@@ -511,11 +527,15 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     };
     
     // Check on mount
+    console.log("🚀 [Daily Reset] Checker mounted - will run every minute");
     checkDailyReset();
     
     // Check every minute (to handle midnight crossover while app is open)
     const interval = setInterval(checkDailyReset, 60000); 
-    return () => clearInterval(interval);
+    return () => {
+      console.log("🛑 [Daily Reset] Checker unmounted");
+      clearInterval(interval);
+    };
   }, [lastResetDate, toast]);
 
   // Start automatic periodic sync (every 30 seconds)
