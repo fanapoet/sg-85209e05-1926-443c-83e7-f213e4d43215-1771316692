@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 /**
  * Task State Service
  * Handles syncing task progress to/from database
- * FOLLOWS EXACT PATTERN FROM rewardsService.ts
+ * FIXES: Proper UPDATE logic to prevent duplicate records
  */
 
 export interface TaskProgressData {
@@ -63,6 +63,34 @@ export function calculateResetAt(taskType: "daily" | "weekly" | "milestone"): st
 }
 
 /**
+ * Check if a task needs to be reset based on reset_at comparison
+ * Returns true if the stored reset_at is older than current period
+ */
+export function shouldResetTask(storedResetAt: string, taskType: "daily" | "weekly" | "milestone"): boolean {
+  if (taskType === "milestone") return false;
+  
+  const currentResetAt = calculateResetAt(taskType);
+  
+  console.log("🔍 [TASK-RESET] Comparing:", { stored: storedResetAt, current: currentResetAt, taskType });
+  
+  // For daily tasks: compare YYYY-MM-DD strings
+  if (taskType === "daily") {
+    const needsReset = storedResetAt < currentResetAt;
+    console.log("🔍 [TASK-RESET] Daily comparison:", storedResetAt, "<", currentResetAt, "=", needsReset);
+    return needsReset;
+  }
+  
+  // For weekly tasks: compare YYYY-WNN strings
+  if (taskType === "weekly") {
+    const needsReset = storedResetAt < currentResetAt;
+    console.log("🔍 [TASK-RESET] Weekly comparison:", storedResetAt, "<", currentResetAt, "=", needsReset);
+    return needsReset;
+  }
+  
+  return false;
+}
+
+/**
  * Get task progress from database for current period
  * USES EXACT BUILD AUTHENTICATION PATTERN
  */
@@ -70,17 +98,10 @@ export async function getTaskProgress(telegramId: number): Promise<TaskProgressR
   try {
     console.log("📥 [TASKS-SYNC] DB Fetch: Starting for telegram_id:", telegramId);
 
-    // Calculate current reset periods
-    const dailyResetKey = calculateResetAt("daily");
-    const weeklyResetKey = calculateResetAt("weekly");
-    
-    console.log("🔵 [TASKS-SYNC] DB Fetch: Current periods - Daily:", dailyResetKey, "Weekly:", weeklyResetKey);
-
     const { data, error } = await (supabase as any)
       .from("user_task_progress")
       .select("*")
       .eq("telegram_id", telegramId)
-      .or(`reset_at.eq.${dailyResetKey},reset_at.eq.${weeklyResetKey},reset_at.eq.NEVER`)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -118,6 +139,45 @@ export async function getTaskProgress(telegramId: number): Promise<TaskProgressR
   } catch (error) {
     console.error("❌ [TASKS-SYNC] DB Fetch: Exception:", error);
     return [];
+  }
+}
+
+/**
+ * Reset a task by updating its existing record
+ * This UPDATES the existing row instead of creating a new one
+ */
+export async function resetTaskProgress(recordId: string, newResetAt: string) {
+  try {
+    console.log("🔄 [TASK-RESET] Resetting record:", recordId, "to reset_at:", newResetAt);
+    
+    const { data, error } = await supabase
+      .from("user_task_progress")
+      .update({
+        reset_at: newResetAt,
+        current_progress: 0,
+        is_completed: false,
+        is_claimed: false,
+        completed_at: null,
+        claimed_at: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", recordId)
+      .select()
+      .maybeSingle();
+    
+    if (error) {
+      console.error("❌ [TASK-RESET] Reset failed:", error);
+      return { success: false, error: error.message };
+    }
+    
+    console.log("✅ [TASK-RESET] Reset successful:", data);
+    return { success: true, data };
+  } catch (error) {
+    console.error("❌ [TASK-RESET] Exception:", error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error" 
+    };
   }
 }
 
