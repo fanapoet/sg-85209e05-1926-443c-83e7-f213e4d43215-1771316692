@@ -70,10 +70,17 @@ export async function getTaskProgress(telegramId: number): Promise<TaskProgressR
   try {
     console.log("📥 [TASKS-SYNC] DB Fetch: Starting for telegram_id:", telegramId);
 
+    // Calculate current reset periods
+    const dailyResetKey = calculateResetAt("daily");
+    const weeklyResetKey = calculateResetAt("weekly");
+    
+    console.log("🔵 [TASKS-SYNC] DB Fetch: Current periods - Daily:", dailyResetKey, "Weekly:", weeklyResetKey);
+
     const { data, error } = await (supabase as any)
       .from("user_task_progress")
       .select("*")
       .eq("telegram_id", telegramId)
+      .or(`reset_at.eq.${dailyResetKey},reset_at.eq.${weeklyResetKey},reset_at.eq.NEVER`)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -87,7 +94,7 @@ export async function getTaskProgress(telegramId: number): Promise<TaskProgressR
     }
 
     console.log("✅ [TASKS-SYNC] DB Fetch: Success -", data.length, "tasks");
-    console.log("🔵 [TASKS-SYNC] DB Fetch: Raw data:", JSON.stringify(data.slice(0, 2))); // Log first 2 records
+    console.log("🔵 [TASKS-SYNC] DB Fetch: Raw data:", JSON.stringify(data.slice(0, 2)));
     
     const records = data.map(record => ({
       id: record.id,

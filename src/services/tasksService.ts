@@ -280,43 +280,30 @@ export async function loadAndMergeTaskProgress(telegramId: number): Promise<void
       return;
     }
     
-    console.log("✅ [TASKS-SYNC] Loaded from server:", serverTasks.length, "tasks");
+    console.log("✅ [TASKS-SYNC] Loaded from server:", serverTasks.length, "current period tasks");
     console.log("🔵 [TASKS-SYNC] Server tasks:", JSON.stringify(serverTasks.map(t => ({ 
       id: t.taskId, 
       progress: t.currentProgress, 
       completed: t.isCompleted, 
       claimed: t.isClaimed,
-      resetAt: t.resetAt
+      resetAt: t.resetAt,
+      claimedAt: t.claimedAt
     }))));
     
     const localProgress = getLocalTaskProgress();
     console.log("🔵 [TASKS-SYNC] Local tasks before merge:", localProgress.size);
     let mergedCount = 0;
     
-    // Filter server tasks to only current reset period
-    const currentServerTasks = serverTasks.filter(serverTask => {
-      const currentResetKey = getResetDateString(serverTask.taskType as "daily" | "weekly" | "milestone");
-      const isCurrentPeriod = serverTask.resetAt === currentResetKey;
-      
-      if (!isCurrentPeriod) {
-        console.log(`ℹ️ [TASKS-SYNC] Skipping old period task: ${serverTask.taskId} (${serverTask.resetAt} vs ${currentResetKey})`);
-      }
-      
-      return isCurrentPeriod;
-    });
-    
-    console.log("🔵 [TASKS-SYNC] Current period tasks:", currentServerTasks.length, "of", serverTasks.length);
-    
-    // Merge current period server data with local using Math.max for progress
-    currentServerTasks.forEach(serverTask => {
+    // All server tasks are already filtered to current period by the database query
+    serverTasks.forEach(serverTask => {
       const localTask = localProgress.get(serverTask.taskId);
       
       console.log(`🔵 [TASKS-SYNC] Merging task: ${serverTask.taskId}`);
-      console.log(`   Local: ${localTask ? `progress=${localTask.currentProgress}, claimed=${localTask.claimed}` : 'NOT FOUND'}`);
-      console.log(`   Server: progress=${serverTask.currentProgress}, claimed=${serverTask.isClaimed}`);
+      console.log(`   Local: ${localTask ? `progress=${localTask.currentProgress}, claimed=${localTask.claimed}, claimedAt=${localTask.claimedAt}` : 'NOT FOUND'}`);
+      console.log(`   Server: progress=${serverTask.currentProgress}, claimed=${serverTask.isClaimed}, claimedAt=${serverTask.claimedAt}`);
       
       if (!localTask) {
-        // Server has data we don't have locally
+        // Server has data we don't have locally - use server data
         localProgress.set(serverTask.taskId, {
           taskId: serverTask.taskId,
           taskType: serverTask.taskType as "daily" | "weekly" | "milestone",
@@ -335,7 +322,13 @@ export async function loadAndMergeTaskProgress(telegramId: number): Promise<void
         const mergedCompleted = localTask.isCompleted || serverTask.isCompleted;
         const mergedClaimed = localTask.claimed || serverTask.isClaimed;
         
+        // CRITICAL: For timestamps, prefer local if it exists, otherwise use server
+        // This prevents old server timestamps from overwriting fresh local state
+        const mergedCompletedAt = mergedCompleted ? (localTask.completedAt || serverTask.completedAt) : null;
+        const mergedClaimedAt = mergedClaimed ? (localTask.claimedAt || serverTask.claimedAt) : null;
+        
         console.log(`   Merged: progress=${mergedProgress}, completed=${mergedCompleted}, claimed=${mergedClaimed}`);
+        console.log(`   Merged timestamps: completedAt=${mergedCompletedAt}, claimedAt=${mergedClaimedAt}`);
         
         if (mergedProgress !== localTask.currentProgress || 
             mergedCompleted !== localTask.isCompleted || 
@@ -346,8 +339,8 @@ export async function loadAndMergeTaskProgress(telegramId: number): Promise<void
             currentProgress: mergedProgress,
             isCompleted: mergedCompleted,
             claimed: mergedClaimed,
-            completedAt: mergedCompleted ? (localTask.completedAt || serverTask.completedAt) : null,
-            claimedAt: mergedClaimed ? (localTask.claimedAt || serverTask.claimedAt) : null
+            completedAt: mergedCompletedAt,
+            claimedAt: mergedClaimedAt
           });
           mergedCount++;
           console.log(`✅ [TASKS-SYNC] Updated task: ${serverTask.taskId}`);
