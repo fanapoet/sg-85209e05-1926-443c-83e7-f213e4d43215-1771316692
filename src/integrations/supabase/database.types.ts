@@ -1,4 +1,4 @@
- 
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 export type Json =
   | string
   | number
@@ -781,6 +781,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_task_state: {
+        Row: {
+          created_at: string
+          id: string
+          last_daily_reset_date: string
+          last_weekly_reset_date: string
+          telegram_id: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_daily_reset_date?: string
+          last_weekly_reset_date?: string
+          telegram_id: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_daily_reset_date?: string
+          last_weekly_reset_date?: string
+          telegram_id?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_task_state_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
