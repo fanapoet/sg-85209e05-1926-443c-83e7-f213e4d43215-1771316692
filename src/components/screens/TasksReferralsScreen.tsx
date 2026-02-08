@@ -176,7 +176,7 @@ export function TasksReferralsScreen() {
 
     // Daily Check-in (Auto-complete on load)
     const checkInTask = taskProgress.get("daily_check_in");
-    if (!checkInTask || (!checkInTask.isCompleted && !checkInTask.claimed)) {
+    if (!checkInTask || (!checkInTask.isCompleted && !checkInTask.isClaimed)) {
       console.log("[Tasks] Auto-completing daily check-in");
       const updated = updateTaskProgress("daily_check_in", "daily", 1, 1);
       setTaskProgress(prev => new Map(prev).set("daily_check_in", updated));
@@ -228,7 +228,7 @@ export function TasksReferralsScreen() {
   const isClaimed = (task: Task) => {
     // Check local sync state first
     const progress = taskProgress.get(task.id);
-    if (progress?.claimed) return true;
+    if (progress?.isClaimed) return true;
 
     // Fallback to legacy claimed tasks (migration support)
     const claimedTime = claimedTasks[task.id];
