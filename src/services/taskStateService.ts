@@ -150,7 +150,7 @@ export async function resetTaskProgress(recordId: string, newResetAt: string) {
   try {
     console.log("🔄 [TASK-RESET] Resetting record:", recordId, "to reset_at:", newResetAt);
     
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("user_task_progress")
       .update({
         reset_at: newResetAt,
@@ -201,7 +201,7 @@ export async function resetOrUpdateTaskForNewPeriod(
     const currentResetAt = calculateResetAt(taskType);
     console.log("🔵 [TASK-RESET] Current period:", currentResetAt);
     
-    const { data: profile, error: profileError } = await supabase
+    const { data: profile, error: profileError } = await (supabase as any)
       .from("profiles")
       .select("id")
       .eq("telegram_id", telegramId)
@@ -212,7 +212,7 @@ export async function resetOrUpdateTaskForNewPeriod(
       return { success: false, error: "Profile not found" };
     }
     
-    const { data: existingRecords, error: fetchError } = await supabase
+    const { data: existingRecords, error: fetchError } = await (supabase as any)
       .from("user_task_progress")
       .select("*")
       .eq("telegram_id", telegramId)
@@ -245,7 +245,7 @@ export async function resetOrUpdateTaskForNewPeriod(
     
     console.log("🔄 [TASK-RESET] Task needs reset - updating record");
     
-    const { error: updateError } = await supabase
+    const { error: updateError } = await (supabase as any)
       .from("user_task_progress")
       .update({
         reset_at: currentResetAt,
