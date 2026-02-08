@@ -35,7 +35,7 @@ interface Task {
   title: string;
   description: string;
   reward: { type: "BZ" | "BB" | "XP"; amount: number };
-  type: "daily" | "weekly" | "milestone";
+  type: "daily" | "weekly" | "progressive";
   target: number;
   current?: number;
   action?: string;
@@ -257,7 +257,7 @@ export function TasksReferralsScreen() {
       return days < 7;
     }
 
-    // Milestone tasks: claimed once forever
+    // Progressive tasks: claimed once forever
     return true;
   };
 
@@ -421,7 +421,7 @@ export function TasksReferralsScreen() {
       title: "Master Tapper",
       description: "Reach 10,000 lifetime taps",
       reward: { type: "BB", amount: 1.0 },
-      type: "milestone",
+      type: "progressive",
       target: 10000,
       current: totalTaps
     },
@@ -430,7 +430,7 @@ export function TasksReferralsScreen() {
       title: "Network Master",
       description: "Reach 25 total referrals",
       reward: { type: "BB", amount: 5.0 },
-      type: "milestone",
+      type: "progressive",
       target: 25,
       current: referralCount
     }
@@ -519,7 +519,7 @@ export function TasksReferralsScreen() {
       
       // Initialize tasks in localStorage
       tasks.forEach(task => {
-        initializeTask(task.id, task.type, task.target);
+        initializeTask(task.id, task.type);
       });
       
       // Load current progress from localStorage
