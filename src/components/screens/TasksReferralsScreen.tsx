@@ -177,7 +177,7 @@ export function TasksReferralsScreen() {
     const updateAndSync = (taskId: string, current: number, target: number) => {
       const isCompleted = current >= target;
       
-      // Update service (Only 2 arguments now)
+      // Update service - Now takes only 2 arguments: taskId and updates object
       updateTaskProgress(taskId, { 
         currentProgress: current,
         isCompleted: isCompleted
@@ -231,7 +231,7 @@ export function TasksReferralsScreen() {
       updateAndSync("milestone_invite", referralCount, 25);
     }
 
-  }, [todayTaps, hasClaimedIdleToday, totalUpgrades, totalConversions, referralCount, totalTaps, isInitialized]);
+  }, [todayTaps, hasClaimedIdleToday, totalUpgrades, totalConversions, referralCount, totalTaps, isInitialized, taskProgress]);
 
   const isClaimed = (task: Task) => {
     // Check local sync state first
