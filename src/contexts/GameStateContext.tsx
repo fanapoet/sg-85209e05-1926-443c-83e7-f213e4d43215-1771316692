@@ -326,6 +326,12 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           setOwnedNFTs(merged);
           safeSetItem("ownedNFTs", merged);
         }
+
+        // Load tasks from server and merge with local
+        console.log("📋 [GameState] Loading tasks from server...");
+        const { loadTasksFromServer } = await import("@/services/tasksService");
+        await loadTasksFromServer(authResult.profile.id);
+        console.log("✅ [GameState] Tasks loaded and merged");
       }
     };
 
