@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 /**
  * Task State Service
  * Handles syncing task progress to/from database
- * FIXES: Proper UPDATE logic to prevent duplicate records
+ * FIXES: Proper UPDATE logic to prevent duplicate records + Auto-reset outdated tasks
  */
 
 export interface TaskProgressData {
@@ -182,6 +182,100 @@ export async function resetTaskProgress(recordId: string, newResetAt: string) {
 }
 
 /**
+ * Reset or update a task for a new period
+ * Finds the most recent record and updates it if it's from an old period
+ */
+export async function resetOrUpdateTaskForNewPeriod(
+  telegramId: number,
+  taskId: string,
+  taskType: "daily" | "weekly" | "milestone"
+) {
+  try {
+    console.log("🔄 [TASK-RESET] Checking task for reset:", { taskId, taskType });
+    
+    if (taskType === "milestone") {
+      console.log("ℹ️ [TASK-RESET] Milestone task - no reset needed");
+      return { success: true, needsReset: false };
+    }
+    
+    const currentResetAt = calculateResetAt(taskType);
+    console.log("🔵 [TASK-RESET] Current period:", currentResetAt);
+    
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", telegramId)
+      .maybeSingle();
+    
+    if (profileError || !profile) {
+      console.error("❌ [TASK-RESET] Profile lookup failed:", profileError);
+      return { success: false, error: "Profile not found" };
+    }
+    
+    const { data: existingRecords, error: fetchError } = await supabase
+      .from("user_task_progress")
+      .select("*")
+      .eq("telegram_id", telegramId)
+      .eq("task_id", taskId)
+      .order("reset_at", { ascending: false })
+      .limit(1);
+    
+    if (fetchError) {
+      console.error("❌ [TASK-RESET] Fetch error:", fetchError);
+      return { success: false, error: fetchError.message };
+    }
+    
+    if (!existingRecords || existingRecords.length === 0) {
+      console.log("ℹ️ [TASK-RESET] No existing record - will create new");
+      return { success: true, needsReset: false };
+    }
+    
+    const mostRecent = existingRecords[0];
+    console.log("🔵 [TASK-RESET] Most recent record:", { 
+      reset_at: mostRecent.reset_at, 
+      is_completed: mostRecent.is_completed 
+    });
+    
+    const needsReset = shouldResetTask(mostRecent.reset_at, taskType);
+    
+    if (!needsReset) {
+      console.log("ℹ️ [TASK-RESET] Task already in current period");
+      return { success: true, needsReset: false };
+    }
+    
+    console.log("🔄 [TASK-RESET] Task needs reset - updating record");
+    
+    const { error: updateError } = await supabase
+      .from("user_task_progress")
+      .update({
+        reset_at: currentResetAt,
+        current_progress: 0,
+        is_completed: false,
+        is_claimed: false,
+        completed_at: null,
+        claimed_at: null,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", mostRecent.id);
+    
+    if (updateError) {
+      console.error("❌ [TASK-RESET] Update failed:", updateError);
+      return { success: false, error: updateError.message };
+    }
+    
+    console.log("✅ [TASK-RESET] Task reset successful");
+    return { success: true, needsReset: true };
+    
+  } catch (error) {
+    console.error("❌ [TASK-RESET] Exception:", error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error" 
+    };
+  }
+}
+
+/**
  * Upsert single task progress
  * USES EXACT BUILD AUTHENTICATION PATTERN
  */
@@ -259,6 +353,7 @@ export async function upsertTaskProgress(data: TaskProgressData) {
 
 /**
  * Batch upsert multiple task progress records
+ * AUTO-RESETS OUTDATED TASKS BEFORE UPSERTING
  */
 export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
   try {
@@ -291,7 +386,30 @@ export async function batchUpsertTaskProgress(records: TaskProgressData[]) {
 
     console.log("🔵 [TASKS-SYNC] DB Batch: Found profile UUID:", profile.id);
 
-    const payloads = records.map(data => ({
+    // AUTO-RESET LOGIC: Check each task and reset if outdated
+    const processedRecords = records.map(data => {
+      const currentResetAt = calculateResetAt(data.taskType);
+      const needsReset = shouldResetTask(data.resetAt, data.taskType);
+      
+      if (needsReset) {
+        console.log("🔄 [TASK-RESET] Auto-resetting task:", data.taskId, "from", data.resetAt, "to", currentResetAt);
+        
+        // Reset the task data
+        return {
+          ...data,
+          resetAt: currentResetAt,
+          currentProgress: 0,
+          isCompleted: false,
+          claimed: false,
+          completedAt: null,
+          claimedAt: null
+        };
+      }
+      
+      return data;
+    });
+
+    const payloads = processedRecords.map(data => ({
       telegram_id: tgUser.id,
       user_id: profile.id,
       task_id: data.taskId,
