@@ -177,7 +177,7 @@ export function TasksReferralsScreen() {
     const updateAndSync = (taskId: string, current: number, target: number) => {
       const isCompleted = current >= target;
       
-      // Update service
+      // Update service (NEW: Only 2 arguments)
       updateTaskProgress(taskId, { 
         currentProgress: current,
         isCompleted: isCompleted
