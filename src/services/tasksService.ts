@@ -1,23 +1,11 @@
 /**
  * Tasks Service - LOCAL-FIRST with Background Sync
- * Orchestrates TaskState (resets) and TaskData (completions)
- * Matches Rewards pattern exactly
+ * Single source of truth: localStorage
+ * Background sync to user_task_state table
+ * Matches Rewards/Boost architecture exactly
  */
 
-import { 
-  getTaskState, 
-  upsertTaskState, 
-  updateDailyResetDate, 
-  updateWeeklyResetDate,
-  type TaskStateRecord 
-} from "./taskStateService";
-
-import { 
-  loadCompletedTasksFromDB, 
-  syncCompletedTasksToDB,
-  mergeCompletedTasks,
-  type CompletedTask
-} from "./taskDataService";
+import { supabase } from "@/integrations/supabase/client";
 
 export interface TaskProgressData {
   taskId: string;
@@ -33,8 +21,7 @@ export interface TaskProgressData {
 const STORAGE_KEY = "bunergy_task_progress";
 
 /**
- * Calculate reset date string (YYYY-MM-DD)
- * Uses LOCAL time to match user's day
+ * Calculate reset date string (YYYY-MM-DD for daily, YYYY-WXX for weekly)
  */
 export function getResetDateString(taskType: "daily" | "weekly" | "milestone"): string {
   if (taskType === "milestone") return "NEVER";
@@ -74,16 +61,20 @@ function getLocalTaskProgress(): Map<string, TaskProgressData> {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) {
+      console.log("📋 [Tasks-Local] No saved tasks, starting fresh");
       return new Map();
     }
     
     const data = JSON.parse(stored);
     const map = new Map<string, TaskProgressData>();
+    let resetCount = 0;
     
     Object.entries(data).forEach(([key, value]: [string, any]) => {
       const task = value as TaskProgressData;
       
+      // Auto-reset if period changed
       if (shouldResetTask(task.taskType, task.resetAt)) {
+        console.log(`🔄 [Tasks-Local] Auto-resetting ${key} (${task.taskType}): ${task.resetAt} → ${getResetDateString(task.taskType)}`);
         map.set(key, {
           taskId: task.taskId,
           taskType: task.taskType,
@@ -94,14 +85,20 @@ function getLocalTaskProgress(): Map<string, TaskProgressData> {
           claimedAt: null,
           resetAt: getResetDateString(task.taskType)
         });
+        resetCount++;
       } else {
         map.set(key, task);
       }
     });
     
+    if (resetCount > 0) {
+      console.log(`✅ [Tasks-Local] Auto-reset ${resetCount} tasks on load`);
+    }
+    
+    console.log(`📋 [Tasks-Local] Loaded ${map.size} tasks from localStorage`);
     return map;
   } catch (error) {
-    console.error("❌ [Tasks] Failed to load from localStorage:", error);
+    console.error("❌ [Tasks-Local] Failed to load:", error);
     return new Map();
   }
 }
@@ -116,13 +113,14 @@ function saveLocalTaskProgress(progress: Map<string, TaskProgressData>): void {
       obj[key] = value;
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
+    console.log(`💾 [Tasks-Local] Saved ${progress.size} tasks to localStorage`);
   } catch (error) {
-    console.error("❌ [Tasks] Failed to save to localStorage:", error);
+    console.error("❌ [Tasks-Local] Failed to save:", error);
   }
 }
 
 /**
- * Initialize task if not exists
+ * Initialize task if not exists (Local-First)
  */
 export function initializeTask(
   taskId: string,
@@ -133,6 +131,8 @@ export function initializeTask(
   
   if (!progress.has(taskId)) {
     const resetAt = getResetDateString(taskType);
+    
+    console.log(`🆕 [Tasks-Local] Initializing task: ${taskId} (${taskType})`);
     
     progress.set(taskId, {
       taskId,
@@ -149,7 +149,7 @@ export function initializeTask(
 }
 
 /**
- * Update task progress (Local First)
+ * Update task progress (Local-First)
  */
 export function updateTaskProgress(
   taskId: string,
@@ -162,7 +162,9 @@ export function updateTaskProgress(
   
   const resetAt = getResetDateString(taskType);
   
+  // Don't update if already claimed in current period
   if (existing?.isClaimed && existing.resetAt === resetAt) {
+    console.log(`⏭️ [Tasks-Local] Task ${taskId} already claimed, skipping update`);
     return existing;
   }
 
@@ -179,6 +181,8 @@ export function updateTaskProgress(
     resetAt
   };
   
+  console.log(`📝 [Tasks-Local] Updated ${taskId}: progress=${currentProgress}/${target}, completed=${isCompleted}`);
+  
   progress.set(taskId, updated);
   saveLocalTaskProgress(progress);
   
@@ -186,7 +190,7 @@ export function updateTaskProgress(
 }
 
 /**
- * Claim task reward
+ * Claim task reward (Local-First)
  */
 export function claimTaskReward(
   taskId: string,
@@ -196,6 +200,7 @@ export function claimTaskReward(
   const existing = progress.get(taskId);
   
   if (!existing || !existing.isCompleted || existing.isClaimed) {
+    console.log(`❌ [Tasks-Local] Cannot claim ${taskId}: completed=${existing?.isCompleted}, claimed=${existing?.isClaimed}`);
     return null;
   }
   
@@ -204,6 +209,8 @@ export function claimTaskReward(
     isClaimed: true,
     claimedAt: new Date().toISOString()
   };
+  
+  console.log(`🎁 [Tasks-Local] Claimed reward for ${taskId}`);
   
   progress.set(taskId, updated);
   saveLocalTaskProgress(progress);
@@ -228,138 +235,186 @@ export function getAllTaskProgress(): TaskProgressData[] {
 }
 
 /**
- * MAIN SYNC FUNCTION
- * Orchestrates the full sync process:
- * 1. Check/Update Reset Dates (TaskState)
- * 2. Sync Completed Tasks (TaskData)
+ * BACKGROUND SYNC - Sync tasks to server (user_task_state table)
+ * Uses Math.max() logic for timestamps (local wins if newer)
  */
 export async function syncTasksWithServer(telegramId: number, userId: string): Promise<void> {
   try {
-    console.log("🔄 [TASKS-SYNC] Starting sync for:", telegramId);
+    console.log("🔄 [Tasks-Sync] Starting background sync...");
+    console.log(`🔄 [Tasks-Sync] User: telegramId=${telegramId}, userId=${userId}`);
     
     const localTasks = getLocalTaskProgress();
-    const currentDailyReset = getResetDateString("daily");
-    const currentWeeklyReset = getResetDateString("weekly");
+    console.log(`📤 [Tasks-Sync] Local tasks to sync: ${localTasks.size}`);
     
-    const [serverState, serverCompletions] = await Promise.all([
-      getTaskState(telegramId),
-      loadCompletedTasksFromDB(userId)
-    ]);
-    
-    let needsDailyReset = false;
-    let needsWeeklyReset = false;
-    
-    if (!serverState || serverState.lastDailyResetDate !== currentDailyReset) {
-      console.log("📅 [TASKS-SYNC] New daily period detected. Server:", serverState?.lastDailyResetDate, "Local:", currentDailyReset);
-      needsDailyReset = true;
-      await updateDailyResetDate(telegramId, currentDailyReset);
+    if (localTasks.size === 0) {
+      console.log("⏭️ [Tasks-Sync] No local tasks to sync");
+      return;
     }
-    
-    if (!serverState || serverState.lastWeeklyResetDate !== currentWeeklyReset) {
-      console.log("📅 [TASKS-SYNC] New weekly period detected. Server:", serverState?.lastWeeklyResetDate, "Local:", currentWeeklyReset);
-      needsWeeklyReset = true;
-      await updateWeeklyResetDate(telegramId, currentWeeklyReset);
+
+    // Fetch server state
+    const { data: serverTasks, error: fetchError } = await supabase
+      .from("user_task_state")
+      .select("*")
+      .eq("user_id", userId);
+
+    if (fetchError) {
+      console.error("❌ [Tasks-Sync] Failed to fetch server tasks:", fetchError);
+      return;
     }
+
+    console.log(`📥 [Tasks-Sync] Server tasks fetched: ${serverTasks?.length || 0}`);
+
+    // Build upsert payload (local-first, Math.max for timestamps)
+    const upsertData: any[] = [];
     
-    if (needsDailyReset || needsWeeklyReset) {
-      console.log("🔄 [TASKS-SYNC] Applying resets to local tasks...");
-      let resetCount = 0;
+    localTasks.forEach((localTask, taskId) => {
+      const serverTask = serverTasks?.find(t => t.task_id === taskId && t.reset_at === localTask.resetAt);
       
-      localTasks.forEach((task, taskId) => {
-        let shouldReset = false;
+      if (!serverTask) {
+        // New task - insert local state
+        console.log(`🆕 [Tasks-Sync] New task for server: ${taskId}`);
+        upsertData.push({
+          user_id: userId,
+          telegram_id: telegramId,
+          task_id: localTask.taskId,
+          task_type: localTask.taskType,
+          current_progress: localTask.currentProgress,
+          is_completed: localTask.isCompleted,
+          is_claimed: localTask.isClaimed,
+          completed_at: localTask.completedAt,
+          claimed_at: localTask.claimedAt,
+          reset_at: localTask.resetAt,
+          updated_at: new Date().toISOString()
+        });
+      } else {
+        // Existing task - use Math.max() for progress, OR latest timestamp for claims
+        const localUpdated = localTask.claimedAt || localTask.completedAt || new Date(0).toISOString();
+        const serverUpdated = serverTask.claimed_at || serverTask.completed_at || new Date(0).toISOString();
         
-        if (needsDailyReset && task.taskType === "daily" && task.resetAt !== currentDailyReset) {
-          shouldReset = true;
-        }
+        const useLocal = new Date(localUpdated) > new Date(serverUpdated);
         
-        if (needsWeeklyReset && task.taskType === "weekly" && task.resetAt !== currentWeeklyReset) {
-          shouldReset = true;
-        }
-        
-        if (shouldReset) {
-          console.log(`🔄 [TASKS-SYNC] Resetting task ${taskId} (${task.taskType})`);
-          localTasks.set(taskId, {
-            ...task,
-            currentProgress: 0,
-            isCompleted: false,
-            isClaimed: false,
-            completedAt: null,
-            claimedAt: null,
-            resetAt: task.taskType === "daily" ? currentDailyReset : currentWeeklyReset
+        if (useLocal) {
+          console.log(`🔄 [Tasks-Sync] Local newer for ${taskId}, syncing to server`);
+          upsertData.push({
+            user_id: userId,
+            telegram_id: telegramId,
+            task_id: localTask.taskId,
+            task_type: localTask.taskType,
+            current_progress: Math.max(localTask.currentProgress, serverTask.current_progress),
+            is_completed: localTask.isCompleted || serverTask.is_completed,
+            is_claimed: localTask.isClaimed || serverTask.is_claimed,
+            completed_at: localTask.completedAt || serverTask.completed_at,
+            claimed_at: localTask.claimedAt || serverTask.claimed_at,
+            reset_at: localTask.resetAt,
+            updated_at: new Date().toISOString()
           });
-          resetCount++;
+        } else {
+          console.log(`⏭️ [Tasks-Sync] Server newer or equal for ${taskId}, skipping`);
         }
-      });
-      
-      if (resetCount > 0) {
-        saveLocalTaskProgress(localTasks);
-        console.log(`✅ [TASKS-SYNC] Reset ${resetCount} tasks`);
       }
-    }
-    
-    if (!serverState) {
-      await upsertTaskState({
-        telegramId,
-        userId,
-        lastDailyResetDate: currentDailyReset,
-        lastWeeklyResetDate: currentWeeklyReset
-      });
+    });
+
+    if (upsertData.length === 0) {
+      console.log("⏭️ [Tasks-Sync] No changes to sync");
+      return;
     }
 
-    if (serverCompletions && serverCompletions.length > 0) {
-      let localUpdated = false;
-      
-      serverCompletions.forEach(comp => {
-        const local = localTasks.get(comp.task_id);
-        
-        if (local && local.taskType === "milestone") {
-          if (!local.isCompleted || !local.isClaimed) {
-            localTasks.set(comp.task_id, {
-              ...local,
-              isCompleted: true,
-              isClaimed: true,
-              completedAt: comp.completed_at || new Date().toISOString(),
-              claimedAt: comp.claimed_at || new Date().toISOString()
-            });
-            localUpdated = true;
-          }
-        }
+    // Upsert to server
+    console.log(`📤 [Tasks-Sync] Upserting ${upsertData.length} tasks to server...`);
+    
+    const { error: upsertError } = await supabase
+      .from("user_task_state")
+      .upsert(upsertData, {
+        onConflict: "user_id,task_id,reset_at"
       });
-      
-      if (localUpdated) {
-        saveLocalTaskProgress(localTasks);
-        console.log("✅ [TASKS-SYNC] Merged server completions to local");
-      }
+
+    if (upsertError) {
+      console.error("❌ [Tasks-Sync] Upsert failed:", upsertError);
+      console.error("❌ [Tasks-Sync] Error details:", JSON.stringify(upsertError, null, 2));
+      return;
     }
 
-    const allTasksArray = Array.from(localTasks.values());
-    const tasksToSync = allTasksArray.filter(t => t.isCompleted && t.isClaimed);
-    
-    if (tasksToSync.length > 0) {
-      console.log(`📤 [TASKS-SYNC] Syncing ${tasksToSync.length} claimed tasks to server...`);
-      
-      const syncPayload: CompletedTask[] = tasksToSync.map(t => ({
-        task_id: t.taskId,
-        current_progress: t.currentProgress,
-        is_completed: t.isCompleted,
-        completed_at: t.completedAt,
-        is_claimed: t.isClaimed,
-        claimed_at: t.claimedAt,
-        reset_at: t.resetAt
-      }));
-      
-      const syncResult = await syncCompletedTasksToDB(userId, syncPayload);
-      
-      if (!syncResult.success) {
-        console.error("❌ [TASKS-SYNC] Failed to sync tasks:", syncResult.error);
-      }
-    } else {
-      console.log("⏭️ [TASKS-SYNC] No claimed tasks to sync");
-    }
-    
-    console.log("✅ [TASKS-SYNC] Sync complete");
+    console.log("✅ [Tasks-Sync] Successfully synced to server");
 
   } catch (error) {
-    console.error("❌ [TASKS-SYNC] Failed:", error);
+    console.error("❌ [Tasks-Sync] Exception:", error);
+  }
+}
+
+/**
+ * Load tasks from server and merge with local (on app start)
+ */
+export async function loadTasksFromServer(userId: string): Promise<void> {
+  try {
+    console.log("📥 [Tasks-Load] Loading tasks from server...");
+    
+    const { data: serverTasks, error } = await supabase
+      .from("user_task_state")
+      .select("*")
+      .eq("user_id", userId);
+
+    if (error) {
+      console.error("❌ [Tasks-Load] Failed to load:", error);
+      return;
+    }
+
+    if (!serverTasks || serverTasks.length === 0) {
+      console.log("ℹ️ [Tasks-Load] No server tasks found");
+      return;
+    }
+
+    console.log(`📥 [Tasks-Load] Loaded ${serverTasks.length} tasks from server`);
+
+    const localTasks = getLocalTaskProgress();
+    let mergeCount = 0;
+
+    serverTasks.forEach(serverTask => {
+      const localTask = localTasks.get(serverTask.task_id);
+      
+      if (!localTask) {
+        // Server has task we don't have locally - add it
+        console.log(`🆕 [Tasks-Load] Adding server task to local: ${serverTask.task_id}`);
+        localTasks.set(serverTask.task_id, {
+          taskId: serverTask.task_id,
+          taskType: serverTask.task_type as "daily" | "weekly" | "milestone",
+          currentProgress: serverTask.current_progress,
+          isCompleted: serverTask.is_completed,
+          isClaimed: serverTask.is_claimed,
+          completedAt: serverTask.completed_at,
+          claimedAt: serverTask.claimed_at,
+          resetAt: serverTask.reset_at
+        });
+        mergeCount++;
+      } else {
+        // Both exist - use Math.max() logic
+        const localUpdated = localTask.claimedAt || localTask.completedAt || new Date(0).toISOString();
+        const serverUpdated = serverTask.claimed_at || serverTask.completed_at || new Date(0).toISOString();
+        
+        if (new Date(serverUpdated) > new Date(localUpdated)) {
+          console.log(`🔄 [Tasks-Load] Server newer for ${serverTask.task_id}, updating local`);
+          localTasks.set(serverTask.task_id, {
+            taskId: serverTask.task_id,
+            taskType: serverTask.task_type as "daily" | "weekly" | "milestone",
+            currentProgress: Math.max(serverTask.current_progress, localTask.currentProgress),
+            isCompleted: serverTask.is_completed || localTask.isCompleted,
+            isClaimed: serverTask.is_claimed || localTask.isClaimed,
+            completedAt: serverTask.completed_at || localTask.completedAt,
+            claimedAt: serverTask.claimed_at || localTask.claimedAt,
+            resetAt: serverTask.reset_at
+          });
+          mergeCount++;
+        }
+      }
+    });
+
+    if (mergeCount > 0) {
+      saveLocalTaskProgress(localTasks);
+      console.log(`✅ [Tasks-Load] Merged ${mergeCount} tasks from server`);
+    } else {
+      console.log("⏭️ [Tasks-Load] No merge needed, local is up to date");
+    }
+
+  } catch (error) {
+    console.error("❌ [Tasks-Load] Exception:", error);
   }
 }
