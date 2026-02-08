@@ -118,6 +118,7 @@ export async function syncCompletedTasksToDB(
 
     if (error) {
       console.error("❌ [TASK-DATA-SYNC] Sync failed:", error);
+      console.error("❌ [TASK-DATA-SYNC] Error details:", JSON.stringify(error, null, 2));
       return { success: false, error: error.message };
     }
 

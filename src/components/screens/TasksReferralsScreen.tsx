@@ -24,7 +24,7 @@ import {
   initializeTask, 
   getTaskProgress, 
   getAllTaskProgress,
-  loadAndMergeTaskProgress, 
+  syncTasksWithServer,
   updateTaskProgress,
   claimTaskReward,
   type TaskProgressData 
@@ -532,7 +532,7 @@ export function TasksReferralsScreen() {
         try {
           // Now sync with database (Public RLS allows this without session)
           console.log(`[Tasks] Starting DB sync for user ${tgUser.id}`);
-          await loadAndMergeTaskProgress(tgUser.id);
+          await syncTasksWithServer(tgUser.id, tgUser.id);
           console.log("✅ [Tasks] DB merge finished, refreshing UI...");
           
           // Reload progress after merge

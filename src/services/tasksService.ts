@@ -14,8 +14,8 @@ import {
 
 import { 
   loadCompletedTasksFromDB, 
-  syncCompletedTasksToDB, 
-  type mergeCompletedTasks 
+  syncCompletedTasksToDB,
+  mergeCompletedTasks
 } from "./taskDataService";
 
 export interface TaskProgressData {
@@ -261,11 +261,13 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
     
     // 4. Handle State Resets (Server vs Local)
     let needsStateUpdate = false;
+    let needsDailyReset = false;
+    let needsWeeklyReset = false;
     
     // Check Daily Reset
     if (!serverState || serverState.lastDailyResetDate !== currentDailyReset) {
       console.log("📅 [TASKS-SYNC] New daily period detected. Server:", serverState?.lastDailyResetDate, "Local:", currentDailyReset);
-      // We are in a new day relative to server. Update server.
+      needsDailyReset = true;
       await updateDailyResetDate(telegramId, currentDailyReset);
       needsStateUpdate = true;
     }
@@ -273,8 +275,45 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
     // Check Weekly Reset
     if (!serverState || serverState.lastWeeklyResetDate !== currentWeeklyReset) {
       console.log("📅 [TASKS-SYNC] New weekly period detected. Server:", serverState?.lastWeeklyResetDate, "Local:", currentWeeklyReset);
+      needsWeeklyReset = true;
       await updateWeeklyResetDate(telegramId, currentWeeklyReset);
       needsStateUpdate = true;
+    }
+    
+    // Apply resets to local tasks IMMEDIATELY
+    if (needsDailyReset || needsWeeklyReset) {
+      console.log("🔄 [TASKS-SYNC] Applying resets to local tasks...");
+      let resetCount = 0;
+      
+      localTasks.forEach((task, taskId) => {
+        let shouldReset = false;
+        
+        if (needsDailyReset && task.taskType === "daily" && task.resetAt !== currentDailyReset) {
+          shouldReset = true;
+        }
+        
+        if (needsWeeklyReset && task.taskType === "weekly" && task.resetAt !== currentWeeklyReset) {
+          shouldReset = true;
+        }
+        
+        if (shouldReset) {
+          localTasks.set(taskId, {
+            ...task,
+            currentProgress: 0,
+            isCompleted: false,
+            claimed: false,
+            completedAt: null,
+            claimedAt: null,
+            resetAt: task.taskType === "daily" ? currentDailyReset : currentWeeklyReset
+          });
+          resetCount++;
+        }
+      });
+      
+      if (resetCount > 0) {
+        saveLocalTaskProgress(localTasks);
+        console.log(`✅ [TASKS-SYNC] Reset ${resetCount} tasks`);
+      }
     }
     
     // If server state was missing, create it
