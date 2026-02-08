@@ -233,7 +233,7 @@ export function getAllTaskProgress(): TaskProgressData[] {
  * 1. Check/Update Reset Dates (TaskState)
  * 2. Sync Completed Tasks (TaskData)
  */
-export async function syncTasksWithServer(telegramId: string, userId: string): Promise<void> {
+export async function syncTasksWithServer(telegramId: number, userId: string): Promise<void> {
   try {
     console.log("🔄 [TASKS-SYNC] Starting sync for:", telegramId);
     
