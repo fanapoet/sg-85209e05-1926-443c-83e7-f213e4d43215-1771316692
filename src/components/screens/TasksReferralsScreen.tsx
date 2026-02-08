@@ -177,7 +177,7 @@ export function TasksReferralsScreen() {
     const updateAndSync = (taskId: string, current: number, target: number) => {
       const isCompleted = current >= target;
       
-      // Update service - Now takes only 2 arguments: taskId and updates object
+      // Update service - Takes only 2 arguments: taskId and updates object
       updateTaskProgress(taskId, { 
         currentProgress: current,
         isCompleted: isCompleted
@@ -248,13 +248,13 @@ export function TasksReferralsScreen() {
     // Daily tasks: NOT claimed if more than 24 hours passed
     if (task.type === "daily") {
       const hours = timeSinceClaim / (1000 * 60 * 60);
-      return hours < 24; // ✅ If >24 hours, returns false = available again
+      return hours < 24;
     }
 
     // Weekly tasks: NOT claimed if more than 7 days passed
     if (task.type === "weekly") {
       const days = timeSinceClaim / (1000 * 60 * 60 * 24);
-      return days < 7; // ✅ If >7 days, returns false = available again
+      return days < 7;
     }
 
     // Milestone tasks: claimed once forever
@@ -451,7 +451,7 @@ export function TasksReferralsScreen() {
     // Use synced progress if available, otherwise fallback to context/props
     const syncedData = taskProgress.get(task.id);
     const currentProgress = syncedData ? syncedData.currentProgress : (task.current || 0);
-    const claimed = isClaimed(task); // Checks both synced and legacy state
+    const claimed = isClaimed(task);
     
     const progress = Math.min(currentProgress, task.target);
     const progressPercent = (progress / task.target) * 100;
