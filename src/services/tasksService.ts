@@ -336,8 +336,8 @@ export async function loadAndMergeTaskProgress(telegramId: number): Promise<void
       const localTask = localProgress.get(serverTask.taskId);
       
       console.log(`🔵 [TASKS-SYNC] Merging task: ${serverTask.taskId}`);
-      console.log(`   Local: ${localTask ? `progress=${localTask.currentProgress}, claimed=${localTask.claimed}, claimedAt=${localTask.claimedAt}` : 'NOT FOUND'}`);
-      console.log(`   Server: progress=${serverTask.currentProgress}, claimed=${serverTask.isClaimed}, claimedAt=${serverTask.claimedAt}`);
+      console.log(`   Local: ${localTask ? `progress=${localTask.currentProgress}, claimed=${localTask.claimed}, claimedAt=${localTask.claimedAt}, resetAt=${localTask.resetAt}` : 'NOT FOUND'}`);
+      console.log(`   Server: progress=${serverTask.currentProgress}, claimed=${serverTask.isClaimed}, claimedAt=${serverTask.claimedAt}, resetAt=${serverTask.resetAt}`);
       
       if (!localTask) {
         // Server has data we don't have locally - use server data
@@ -354,7 +354,38 @@ export async function loadAndMergeTaskProgress(telegramId: number): Promise<void
         mergedCount++;
         console.log(`✅ [TASKS-SYNC] Added from server: ${serverTask.taskId}`);
       } else {
-        // Merge: use Math.max for progress, keep claimed status if either is true
+        // CRITICAL FIX: Check if reset periods match
+        // If local has been reset (newer resetAt), DON'T merge old server completion states
+        const localResetIsNewer = localTask.resetAt > serverTask.resetAt;
+        const serverResetIsNewer = serverTask.resetAt > localTask.resetAt;
+        
+        console.log(`   Reset comparison: local=${localTask.resetAt}, server=${serverTask.resetAt}, localNewer=${localResetIsNewer}, serverNewer=${serverResetIsNewer}`);
+        
+        if (localResetIsNewer) {
+          // Local task has been reset to a newer period → keep local (already reset)
+          console.log(`ℹ️ [TASKS-SYNC] Local is newer period, keeping local reset state: ${serverTask.taskId}`);
+          // Don't update - local reset state is authoritative
+          return;
+        }
+        
+        if (serverResetIsNewer) {
+          // Server has newer period → use server data entirely
+          localProgress.set(serverTask.taskId, {
+            taskId: serverTask.taskId,
+            taskType: serverTask.taskType as "daily" | "weekly" | "milestone",
+            currentProgress: serverTask.currentProgress,
+            isCompleted: serverTask.isCompleted,
+            claimed: serverTask.isClaimed,
+            completedAt: serverTask.completedAt,
+            claimedAt: serverTask.claimedAt,
+            resetAt: serverTask.resetAt
+          });
+          mergedCount++;
+          console.log(`✅ [TASKS-SYNC] Server has newer period, using server state: ${serverTask.taskId}`);
+          return;
+        }
+        
+        // Same reset period → merge using Math.max for progress, OR for completion
         const mergedProgress = Math.max(localTask.currentProgress, serverTask.currentProgress);
         const mergedCompleted = localTask.isCompleted || serverTask.isCompleted;
         const mergedClaimed = localTask.claimed || serverTask.isClaimed;
