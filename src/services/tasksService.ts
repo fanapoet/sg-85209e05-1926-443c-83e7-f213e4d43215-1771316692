@@ -7,6 +7,23 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
+// Manually define the DB row type since generated types are out of sync
+interface UserTaskStateRow {
+  id: string;
+  user_id: string;
+  telegram_id: number;
+  task_id: string;
+  task_type: string;
+  current_progress: number;
+  is_completed: boolean;
+  is_claimed: boolean;
+  completed_at: string | null;
+  claimed_at: string | null;
+  reset_at: string;
+  updated_at: string;
+  created_at: string;
+}
+
 export interface TaskProgressData {
   taskId: string;
   taskType: "daily" | "weekly" | "milestone";
@@ -252,7 +269,7 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
     }
 
     // Fetch server state
-    const { data: serverTasks, error: fetchError } = await supabase
+    const { data, error: fetchError } = await supabase
       .from("user_task_state")
       .select("*")
       .eq("user_id", userId);
@@ -262,6 +279,7 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
       return;
     }
 
+    const serverTasks = data as unknown as UserTaskStateRow[];
     console.log(`📥 [Tasks-Sync] Server tasks fetched: ${serverTasks?.length || 0}`);
 
     // Build upsert payload (local-first, Math.max for timestamps)
@@ -348,7 +366,7 @@ export async function loadTasksFromServer(userId: string): Promise<void> {
   try {
     console.log("📥 [Tasks-Load] Loading tasks from server...");
     
-    const { data: serverTasks, error } = await supabase
+    const { data, error } = await supabase
       .from("user_task_state")
       .select("*")
       .eq("user_id", userId);
@@ -357,6 +375,8 @@ export async function loadTasksFromServer(userId: string): Promise<void> {
       console.error("❌ [Tasks-Load] Failed to load:", error);
       return;
     }
+
+    const serverTasks = data as unknown as UserTaskStateRow[];
 
     if (!serverTasks || serverTasks.length === 0) {
       console.log("ℹ️ [Tasks-Load] No server tasks found");
