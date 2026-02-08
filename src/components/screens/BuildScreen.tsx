@@ -847,7 +847,7 @@ export function BuildScreen() {
                 {hourlyYield.toFixed(1)} BZ/h
                 {tierMultiplier > 1 && (
                   <span className="text-green-600 dark:text-green-400 ml-1">
-                    (+{Math.floor((tierMultiplier - 1) * 100)}%)
+                    (+{Math.round((tierMultiplier - 1) * 100)}%)
                   </span>
                 )}
               </p>
