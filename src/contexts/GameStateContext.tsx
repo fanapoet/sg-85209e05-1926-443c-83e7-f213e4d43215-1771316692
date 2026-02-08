@@ -336,6 +336,24 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         if (userId && telegramId) {
           await loadTasksFromDB();
           console.log("✅ [GameState] Tasks loaded and merged");
+          
+          // Initialize task reset tracking record (if not exists)
+          const { getTaskState, upsertTaskState } = await import("@/services/taskStateService");
+          const taskState = await getTaskState(authResult.profile.telegram_id);
+          
+          if (!taskState) {
+            const today = new Date().toISOString().split("T")[0];
+            console.log("📤 [TASK-STATE] Creating initial reset tracking record");
+            await upsertTaskState({
+              telegramId: authResult.profile.telegram_id,
+              userId: authResult.profile.id,
+              lastDailyResetDate: today,
+              lastWeeklyResetDate: today
+            });
+            console.log("✅ [TASK-STATE] Initial reset tracking record created");
+          } else {
+            console.log("✅ [TASK-STATE] Reset tracking record exists:", taskState);
+          }
         }
       }
     };
