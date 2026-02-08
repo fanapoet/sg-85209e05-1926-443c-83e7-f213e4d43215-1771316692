@@ -682,7 +682,7 @@ export function startAutoSync(
       const { syncTasksWithServer } = await import("./tasksService");
       
       // Call the main sync function which handles everything
-      await syncTasksWithServer(tgUser.id, profile.id);
+      await syncTasksWithServer();
       
       console.log("✅ [AUTO-SYNC] Task sync orchestrated successfully");
     } catch (error) {

@@ -174,53 +174,61 @@ export function TasksReferralsScreen() {
   useEffect(() => {
     if (!isInitialized) return;
 
+    const updateAndSync = (taskId: string, current: number, target: number) => {
+      const isCompleted = current >= target;
+      
+      // Update service
+      updateTaskProgress(taskId, { 
+        currentProgress: current,
+        isCompleted: isCompleted
+      });
+      
+      // Update local state
+      const updated = getTaskProgress(taskId);
+      if (updated) {
+        setTaskProgress(prev => new Map(prev).set(taskId, updated));
+      }
+    };
+
     // Daily Check-in (Auto-complete on load)
     const checkInTask = taskProgress.get("daily_check_in");
     if (!checkInTask || (!checkInTask.isCompleted && !checkInTask.isClaimed)) {
       console.log("[Tasks] Auto-completing daily check-in");
-      const updated = updateTaskProgress("daily_check_in", "daily", 1, 1);
-      setTaskProgress(prev => new Map(prev).set("daily_check_in", updated));
+      updateAndSync("daily_check_in", 1, 1);
     }
 
     // Daily Taps
     if (todayTaps > 0) {
-      const updated = updateTaskProgress("daily_taps", "daily", todayTaps, 100);
-      setTaskProgress(prev => new Map(prev).set("daily_taps", updated));
+      updateAndSync("daily_taps", todayTaps, 100);
     }
 
     // Daily Idle
     if (hasClaimedIdleToday) {
-      const updated = updateTaskProgress("daily_idle", "daily", 1, 1);
-      setTaskProgress(prev => new Map(prev).set("daily_idle", updated));
+      updateAndSync("daily_idle", 1, 1);
     }
 
     // Weekly Upgrades (using total for now)
     if (totalUpgrades > 0) {
-      const updated = updateTaskProgress("weekly_upgrade", "weekly", totalUpgrades, 10);
-      setTaskProgress(prev => new Map(prev).set("weekly_upgrade", updated));
+      updateAndSync("weekly_upgrade", totalUpgrades, 10);
     }
 
     // Weekly Convert
     if (totalConversions > 0) {
-      const updated = updateTaskProgress("weekly_convert", "weekly", totalConversions, 500000);
-      setTaskProgress(prev => new Map(prev).set("weekly_convert", updated));
+      updateAndSync("weekly_convert", totalConversions, 500000);
     }
 
     // Weekly Invite
     if (referralCount > 0) {
-      const updated = updateTaskProgress("weekly_invite", "weekly", referralCount, 3);
-      setTaskProgress(prev => new Map(prev).set("weekly_invite", updated));
+      updateAndSync("weekly_invite", referralCount, 3);
     }
 
     // Milestones
     if (totalTaps > 0) {
-      const updated = updateTaskProgress("milestone_taps", "milestone", totalTaps, 10000);
-      setTaskProgress(prev => new Map(prev).set("milestone_taps", updated));
+      updateAndSync("milestone_taps", totalTaps, 10000);
     }
 
     if (referralCount > 0) {
-      const updated = updateTaskProgress("milestone_invite", "milestone", referralCount, 25);
-      setTaskProgress(prev => new Map(prev).set("milestone_invite", updated));
+      updateAndSync("milestone_invite", referralCount, 25);
     }
 
   }, [todayTaps, hasClaimedIdleToday, totalUpgrades, totalConversions, referralCount, totalTaps, isInitialized]);
@@ -262,20 +270,23 @@ export function TasksReferralsScreen() {
     if (task.reward.type === "XP") addXP(task.reward.amount);
 
     // 2. Update Sync Service (Local + Background DB)
-    const updated = claimTaskReward(task.id, task.type);
-    if (updated) {
-      setTaskProgress(prev => new Map(prev).set(task.id, updated));
+    const success = claimTaskReward(task.id);
+    if (success) {
+      const updated = getTaskProgress(task.id);
+      if (updated) {
+        setTaskProgress(prev => new Map(prev).set(task.id, updated));
+      }
+      
+      toast({
+        title: "Reward Claimed!",
+        description: `You earned ${task.reward.amount} ${task.reward.type}`,
+      });
     }
 
     // 3. Update Legacy State (Double write for safety)
     const newClaimed = { ...claimedTasks, [task.id]: Date.now() };
     setClaimedTasks(newClaimed);
     localStorage.setItem("bunergy_claimed_tasks", JSON.stringify(newClaimed));
-
-    toast({
-      title: "Reward Claimed!",
-      description: `You earned ${task.reward.amount} ${task.reward.type}`,
-    });
   };
 
   const handleClaimPendingEarnings = async () => {
@@ -532,7 +543,7 @@ export function TasksReferralsScreen() {
         try {
           // Now sync with database (Public RLS allows this without session)
           console.log(`[Tasks] Starting DB sync for user ${tgUser.id}`);
-          await syncTasksWithServer(tgUser.id, tgUser.id);
+          await syncTasksWithServer();
           console.log("✅ [Tasks] DB merge finished, refreshing UI...");
           
           // Reload progress after merge

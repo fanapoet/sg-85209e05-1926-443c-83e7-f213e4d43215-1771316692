@@ -17,6 +17,11 @@ import {
   mergeDailyClaims, 
   mergeNFTs 
 } from "@/services/rewardDataService";
+import { 
+  loadTasksFromDB, 
+  syncTasksWithServer,
+  checkAndResetTasks
+} from "@/services/tasksService";
 import { useToast } from "@/hooks/use-toast";
 
 type Tier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
@@ -327,11 +332,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           safeSetItem("ownedNFTs", merged);
         }
 
-        // Load tasks from server and merge with local
-        console.log("📋 [GameState] Loading tasks from server...");
-        const { loadTasksFromServer } = await import("@/services/tasksService");
-        await loadTasksFromServer(authResult.profile.id);
-        console.log("✅ [GameState] Tasks loaded and merged");
+        // Load Task State
+        if (userId && telegramId) {
+          await loadTasksFromDB(userId, telegramId);
+          console.log("✅ [GameState] Tasks loaded and merged");
+        }
       }
     };
 
@@ -439,9 +444,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         // Sync Task Progress
         if (telegramId && userId) {
           console.log("📋 [MANUAL SYNC] Syncing task progress...");
-          const { syncTasksWithServer } = await import("@/services/tasksService");
-          
-          await syncTasksWithServer(telegramId, userId);
+          await syncTasksWithServer();
           console.log("✅ [MANUAL SYNC] Task sync completed");
         }
         
