@@ -297,6 +297,7 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
         }
         
         if (shouldReset) {
+          console.log(`🔄 [TASKS-SYNC] Resetting task ${taskId} (${task.taskType})`);
           localTasks.set(taskId, {
             ...task,
             currentProgress: 0,
@@ -328,66 +329,23 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
 
     // 5. Merge Completions (Server -> Local)
     // Apply server completions to local IF they match current period
-    if (serverCompletions) {
+    if (serverCompletions && serverCompletions.length > 0) {
       let localUpdated = false;
       
       serverCompletions.forEach(comp => {
         const local = localTasks.get(comp.taskId);
         
-        // If local doesn't exist, we can't really restore it fully without knowing taskType
-        // But if it exists, we can mark it completed if valid
-        if (local) {
-          // Check if completion is valid for current reset period
-          // For milestones: always valid
-          // For daily/weekly: timestamp must match current reset key
-          
-          let isValid = false;
-          if (local.taskType === "milestone") {
-            isValid = true;
-          } else {
-             // Simple check: is the completion recent enough?
-             // Actually, the completion record in DB is permanent. 
-             // We need to check if it happened TODAY (for daily)
-             
-             const compDate = new Date(comp.completedAt);
-             let compKey = "";
-             
-             if (local.taskType === "daily") {
-                compKey = `${compDate.getFullYear()}-${String(compDate.getMonth() + 1).padStart(2, '0')}-${String(compDate.getDate()).padStart(2, '0')}`;
-             } else if (local.taskType === "weekly") {
-                // Calculate week key from compDate... reused logic or simple approximation
-                // For safety, let's rely on local reset logic mainly.
-                // If server has a completion that is NEWER than local resetAt, it's valid.
-                // But compKey calculation is safer.
-                // Let's use the helper:
-                 const d = new Date(Date.UTC(compDate.getFullYear(), compDate.getMonth(), compDate.getDate()));
-                 const dayNum = d.getUTCDay() || 7;
-                 d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-                 const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-                 const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-                 compKey = `${d.getUTCFullYear()}-W${weekNo}`;
-             }
-             
-             if (compKey === local.resetAt) {
-               isValid = true;
-             }
-          }
-          
-          if (isValid) {
-            // Merge: if server says completed, mark local completed
-            if (!local.isCompleted || !local.claimed) {
-               localTasks.set(comp.taskId, {
-                 ...local,
-                 isCompleted: true,
-                 claimed: true, // DB only stores if claimed/completed usually. 
-                 // Actually DB user_task_progress implies reward given? 
-                 // Yes, usually.
-                 currentProgress: local.currentProgress, // Can't restore exact progress count from DB
-                 completedAt: new Date(comp.completedAt).toISOString(),
-                 claimedAt: new Date(comp.completedAt).toISOString() // Approximate
-               });
-               localUpdated = true;
-            }
+        if (local && local.taskType === "milestone") {
+          // Milestones are permanent - restore from server if not locally completed
+          if (!local.isCompleted || !local.claimed) {
+            localTasks.set(comp.taskId, {
+              ...local,
+              isCompleted: true,
+              claimed: true,
+              completedAt: new Date(comp.completedAt).toISOString(),
+              claimedAt: new Date(comp.completedAt).toISOString()
+            });
+            localUpdated = true;
           }
         }
       });
@@ -399,19 +357,28 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
     }
 
     // 6. Push Local Completions (Local -> Server)
-    // Find tasks that are completed locally but maybe not in DB
-    // We just upsert ALL locally completed/claimed tasks for current period to DB
-    const tasksToSync = allTasks.filter(t => t.isCompleted && t.claimed);
+    // Only sync CLAIMED tasks (not just completed)
+    const allTasksArray = Array.from(localTasks.values());
+    const tasksToSync = allTasksArray.filter(t => t.isCompleted && t.claimed);
     
     if (tasksToSync.length > 0) {
+      console.log(`📤 [TASKS-SYNC] Syncing ${tasksToSync.length} claimed tasks to server...`);
+      
       const syncPayload = tasksToSync.map(t => ({
         taskId: t.taskId,
         completedAt: t.completedAt ? new Date(t.completedAt).getTime() : Date.now(),
-        rewardBZ: 0, // We don't track amount here, service calculates it or it's 0
+        rewardBZ: 0,
         rewardXP: 0
       }));
       
-      await syncCompletedTasksToDB(telegramId, userId, syncPayload);
+      const syncResult = await syncCompletedTasksToDB(telegramId, userId, syncPayload);
+      
+      if (!syncResult.success) {
+        console.error("❌ [TASKS-SYNC] Failed to sync tasks:", syncResult.error);
+        // Don't throw - continue anyway
+      }
+    } else {
+      console.log("⏭️ [TASKS-SYNC] No claimed tasks to sync");
     }
     
     console.log("✅ [TASKS-SYNC] Sync complete");
