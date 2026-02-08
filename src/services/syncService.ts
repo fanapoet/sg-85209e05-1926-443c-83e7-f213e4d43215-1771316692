@@ -676,29 +676,15 @@ export function startAutoSync(
       }
     }
 
-    // ✅ NEW: Sync task progress (following exact Rewards pattern)
+    // ✅ NEW: Sync task progress (Orchestrated by tasksService)
     try {
       console.log("📋 [AUTO-SYNC] Syncing task progress...");
-      const { getAllTaskProgress } = await import("./tasksService");
-      const { batchUpsertTaskProgress } = await import("./taskStateService");
+      const { syncTasksWithServer } = await import("./tasksService");
       
-      // Get all task progress from localStorage
-      const allTaskProgress = getAllTaskProgress();
+      // Call the main sync function which handles everything
+      await syncTasksWithServer(tgUser.id, profile.id);
       
-      if (allTaskProgress && allTaskProgress.length > 0) {
-        console.log(`📋 [AUTO-SYNC] Found ${allTaskProgress.length} tasks to sync`);
-        
-        // Batch upsert to database
-        const tasksResult = await batchUpsertTaskProgress(allTaskProgress);
-        
-        if (tasksResult.success) {
-          console.log("✅ [AUTO-SYNC] Task progress synced!");
-        } else {
-          console.error("❌ [AUTO-SYNC] Task progress sync failed:", tasksResult.error);
-        }
-      } else {
-        console.log("ℹ️ [AUTO-SYNC] No task progress to sync");
-      }
+      console.log("✅ [AUTO-SYNC] Task sync orchestrated successfully");
     } catch (error) {
       console.error("❌ [AUTO-SYNC] Task sync exception:", error);
     }

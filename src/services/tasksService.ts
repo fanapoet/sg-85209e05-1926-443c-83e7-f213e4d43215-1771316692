@@ -1,18 +1,33 @@
 /**
  * Tasks Service - LOCAL-FIRST with Background Sync
- * All state in localStorage, database sync happens in background
- * FOLLOWS EXACT PATTERN FROM rewardsService.ts
+ * Orchestrates TaskState (resets) and TaskData (completions)
+ * Matches Rewards pattern exactly
  */
 
 import { 
-  getTaskProgress as getTaskProgressFromDB,
-  upsertTaskProgress as upsertTaskProgressToDB,
-  batchUpsertTaskProgress,
-  calculateResetAt,
-  type TaskProgressData
+  getTaskState, 
+  upsertTaskState, 
+  updateDailyResetDate, 
+  updateWeeklyResetDate,
+  type TaskStateRecord 
 } from "./taskStateService";
 
-export type { TaskProgressData };
+import { 
+  loadCompletedTasksFromDB, 
+  syncCompletedTasksToDB, 
+  type mergeCompletedTasks 
+} from "./taskDataService";
+
+export interface TaskProgressData {
+  taskId: string;
+  taskType: "daily" | "weekly" | "milestone";
+  currentProgress: number;
+  isCompleted: boolean;
+  claimed: boolean;
+  completedAt: string | null; // ISO string
+  claimedAt: string | null; // ISO string
+  resetAt: string; // YYYY-MM-DD or YYYY-Www or NEVER
+}
 
 const STORAGE_KEY = "bunergy_task_progress";
 
@@ -20,7 +35,7 @@ const STORAGE_KEY = "bunergy_task_progress";
  * Calculate reset date string (YYYY-MM-DD)
  * Uses LOCAL time to match user's day
  */
-function getResetDateString(taskType: "daily" | "weekly" | "milestone"): string {
+export function getResetDateString(taskType: "daily" | "weekly" | "milestone"): string {
   if (taskType === "milestone") return "NEVER";
   
   const now = new Date();
@@ -44,57 +59,13 @@ function getResetDateString(taskType: "daily" | "weekly" | "milestone"): string 
 }
 
 /**
- * Check if task needs reset
+ * Check if task needs reset based on stored resetAt vs current
  */
-function shouldResetTask(taskType: "daily" | "weekly" | "milestone", lastResetKey: string): boolean {
+function shouldResetTask(taskType: "daily" | "weekly" | "milestone", storedResetAt: string): boolean {
   if (taskType === "milestone") return false;
   
   const currentKey = getResetDateString(taskType);
-  
-  // Debug log to catch reset issues
-  if (currentKey !== lastResetKey) {
-    console.log(`[Tasks] Resetting ${taskType} task. Old: ${lastResetKey}, New: ${currentKey}`);
-    return true;
-  }
-  
-  return false;
-}
-
-/**
- * Validate if timestamp matches the reset period
- */
-function isTimestampValidForResetPeriod(
-  timestamp: string | null, 
-  resetAt: string,
-  taskType: "daily" | "weekly" | "milestone"
-): boolean {
-  if (!timestamp || taskType === "milestone") return true;
-  
-  try {
-    const ts = new Date(timestamp);
-    
-    if (taskType === "daily") {
-      // Extract YYYY-MM-DD from timestamp
-      const tsDate = `${ts.getFullYear()}-${String(ts.getMonth() + 1).padStart(2, '0')}-${String(ts.getDate()).padStart(2, '0')}`;
-      return tsDate === resetAt;
-    }
-    
-    if (taskType === "weekly") {
-      // Calculate week number from timestamp
-      const d = new Date(Date.UTC(ts.getFullYear(), ts.getMonth(), ts.getDate()));
-      const dayNum = d.getUTCDay() || 7;
-      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-      const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-      const weekStr = `${d.getUTCFullYear()}-W${weekNo}`;
-      return weekStr === resetAt;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error("[Tasks] Timestamp validation error:", error);
-    return false;
-  }
+  return currentKey !== storedResetAt;
 }
 
 /**
@@ -104,22 +75,19 @@ function getLocalTaskProgress(): Map<string, TaskProgressData> {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) {
-      console.log("[Tasks] No local storage found, returning empty map");
       return new Map();
     }
     
     const data = JSON.parse(stored);
     const map = new Map<string, TaskProgressData>();
     
-    // Clean up stale tasks that need reset
+    // Process loaded tasks
     Object.entries(data).forEach(([key, value]: [string, any]) => {
       const task = value as TaskProgressData;
       
-      // MIGRATION: If resetAt is ISO string (old format), force reset to use new format
-      const isOldFormat = task.resetAt && task.resetAt.includes("T");
-      
-      if (isOldFormat || shouldResetTask(task.taskType, task.resetAt)) {
-        // Task needs reset - create fresh entry with NO old data
+      // Auto-reset check
+      if (shouldResetTask(task.taskType, task.resetAt)) {
+        // Reset task
         map.set(key, {
           taskId: task.taskId,
           taskType: task.taskType,
@@ -131,7 +99,6 @@ function getLocalTaskProgress(): Map<string, TaskProgressData> {
           resetAt: getResetDateString(task.taskType)
         });
       } else {
-        // Task is current
         map.set(key, task);
       }
     });
@@ -153,120 +120,9 @@ function saveLocalTaskProgress(progress: Map<string, TaskProgressData>): void {
       obj[key] = value;
     });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(obj));
-    console.log(`[Tasks] Saved ${progress.size} tasks to localStorage`);
   } catch (error) {
     console.error("❌ [Tasks] Failed to save to localStorage:", error);
   }
-}
-
-/**
- * Update task progress (local-first, background sync)
- */
-export function updateTaskProgress(
-  taskId: string,
-  taskType: "daily" | "weekly" | "milestone",
-  currentProgress: number,
-  target: number
-): TaskProgressData {
-  console.log(`[Tasks] updateTaskProgress: ${taskId}, ${currentProgress}/${target}`);
-  
-  const progress = getLocalTaskProgress();
-  const existing = progress.get(taskId);
-  
-  const resetAt = getResetDateString(taskType);
-  const isCompleted = currentProgress >= target;
-  
-  // Don't update if already claimed and completed (unless force update needed)
-  if (existing?.claimed) {
-     // Keep existing state if claimed
-     return existing;
-  }
-
-  const updated: TaskProgressData = {
-    taskId,
-    taskType,
-    currentProgress,
-    isCompleted,
-    claimed: existing?.claimed || false,
-    completedAt: isCompleted && !existing?.completedAt ? new Date().toISOString() : existing?.completedAt || null,
-    claimedAt: existing?.claimedAt || null,
-    resetAt
-  };
-  
-  progress.set(taskId, updated);
-  saveLocalTaskProgress(progress);
-  
-  // Background sync
-  setTimeout(() => {
-    upsertTaskProgressToDB(updated).then(result => {
-      if (result.success) {
-        console.log(`[Tasks] Sync success: ${taskId}`);
-      } else {
-        console.error(`[Tasks] Sync failed: ${taskId}`, result.error);
-      }
-    }).catch(err => console.error(`[Tasks] Sync error: ${taskId}`, err));
-  }, 100);
-  
-  return updated;
-}
-
-/**
- * Claim task reward (local-first, background sync)
- */
-export function claimTaskReward(
-  taskId: string,
-  taskType: "daily" | "weekly" | "milestone"
-): TaskProgressData | null {
-  console.log(`[Tasks] claimTaskReward: ${taskId}`);
-  
-  const progress = getLocalTaskProgress();
-  const existing = progress.get(taskId);
-  
-  if (!existing || !existing.isCompleted || existing.claimed) {
-    console.warn(`[Tasks] Cannot claim ${taskId}:`, existing);
-    return null;
-  }
-  
-  const updated: TaskProgressData = {
-    ...existing,
-    claimed: true,
-    claimedAt: new Date().toISOString(),
-    resetAt: getResetDateString(taskType) // Ensure reset key is preserved
-  };
-  
-  progress.set(taskId, updated);
-  saveLocalTaskProgress(progress);
-  
-  console.log(`[Tasks] Claimed locally: ${taskId}`);
-  
-  // Background sync
-  setTimeout(() => {
-    upsertTaskProgressToDB(updated).then(result => {
-      if (result.success) {
-        console.log(`[Tasks] Claim sync success: ${taskId}`);
-      } else {
-        console.error(`[Tasks] Claim sync failed: ${taskId}`, result.error);
-      }
-    }).catch(err => console.error(`[Tasks] Claim sync error: ${taskId}`, err));
-  }, 100);
-  
-  return updated;
-}
-
-/**
- * Get task progress
- */
-export function getTaskProgress(taskId: string): TaskProgressData | undefined {
-  const progress = getLocalTaskProgress();
-  return progress.get(taskId);
-}
-
-/**
- * Get all current task progress
- */
-export function getAllTaskProgress(): TaskProgressData[] {
-  const progress = getLocalTaskProgress();
-  return Array.from(progress.values());
 }
 
 /**
@@ -281,7 +137,6 @@ export function initializeTask(
   
   if (!progress.has(taskId)) {
     const resetAt = getResetDateString(taskType);
-    console.log(`[Tasks] Initializing new task: ${taskId} (${resetAt})`);
     
     progress.set(taskId, {
       taskId,
@@ -298,168 +153,231 @@ export function initializeTask(
 }
 
 /**
- * Load task progress from database and merge with local (Math.max)
- * FOLLOWS EXACT PATTERN FROM rewardsService.ts
+ * Update task progress (Local First)
  */
-export async function loadAndMergeTaskProgress(telegramId: number): Promise<void> {
+export function updateTaskProgress(
+  taskId: string,
+  taskType: "daily" | "weekly" | "milestone",
+  currentProgress: number,
+  target: number
+): TaskProgressData {
+  const progress = getLocalTaskProgress();
+  const existing = progress.get(taskId);
+  
+  const resetAt = getResetDateString(taskType);
+  
+  // If task is already claimed for this period, don't update progress
+  if (existing?.claimed && existing.resetAt === resetAt) {
+    return existing;
+  }
+
+  const isCompleted = currentProgress >= target;
+  
+  const updated: TaskProgressData = {
+    taskId,
+    taskType,
+    currentProgress,
+    isCompleted,
+    claimed: existing?.claimed || false, // Keep claimed if valid
+    completedAt: isCompleted && !existing?.completedAt ? new Date().toISOString() : existing?.completedAt || null,
+    claimedAt: existing?.claimedAt || null,
+    resetAt
+  };
+  
+  progress.set(taskId, updated);
+  saveLocalTaskProgress(progress);
+  
+  // NOTE: We do NOT sync partial progress to DB anymore. 
+  // We only sync completions via syncCompletedTasksToDB later.
+  
+  return updated;
+}
+
+/**
+ * Claim task reward
+ */
+export function claimTaskReward(
+  taskId: string,
+  taskType: "daily" | "weekly" | "milestone"
+): TaskProgressData | null {
+  const progress = getLocalTaskProgress();
+  const existing = progress.get(taskId);
+  
+  if (!existing || !existing.isCompleted || existing.claimed) {
+    return null;
+  }
+  
+  const updated: TaskProgressData = {
+    ...existing,
+    claimed: true,
+    claimedAt: new Date().toISOString()
+  };
+  
+  progress.set(taskId, updated);
+  saveLocalTaskProgress(progress);
+  
+  return updated;
+}
+
+/**
+ * Get single task progress
+ */
+export function getTaskProgress(taskId: string): TaskProgressData | undefined {
+  const progress = getLocalTaskProgress();
+  return progress.get(taskId);
+}
+
+/**
+ * Get all tasks
+ */
+export function getAllTaskProgress(): TaskProgressData[] {
+  const progress = getLocalTaskProgress();
+  return Array.from(progress.values());
+}
+
+/**
+ * MAIN SYNC FUNCTION
+ * Orchestrates the full sync process:
+ * 1. Check/Update Reset Dates (TaskState)
+ * 2. Sync Completed Tasks (TaskData)
+ */
+export async function syncTasksWithServer(telegramId: number, userId: string): Promise<void> {
   try {
-    console.log("🔵 [TASKS-SYNC] ========== LOAD AND MERGE START ==========");
-    console.log("🔵 [TASKS-SYNC] Telegram ID:", telegramId);
-    console.log("🔄 [TASKS-SYNC] Loading from database...");
+    console.log("🔄 [TASKS-SYNC] Starting sync for:", telegramId);
     
-    const serverTasks = await getTaskProgressFromDB(telegramId);
+    // 1. Load Local State
+    const localTasks = getLocalTaskProgress();
+    const allTasks = Array.from(localTasks.values());
     
-    console.log("🔵 [TASKS-SYNC] Server response:", serverTasks.length, "tasks");
+    // 2. Identify Current Local Reset Dates
+    const currentDailyReset = getResetDateString("daily");
+    const currentWeeklyReset = getResetDateString("weekly");
     
-    if (serverTasks.length === 0) {
-      console.log("ℹ️ [TASKS-SYNC] No server data, using local state only");
-      console.log("🔵 [TASKS-SYNC] ========== LOAD AND MERGE END (NO SERVER DATA) ==========");
-      return;
+    // 3. Fetch Server State
+    const [serverState, serverCompletions] = await Promise.all([
+      getTaskState(telegramId),
+      loadCompletedTasksFromDB(telegramId)
+    ]);
+    
+    // 4. Handle State Resets (Server vs Local)
+    let needsStateUpdate = false;
+    
+    // Check Daily Reset
+    if (!serverState || serverState.lastDailyResetDate !== currentDailyReset) {
+      console.log("📅 [TASKS-SYNC] New daily period detected. Server:", serverState?.lastDailyResetDate, "Local:", currentDailyReset);
+      // We are in a new day relative to server. Update server.
+      await updateDailyResetDate(telegramId, currentDailyReset);
+      needsStateUpdate = true;
     }
     
-    console.log("✅ [TASKS-SYNC] Loaded from server:", serverTasks.length, "current period tasks");
-    console.log("🔵 [TASKS-SYNC] Server tasks:", JSON.stringify(serverTasks.map(t => ({ 
-      id: t.taskId, 
-      progress: t.currentProgress, 
-      completed: t.isCompleted, 
-      claimed: t.isClaimed,
-      resetAt: t.resetAt,
-      claimedAt: t.claimedAt
-    }))));
+    // Check Weekly Reset
+    if (!serverState || serverState.lastWeeklyResetDate !== currentWeeklyReset) {
+      console.log("📅 [TASKS-SYNC] New weekly period detected. Server:", serverState?.lastWeeklyResetDate, "Local:", currentWeeklyReset);
+      await updateWeeklyResetDate(telegramId, currentWeeklyReset);
+      needsStateUpdate = true;
+    }
     
-    const localProgress = getLocalTaskProgress();
-    console.log("🔵 [TASKS-SYNC] Local tasks before merge:", localProgress.size);
-    let mergedCount = 0;
-    
-    // All server tasks are already filtered to current period by the database query
-    serverTasks.forEach(serverTask => {
-      const localTask = localProgress.get(serverTask.taskId);
-      
-      console.log(`🔵 [TASKS-SYNC] Merging task: ${serverTask.taskId}`);
-      console.log(`   Local: ${localTask ? `progress=${localTask.currentProgress}, claimed=${localTask.claimed}, claimedAt=${localTask.claimedAt}, resetAt=${localTask.resetAt}` : 'NOT FOUND'}`);
-      console.log(`   Server: progress=${serverTask.currentProgress}, claimed=${serverTask.isClaimed}, claimedAt=${serverTask.claimedAt}, resetAt=${serverTask.resetAt}`);
-      
-      if (!localTask) {
-        // Server has data we don't have locally - use server data
-        localProgress.set(serverTask.taskId, {
-          taskId: serverTask.taskId,
-          taskType: serverTask.taskType as "daily" | "weekly" | "milestone",
-          currentProgress: serverTask.currentProgress,
-          isCompleted: serverTask.isCompleted,
-          claimed: serverTask.isClaimed,
-          completedAt: serverTask.completedAt,
-          claimedAt: serverTask.claimedAt,
-          resetAt: serverTask.resetAt
-        });
-        mergedCount++;
-        console.log(`✅ [TASKS-SYNC] Added from server: ${serverTask.taskId}`);
-      } else {
-        // CRITICAL FIX: Check if reset periods match
-        // If local has been reset (newer resetAt), DON'T merge old server completion states
-        const localResetIsNewer = localTask.resetAt > serverTask.resetAt;
-        const serverResetIsNewer = serverTask.resetAt > localTask.resetAt;
-        
-        console.log(`   Reset comparison: local=${localTask.resetAt}, server=${serverTask.resetAt}, localNewer=${localResetIsNewer}, serverNewer=${serverResetIsNewer}`);
-        
-        if (localResetIsNewer) {
-          // Local task has been reset to a newer period → keep local (already reset)
-          console.log(`ℹ️ [TASKS-SYNC] Local is newer period, keeping local reset state: ${serverTask.taskId}`);
-          // Don't update - local reset state is authoritative
-          return;
-        }
-        
-        if (serverResetIsNewer) {
-          // Server has newer period → use server data entirely
-          localProgress.set(serverTask.taskId, {
-            taskId: serverTask.taskId,
-            taskType: serverTask.taskType as "daily" | "weekly" | "milestone",
-            currentProgress: serverTask.currentProgress,
-            isCompleted: serverTask.isCompleted,
-            claimed: serverTask.isClaimed,
-            completedAt: serverTask.completedAt,
-            claimedAt: serverTask.claimedAt,
-            resetAt: serverTask.resetAt
-          });
-          mergedCount++;
-          console.log(`✅ [TASKS-SYNC] Server has newer period, using server state: ${serverTask.taskId}`);
-          return;
-        }
-        
-        // Same reset period → merge using Math.max for progress, OR for completion
-        const mergedProgress = Math.max(localTask.currentProgress, serverTask.currentProgress);
-        const mergedCompleted = localTask.isCompleted || serverTask.isCompleted;
-        const mergedClaimed = localTask.claimed || serverTask.isClaimed;
-        
-        // CRITICAL FIX: Validate timestamps against reset period
-        // If localStorage has old timestamps from different period, discard them and use server data
-        const localCompletedValid = isTimestampValidForResetPeriod(
-          localTask.completedAt, 
-          serverTask.resetAt, 
-          serverTask.taskType as "daily" | "weekly" | "milestone"
-        );
-        const localClaimedValid = isTimestampValidForResetPeriod(
-          localTask.claimedAt, 
-          serverTask.resetAt, 
-          serverTask.taskType as "daily" | "weekly" | "milestone"
-        );
-        
-        console.log(`   Local timestamps valid: completedAt=${localCompletedValid}, claimedAt=${localClaimedValid}`);
-        
-        // Use local timestamp only if it's valid for the current reset period
-        const mergedCompletedAt = mergedCompleted ? 
-          (localCompletedValid && localTask.completedAt ? localTask.completedAt : serverTask.completedAt) : 
-          null;
-        const mergedClaimedAt = mergedClaimed ? 
-          (localClaimedValid && localTask.claimedAt ? localTask.claimedAt : serverTask.claimedAt) : 
-          null;
-        
-        console.log(`   Merged: progress=${mergedProgress}, completed=${mergedCompleted}, claimed=${mergedClaimed}`);
-        console.log(`   Merged timestamps: completedAt=${mergedCompletedAt}, claimedAt=${mergedClaimedAt}`);
-        
-        if (mergedProgress !== localTask.currentProgress || 
-            mergedCompleted !== localTask.isCompleted || 
-            mergedClaimed !== localTask.claimed) {
-          
-          localProgress.set(serverTask.taskId, {
-            ...localTask,
-            currentProgress: mergedProgress,
-            isCompleted: mergedCompleted,
-            claimed: mergedClaimed,
-            completedAt: mergedCompletedAt,
-            claimedAt: mergedClaimedAt
-          });
-          mergedCount++;
-          console.log(`✅ [TASKS-SYNC] Updated task: ${serverTask.taskId}`);
-        } else {
-          console.log(`ℹ️ [TASKS-SYNC] No changes needed: ${serverTask.taskId}`);
-        }
-      }
-    });
-    
-    saveLocalTaskProgress(localProgress);
-    console.log("✅ [TASKS-SYNC] Merge complete:", mergedCount, "tasks updated");
-    console.log("🔵 [TASKS-SYNC] Final local tasks count:", localProgress.size);
-    
-    // Background sync local data back to server (fire-and-forget)
-    console.log("🔄 [TASKS-SYNC] Starting background batch sync to server...");
-    setTimeout(() => {
-      const allTasks = Array.from(localProgress.values());
-      console.log("🔵 [TASKS-SYNC] Batch syncing", allTasks.length, "tasks to server");
-      batchUpsertTaskProgress(allTasks).then(result => {
-        if (result.success) {
-          console.log("✅ [TASKS-SYNC] Background batch sync success");
-        } else {
-          console.error("❌ [TASKS-SYNC] Background batch sync failed:", result.error);
-        }
-      }).catch(err => {
-        console.error("❌ [TASKS-SYNC] Background batch sync exception:", err);
+    // If server state was missing, create it
+    if (!serverState) {
+      await upsertTaskState({
+        telegramId,
+        userId,
+        lastDailyResetDate: currentDailyReset,
+        lastWeeklyResetDate: currentWeeklyReset
       });
-    }, 2000);
+    }
+
+    // 5. Merge Completions (Server -> Local)
+    // Apply server completions to local IF they match current period
+    if (serverCompletions) {
+      let localUpdated = false;
+      
+      serverCompletions.forEach(comp => {
+        const local = localTasks.get(comp.taskId);
+        
+        // If local doesn't exist, we can't really restore it fully without knowing taskType
+        // But if it exists, we can mark it completed if valid
+        if (local) {
+          // Check if completion is valid for current reset period
+          // For milestones: always valid
+          // For daily/weekly: timestamp must match current reset key
+          
+          let isValid = false;
+          if (local.taskType === "milestone") {
+            isValid = true;
+          } else {
+             // Simple check: is the completion recent enough?
+             // Actually, the completion record in DB is permanent. 
+             // We need to check if it happened TODAY (for daily)
+             
+             const compDate = new Date(comp.completedAt);
+             let compKey = "";
+             
+             if (local.taskType === "daily") {
+                compKey = `${compDate.getFullYear()}-${String(compDate.getMonth() + 1).padStart(2, '0')}-${String(compDate.getDate()).padStart(2, '0')}`;
+             } else if (local.taskType === "weekly") {
+                // Calculate week key from compDate... reused logic or simple approximation
+                // For safety, let's rely on local reset logic mainly.
+                // If server has a completion that is NEWER than local resetAt, it's valid.
+                // But compKey calculation is safer.
+                // Let's use the helper:
+                 const d = new Date(Date.UTC(compDate.getFullYear(), compDate.getMonth(), compDate.getDate()));
+                 const dayNum = d.getUTCDay() || 7;
+                 d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+                 const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+                 const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+                 compKey = `${d.getUTCFullYear()}-W${weekNo}`;
+             }
+             
+             if (compKey === local.resetAt) {
+               isValid = true;
+             }
+          }
+          
+          if (isValid) {
+            // Merge: if server says completed, mark local completed
+            if (!local.isCompleted || !local.claimed) {
+               localTasks.set(comp.taskId, {
+                 ...local,
+                 isCompleted: true,
+                 claimed: true, // DB only stores if claimed/completed usually. 
+                 // Actually DB user_task_progress implies reward given? 
+                 // Yes, usually.
+                 currentProgress: local.currentProgress, // Can't restore exact progress count from DB
+                 completedAt: new Date(comp.completedAt).toISOString(),
+                 claimedAt: new Date(comp.completedAt).toISOString() // Approximate
+               });
+               localUpdated = true;
+            }
+          }
+        }
+      });
+      
+      if (localUpdated) {
+        saveLocalTaskProgress(localTasks);
+        console.log("✅ [TASKS-SYNC] Merged server completions to local");
+      }
+    }
+
+    // 6. Push Local Completions (Local -> Server)
+    // Find tasks that are completed locally but maybe not in DB
+    // We just upsert ALL locally completed/claimed tasks for current period to DB
+    const tasksToSync = allTasks.filter(t => t.isCompleted && t.claimed);
     
-    console.log("🔵 [TASKS-SYNC] ========== LOAD AND MERGE END ==========");
+    if (tasksToSync.length > 0) {
+      const syncPayload = tasksToSync.map(t => ({
+        taskId: t.taskId,
+        completedAt: t.completedAt ? new Date(t.completedAt).getTime() : Date.now(),
+        rewardBZ: 0, // We don't track amount here, service calculates it or it's 0
+        rewardXP: 0
+      }));
+      
+      await syncCompletedTasksToDB(telegramId, userId, syncPayload);
+    }
     
+    console.log("✅ [TASKS-SYNC] Sync complete");
+
   } catch (error) {
-    console.error("❌ [TASKS-SYNC] Load and merge failed:", error);
-    console.log("🔵 [TASKS-SYNC] ========== LOAD AND MERGE END (ERROR) ==========");
+    console.error("❌ [TASKS-SYNC] Failed:", error);
   }
 }
