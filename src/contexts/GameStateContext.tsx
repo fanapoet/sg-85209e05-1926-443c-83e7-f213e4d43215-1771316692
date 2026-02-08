@@ -334,7 +334,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
         // Load Task State
         if (userId && telegramId) {
-          await loadTasksFromDB(userId, telegramId);
+          await loadTasksFromDB();
           console.log("✅ [GameState] Tasks loaded and merged");
         }
       }

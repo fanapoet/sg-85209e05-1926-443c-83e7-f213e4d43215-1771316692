@@ -6,6 +6,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { getCurrentTelegramUser } from "@/services/authService";
 
 // Match exact DB schema from user_task_state table
 interface UserTaskStateRow {
@@ -44,6 +45,39 @@ const STORAGE_KEY = "bunergy_task_progress";
 const SYNC_DEBOUNCE_MS = 2000;
 
 let syncTimeout: NodeJS.Timeout | null = null;
+
+/**
+ * Get current user info (needed for DB operations)
+ */
+async function getCurrentUser() {
+  try {
+    const tgUser = getCurrentTelegramUser();
+    if (!tgUser?.id) {
+      console.warn("⚠️ [Tasks] No Telegram user found");
+      return null;
+    }
+
+    // Get user profile from DB
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, telegram_id")
+      .eq("telegram_id", tgUser.id)
+      .single();
+
+    if (error || !data) {
+      console.error("❌ [Tasks] Failed to get user profile:", error);
+      return null;
+    }
+
+    return {
+      id: data.id,
+      telegram_id: data.telegram_id
+    };
+  } catch (error) {
+    console.error("❌ [Tasks] getCurrentUser exception:", error);
+    return null;
+  }
+}
 
 /**
  * Get all task progress from localStorage
@@ -290,138 +324,168 @@ function scheduleSyncToServer(): void {
 }
 
 /**
- * Sync tasks to server (background operation)
+ * Sync all pending local task states to server
  */
 export async function syncTasksWithServer(): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      console.log("ℹ️ [Tasks-Sync] No user, skipping sync");
+    const user = await getCurrentUser();
+    if (!user?.id || !user?.telegram_id) {
+      console.warn("⚠️ [Tasks-Sync] No user, skipping sync");
       return;
     }
 
-    // Get Telegram ID from metadata
-    const telegramId = user.user_metadata?.telegram_id;
-    if (!telegramId) {
-      console.error("❌ [Tasks-Sync] No telegram_id in user metadata");
-      return;
-    }
+    console.log("🔄 [Tasks-Sync] Starting sync for user:", user.id);
 
-    const tasks = getLocalTaskProgress();
-    if (tasks.size === 0) {
+    // Get all tasks from localStorage
+    const allTasks = getLocalTaskProgress();
+    console.log("🔄 [Tasks-Sync] Found tasks in localStorage:", allTasks.size);
+
+    if (allTasks.size === 0) {
       console.log("ℹ️ [Tasks-Sync] No tasks to sync");
       return;
     }
 
-    console.log(`📋 [Tasks-Sync] Syncing ${tasks.size} tasks to server...`);
-
-    // Prepare upsert data (one row per task)
-    const upsertData = Array.from(tasks.values()).map((task) => ({
-      user_id: user.id,
-      telegram_id: telegramId,
-      task_id: task.taskId,
-      task_type: task.taskType,
-      current_progress: task.currentProgress,
-      is_completed: task.isCompleted,
-      is_claimed: task.isClaimed,
-      completed_at: task.completedAt || null,
-      claimed_at: task.claimedAt || null,
-      reset_at: task.resetAt || null,
-      expires_at: task.expiresAt || null,
-      updated_at: new Date().toISOString(),
-    }));
-
-    // Upsert with conflict resolution on (user_id, task_id)
-    const { error } = await supabase
-      .from("user_task_state")
-      .upsert(upsertData, {
-        onConflict: "user_id,task_id",
-        ignoreDuplicates: false,
-      });
-
-    if (error) {
-      console.error("❌ [Tasks-Sync] Upsert failed:", error);
-      console.error("❌ [Tasks-Sync] Error details:", {
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        message: error.message,
-      });
-      throw error;
+    // Sync each task
+    let syncCount = 0;
+    for (const [taskId, taskData] of allTasks.entries()) {
+      console.log("📤 [Tasks-Sync] Syncing task:", taskId, taskData);
+      await saveTaskToDB(user.id, user.telegram_id, taskId, taskData);
+      syncCount++;
     }
 
-    console.log(`✅ [Tasks-Sync] Successfully synced ${tasks.size} tasks`);
+    console.log("✅ [Tasks-Sync] Synced tasks:", syncCount);
   } catch (error) {
     console.error("❌ [Tasks-Sync] Exception:", error);
-    throw error;
   }
 }
 
 /**
- * Load tasks from server and merge with local (on app init)
+ * Load tasks from database and merge with local state
  */
-export async function loadTasksFromDB(userId: string, telegramId: number): Promise<void> {
+export async function loadTasksFromDB(): Promise<void> {
   try {
-    console.log("📋 [Tasks-Load] Loading tasks from server...");
+    const user = await getCurrentUser();
+    if (!user?.id) {
+      console.warn("⚠️ [Tasks-Load] No authenticated user, skipping DB load");
+      return;
+    }
 
-    const { data: serverTasks, error } = await supabase
+    console.log("📥 [Tasks-Load] Fetching tasks from DB for user:", user.id);
+
+    const { data, error } = await supabase
       .from("user_task_state")
       .select("*")
-      .eq("user_id", userId)
-      .not("task_id", "is", null) as { data: UserTaskStateRow[] | null; error: any };
+      .eq("user_id", user.id);
 
     if (error) {
       console.error("❌ [Tasks-Load] Query failed:", error);
       return;
     }
 
-    if (!serverTasks || serverTasks.length === 0) {
-      console.log("ℹ️ [Tasks-Load] No server tasks found");
+    console.log("📥 [Tasks-Load] Fetched rows from DB:", data?.length || 0);
+
+    if (!data || data.length === 0) {
+      console.log("ℹ️ [Tasks-Load] No tasks found in DB (new user or first sync)");
       return;
     }
 
-    console.log(`📋 [Tasks-Load] Found ${serverTasks.length} tasks on server`);
-
+    // Merge DB state with local state
     const localTasks = getLocalTaskProgress();
-    let mergeCount = 0;
+    
+    data.forEach((row: any) => {
+      const taskId = row.task_id;
+      if (!taskId) return;
 
-    serverTasks.forEach((serverTask) => {
-      if (!serverTask.task_id) return;
+      console.log("🔄 [Tasks-Load] Processing task from DB:", {
+        taskId,
+        progress: row.current_progress,
+        completed: row.is_completed,
+        claimed: row.is_claimed
+      });
 
-      const localTask = localTasks.get(serverTask.task_id);
-      const serverUpdated = new Date(serverTask.updated_at).getTime();
+      const localTask = localTasks.get(taskId);
+      const dbTask: TaskProgressData = {
+        taskId: taskId,
+        taskType: row.task_type as "daily" | "weekly" | "progressive",
+        currentProgress: row.current_progress || 0,
+        isCompleted: row.is_completed || false,
+        isClaimed: row.is_claimed || false,
+        completedAt: row.completed_at || undefined,
+        claimedAt: row.claimed_at || undefined,
+        resetAt: row.reset_at || undefined,
+        expiresAt: row.expires_at || undefined,
+        lastUpdated: new Date(row.updated_at).getTime()
+      };
 
-      // Merge logic: Use server data if local doesn't exist OR server is newer
-      if (!localTask || serverUpdated > localTask.lastUpdated) {
-        const merged: TaskProgressData = {
-          taskId: serverTask.task_id,
-          taskType: (serverTask.task_type as "daily" | "weekly" | "progressive") || "progressive",
-          currentProgress: serverTask.current_progress || 0,
-          isCompleted: serverTask.is_completed || false,
-          isClaimed: serverTask.is_claimed || false,
-          completedAt: serverTask.completed_at || undefined,
-          claimedAt: serverTask.claimed_at || undefined,
-          resetAt: serverTask.reset_at || undefined,
-          expiresAt: serverTask.expires_at || undefined,
-          lastUpdated: serverUpdated,
-        };
-
-        localTasks.set(serverTask.task_id, merged);
-        mergeCount++;
-        console.log(`🔄 [Tasks-Load] Merged ${serverTask.task_id} from server (newer)`);
+      // Merge: prefer DB if more recent or if local doesn't exist
+      if (!localTask || dbTask.lastUpdated > localTask.lastUpdated) {
+        console.log("✅ [Tasks-Load] Using DB state for:", taskId);
+        localTasks.set(taskId, dbTask);
       } else {
-        console.log(`ℹ️ [Tasks-Load] Kept local ${serverTask.task_id} (newer or equal)`);
+        console.log("ℹ️ [Tasks-Load] Local state is newer, keeping local for:", taskId);
       }
     });
 
-    if (mergeCount > 0) {
-      saveLocalTaskProgress(localTasks);
-      console.log(`✅ [Tasks-Load] Merged ${mergeCount} tasks from server`);
-    } else {
-      console.log("ℹ️ [Tasks-Load] No merges needed (local is up-to-date)");
-    }
-
+    saveLocalTaskProgress(localTasks);
+    console.log("✅ [Tasks-Load] Task merge completed");
   } catch (error) {
     console.error("❌ [Tasks-Load] Exception:", error);
+  }
+}
+
+/**
+ * Save task progress to database (background, best-effort)
+ */
+async function saveTaskToDB(
+  userId: string,
+  telegramId: number,
+  taskId: string,
+  taskData: TaskProgressData
+): Promise<void> {
+  try {
+    console.log("📤 [Tasks-SaveDB] Attempting upsert for:", {
+      taskId,
+      userId,
+      telegramId,
+      taskData
+    });
+
+    const { data, error } = await supabase
+      .from("user_task_state")
+      .upsert({
+        user_id: userId,
+        telegram_id: telegramId,
+        task_id: taskId,
+        task_type: taskData.taskType,
+        current_progress: taskData.currentProgress,
+        is_completed: taskData.isCompleted,
+        is_claimed: taskData.isClaimed,
+        completed_at: taskData.completedAt || null,
+        claimed_at: taskData.claimedAt || null,
+        reset_at: taskData.resetAt || null,
+        expires_at: taskData.expiresAt || null,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: "user_id,task_id"
+      })
+      .select();
+
+    if (error) {
+      console.error("❌ [Tasks-SaveDB] Upsert failed:", {
+        error,
+        errorCode: error.code,
+        errorMessage: error.message,
+        errorDetails: error.details,
+        taskId,
+        userId
+      });
+    } else {
+      console.log("✅ [Tasks-SaveDB] Upsert successful:", {
+        taskId,
+        data
+      });
+    }
+  } catch (err) {
+    console.error("❌ [Tasks-SaveDB] Exception:", err, "for task:", taskId);
   }
 }
