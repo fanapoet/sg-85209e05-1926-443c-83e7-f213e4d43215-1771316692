@@ -15,7 +15,8 @@ import {
 import { 
   loadCompletedTasksFromDB, 
   syncCompletedTasksToDB,
-  mergeCompletedTasks
+  mergeCompletedTasks,
+  type CompletedTask
 } from "./taskDataService";
 
 export interface TaskProgressData {
@@ -24,9 +25,9 @@ export interface TaskProgressData {
   currentProgress: number;
   isCompleted: boolean;
   claimed: boolean;
-  completedAt: string | null; // ISO string
-  claimedAt: string | null; // ISO string
-  resetAt: string; // YYYY-MM-DD or YYYY-Www or NEVER
+  completedAt: string | null;
+  claimedAt: string | null;
+  resetAt: string;
 }
 
 const STORAGE_KEY = "bunergy_task_progress";
@@ -41,12 +42,10 @@ export function getResetDateString(taskType: "daily" | "weekly" | "milestone"): 
   const now = new Date();
   
   if (taskType === "daily") {
-    // Return YYYY-MM-DD
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   }
   
   if (taskType === "weekly") {
-    // Return YYYY-Www
     const d = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
     const dayNum = d.getUTCDay() || 7;
     d.setUTCDate(d.getUTCDate() + 4 - dayNum);
@@ -81,13 +80,10 @@ function getLocalTaskProgress(): Map<string, TaskProgressData> {
     const data = JSON.parse(stored);
     const map = new Map<string, TaskProgressData>();
     
-    // Process loaded tasks
     Object.entries(data).forEach(([key, value]: [string, any]) => {
       const task = value as TaskProgressData;
       
-      // Auto-reset check
       if (shouldResetTask(task.taskType, task.resetAt)) {
-        // Reset task
         map.set(key, {
           taskId: task.taskId,
           taskType: task.taskType,
@@ -166,7 +162,6 @@ export function updateTaskProgress(
   
   const resetAt = getResetDateString(taskType);
   
-  // If task is already claimed for this period, don't update progress
   if (existing?.claimed && existing.resetAt === resetAt) {
     return existing;
   }
@@ -178,7 +173,7 @@ export function updateTaskProgress(
     taskType,
     currentProgress,
     isCompleted,
-    claimed: existing?.claimed || false, // Keep claimed if valid
+    claimed: existing?.claimed || false,
     completedAt: isCompleted && !existing?.completedAt ? new Date().toISOString() : existing?.completedAt || null,
     claimedAt: existing?.claimedAt || null,
     resetAt
@@ -186,9 +181,6 @@ export function updateTaskProgress(
   
   progress.set(taskId, updated);
   saveLocalTaskProgress(progress);
-  
-  // NOTE: We do NOT sync partial progress to DB anymore. 
-  // We only sync completions via syncCompletedTasksToDB later.
   
   return updated;
 }
@@ -241,46 +233,34 @@ export function getAllTaskProgress(): TaskProgressData[] {
  * 1. Check/Update Reset Dates (TaskState)
  * 2. Sync Completed Tasks (TaskData)
  */
-export async function syncTasksWithServer(telegramId: number, userId: string): Promise<void> {
+export async function syncTasksWithServer(telegramId: string, userId: string): Promise<void> {
   try {
     console.log("🔄 [TASKS-SYNC] Starting sync for:", telegramId);
     
-    // 1. Load Local State
     const localTasks = getLocalTaskProgress();
-    const allTasks = Array.from(localTasks.values());
-    
-    // 2. Identify Current Local Reset Dates
     const currentDailyReset = getResetDateString("daily");
     const currentWeeklyReset = getResetDateString("weekly");
     
-    // 3. Fetch Server State
     const [serverState, serverCompletions] = await Promise.all([
       getTaskState(telegramId),
-      loadCompletedTasksFromDB(telegramId)
+      loadCompletedTasksFromDB(userId)
     ]);
     
-    // 4. Handle State Resets (Server vs Local)
-    let needsStateUpdate = false;
     let needsDailyReset = false;
     let needsWeeklyReset = false;
     
-    // Check Daily Reset
     if (!serverState || serverState.lastDailyResetDate !== currentDailyReset) {
       console.log("📅 [TASKS-SYNC] New daily period detected. Server:", serverState?.lastDailyResetDate, "Local:", currentDailyReset);
       needsDailyReset = true;
       await updateDailyResetDate(telegramId, currentDailyReset);
-      needsStateUpdate = true;
     }
     
-    // Check Weekly Reset
     if (!serverState || serverState.lastWeeklyResetDate !== currentWeeklyReset) {
       console.log("📅 [TASKS-SYNC] New weekly period detected. Server:", serverState?.lastWeeklyResetDate, "Local:", currentWeeklyReset);
       needsWeeklyReset = true;
       await updateWeeklyResetDate(telegramId, currentWeeklyReset);
-      needsStateUpdate = true;
     }
     
-    // Apply resets to local tasks IMMEDIATELY
     if (needsDailyReset || needsWeeklyReset) {
       console.log("🔄 [TASKS-SYNC] Applying resets to local tasks...");
       let resetCount = 0;
@@ -317,7 +297,6 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
       }
     }
     
-    // If server state was missing, create it
     if (!serverState) {
       await upsertTaskState({
         telegramId,
@@ -327,23 +306,20 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
       });
     }
 
-    // 5. Merge Completions (Server -> Local)
-    // Apply server completions to local IF they match current period
     if (serverCompletions && serverCompletions.length > 0) {
       let localUpdated = false;
       
       serverCompletions.forEach(comp => {
-        const local = localTasks.get(comp.taskId);
+        const local = localTasks.get(comp.task_id);
         
         if (local && local.taskType === "milestone") {
-          // Milestones are permanent - restore from server if not locally completed
           if (!local.isCompleted || !local.claimed) {
-            localTasks.set(comp.taskId, {
+            localTasks.set(comp.task_id, {
               ...local,
               isCompleted: true,
               claimed: true,
-              completedAt: new Date(comp.completedAt).toISOString(),
-              claimedAt: new Date(comp.completedAt).toISOString()
+              completedAt: comp.completed_at || new Date().toISOString(),
+              claimedAt: comp.claimed_at || new Date().toISOString()
             });
             localUpdated = true;
           }
@@ -356,26 +332,26 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
       }
     }
 
-    // 6. Push Local Completions (Local -> Server)
-    // Only sync CLAIMED tasks (not just completed)
     const allTasksArray = Array.from(localTasks.values());
     const tasksToSync = allTasksArray.filter(t => t.isCompleted && t.claimed);
     
     if (tasksToSync.length > 0) {
       console.log(`📤 [TASKS-SYNC] Syncing ${tasksToSync.length} claimed tasks to server...`);
       
-      const syncPayload = tasksToSync.map(t => ({
-        taskId: t.taskId,
-        completedAt: t.completedAt ? new Date(t.completedAt).getTime() : Date.now(),
-        rewardBZ: 0,
-        rewardXP: 0
+      const syncPayload: CompletedTask[] = tasksToSync.map(t => ({
+        task_id: t.taskId,
+        current_progress: t.currentProgress,
+        is_completed: t.isCompleted,
+        completed_at: t.completedAt,
+        claimed: t.claimed,
+        claimed_at: t.claimedAt,
+        reset_at: t.resetAt
       }));
       
-      const syncResult = await syncCompletedTasksToDB(telegramId, userId, syncPayload);
+      const syncResult = await syncCompletedTasksToDB(userId, syncPayload);
       
       if (!syncResult.success) {
         console.error("❌ [TASKS-SYNC] Failed to sync tasks:", syncResult.error);
-        // Don't throw - continue anyway
       }
     } else {
       console.log("⏭️ [TASKS-SYNC] No claimed tasks to sync");

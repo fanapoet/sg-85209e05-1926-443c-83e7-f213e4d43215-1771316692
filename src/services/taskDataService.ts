@@ -2,117 +2,80 @@ import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Task Data Service
- * Handles task completion history (write-once records)
- * FOLLOWS EXACT PATTERN FROM rewardDataService.ts
+ * Handles completed task history in user_task_progress table
  */
 
-/**
- * Validate timestamp
- */
-function validateTimestamp(timestamp: number): number {
-  if (!timestamp || isNaN(timestamp) || timestamp <= 0) {
-    return Date.now();
-  }
-  return timestamp;
-}
-
-/**
- * Validate and convert timestamp to ISO string
- */
-function toISOString(timestamp: number): string {
-  if (!timestamp || isNaN(timestamp) || timestamp <= 0) {
-    console.warn("⚠️ Invalid timestamp:", timestamp, "- using current time");
-    return new Date().toISOString();
-  }
-  
-  const date = new Date(timestamp);
-  if (isNaN(date.getTime())) {
-    console.warn("⚠️ Invalid date from timestamp:", timestamp, "- using current time");
-    return new Date().toISOString();
-  }
-  
-  return date.toISOString();
+export interface CompletedTask {
+  task_id: string;
+  current_progress: number;
+  is_completed: boolean;
+  completed_at: string | null;
+  claimed: boolean;
+  claimed_at: string | null;
+  reset_at: string | null;
 }
 
 /**
  * Load completed tasks from database
  */
 export async function loadCompletedTasksFromDB(
-  telegramId: number
-): Promise<Array<{ taskId: string; completedAt: number; rewardBZ: number; rewardXP: number }> | null> {
+  userId: string
+): Promise<CompletedTask[]> {
   try {
-    console.log("📥 [TASK-DATA] Loading from DB for telegram_id:", telegramId);
-
-    const { data, error } = await (supabase
-      .from("user_task_progress") as any)
-      .select("*")
-      .eq("telegram_id", telegramId)
-      .order("completed_at", { ascending: false });
+    const { data, error } = await supabase
+      .from("user_task_progress")
+      .select("task_id, current_progress, is_completed, completed_at, claimed, claimed_at, reset_at")
+      .eq("user_id", userId) as any;
 
     if (error) {
-      console.error("❌ [TASK-DATA] Load error:", error);
-      return null;
-    }
-
-    if (!data || data.length === 0) {
-      console.log("📥 [TASK-DATA] No completed tasks found in DB");
+      console.error("❌ [TASK-DATA-LOAD] Failed:", error);
       return [];
     }
 
-    // Convert DB format to app format
-    const tasks = data.map((row: any) => ({
-      taskId: row.task_id,
-      completedAt: new Date(row.completed_at).getTime(),
-      rewardBZ: Number(row.reward_bz) || 0,
-      rewardXP: Number(row.reward_xp) || 0
-    }));
-
-    console.log(`✅ [TASK-DATA] Loaded ${tasks.length} completed tasks from DB`);
-    return tasks;
-
-  } catch (error: any) {
-    console.error("❌ [TASK-DATA] Load exception:", error);
-    return null;
+    console.log(`✅ [TASK-DATA-LOAD] Loaded ${data?.length || 0} tasks from DB`);
+    return data || [];
+  } catch (error) {
+    console.error("❌ [TASK-DATA-LOAD] Exception:", error);
+    return [];
   }
 }
 
 /**
- * Sync completed tasks to database (UPSERT all local completions)
+ * Sync completed tasks to database
+ * Only syncs tasks that are CLAIMED (to prevent duplicates)
  */
 export async function syncCompletedTasksToDB(
-  telegramId: number,
   userId: string,
-  tasks: Array<{ taskId: string; completedAt: number; rewardBZ: number; rewardXP: number }>
+  completedTasks: CompletedTask[]
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    if (tasks.length === 0) {
-      console.log("⏭️ [TASK-DATA-SYNC] No tasks to sync");
+    // Only sync CLAIMED tasks (filter out completed but not claimed)
+    const claimedTasks = completedTasks.filter(t => t.claimed);
+
+    if (claimedTasks.length === 0) {
+      console.log("ℹ️ [TASK-DATA-SYNC] No claimed tasks to sync");
       return { success: true };
     }
 
-    console.log(`📤 [TASK-DATA-SYNC] Syncing ${tasks.length} completed tasks to DB...`);
-    console.log("📤 [TASK-DATA-SYNC] Sample task:", tasks[0]);
+    console.log(`📤 [TASK-DATA-SYNC] Syncing ${claimedTasks.length} claimed tasks to server...`);
 
-    const upsertData = tasks.map(task => {
-      const completedAt = toISOString(task.completedAt);
-      console.log(`📤 [TASK-DATA-SYNC] Converting timestamp ${task.completedAt} → ${completedAt}`);
-      
-      return {
-        user_id: userId,
-        telegram_id: telegramId,
-        task_id: task.taskId,
-        reward_bz: task.rewardBZ,
-        reward_xp: task.rewardXP,
-        completed_at: completedAt
-      };
-    });
+    // Prepare upsert data
+    const upsertData = claimedTasks.map(task => ({
+      user_id: userId,
+      task_id: task.task_id,
+      current_progress: task.current_progress,
+      is_completed: task.is_completed,
+      completed_at: task.completed_at,
+      claimed: task.claimed,
+      claimed_at: task.claimed_at,
+      reset_at: task.reset_at || new Date().toISOString()
+    }));
 
-    console.log("📤 [TASK-DATA-SYNC] Upsert data sample:", upsertData[0]);
-
-    const { error } = await (supabase
-      .from("user_task_progress") as any)
+    // Upsert to prevent duplicates (UNIQUE constraint on user_id + task_id + reset_at)
+    const { error } = await supabase
+      .from("user_task_progress")
       .upsert(upsertData, {
-        onConflict: "user_id,task_id",
+        onConflict: "user_id,task_id,reset_at",
         ignoreDuplicates: false
       });
 
@@ -122,37 +85,56 @@ export async function syncCompletedTasksToDB(
       return { success: false, error: error.message };
     }
 
-    console.log(`✅ [TASK-DATA-SYNC] ${tasks.length} tasks synced successfully!`);
+    console.log(`✅ [TASK-DATA-SYNC] Synced ${claimedTasks.length} tasks successfully`);
     return { success: true };
 
-  } catch (error: any) {
-    console.error("❌ [TASK-DATA-SYNC] Sync exception:", error);
-    return { success: false, error: error.message };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("❌ [TASK-DATA-SYNC] Exception:", message);
+    return { success: false, error: message };
   }
 }
 
 /**
- * Merge local and server completed tasks (deduplicate by taskId, keep all unique)
+ * Merge local and server tasks
+ * Server wins for claimed tasks, local wins for progress
  */
 export function mergeCompletedTasks(
-  localTasks: Array<{ taskId: string; completedAt: number; rewardBZ: number; rewardXP: number }>,
-  serverTasks: Array<{ taskId: string; completedAt: number; rewardBZ: number; rewardXP: number }>
-): Array<{ taskId: string; completedAt: number; rewardBZ: number; rewardXP: number }> {
-  const mergedMap = new Map<string, any>();
+  localTasks: CompletedTask[],
+  serverTasks: CompletedTask[]
+): CompletedTask[] {
+  const merged = new Map<string, CompletedTask>();
 
-  // Add all local tasks
+  // Start with local tasks
   localTasks.forEach(task => {
-    mergedMap.set(task.taskId, task);
+    const key = `${task.task_id}|${task.reset_at || 'current'}`;
+    merged.set(key, task);
   });
 
-  // Add server tasks (only if not already present)
-  serverTasks.forEach(task => {
-    if (!mergedMap.has(task.taskId)) {
-      mergedMap.set(task.taskId, task);
+  // Merge server tasks (server wins for claimed status)
+  serverTasks.forEach(serverTask => {
+    const key = `${serverTask.task_id}|${serverTask.reset_at || 'current'}`;
+    const localTask = merged.get(key);
+
+    if (!localTask) {
+      // Server has a task we don't have locally
+      merged.set(key, serverTask);
+    } else {
+      // Both exist - merge intelligently
+      merged.set(key, {
+        ...localTask,
+        // Server wins for claimed status (prevent duplicate claims)
+        claimed: serverTask.claimed || localTask.claimed,
+        claimed_at: serverTask.claimed_at || localTask.claimed_at,
+        // Take higher progress
+        current_progress: Math.max(localTask.current_progress, serverTask.current_progress),
+        is_completed: serverTask.is_completed || localTask.is_completed,
+        completed_at: serverTask.completed_at || localTask.completed_at
+      });
     }
   });
 
-  const merged = Array.from(mergedMap.values());
-  console.log(`🔀 [TASK-DATA] Merged: ${localTasks.length} local + ${serverTasks.length} server = ${merged.length} unique`);
-  return merged;
+  const result = Array.from(merged.values());
+  console.log(`🔀 [TASK-DATA-MERGE] ${localTasks.length} local + ${serverTasks.length} server = ${result.length} unique`);
+  return result;
 }
