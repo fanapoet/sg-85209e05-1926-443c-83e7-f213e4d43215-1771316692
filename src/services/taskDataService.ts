@@ -10,7 +10,7 @@ export interface CompletedTask {
   current_progress: number;
   is_completed: boolean;
   completed_at: string | null;
-  claimed: boolean;
+  is_claimed: boolean;
   claimed_at: string | null;
   reset_at: string | null;
 }
@@ -24,7 +24,7 @@ export async function loadCompletedTasksFromDB(
   try {
     const { data, error } = await supabase
       .from("user_task_progress")
-      .select("task_id, current_progress, is_completed, completed_at, claimed, claimed_at, reset_at")
+      .select("task_id, current_progress, is_completed, completed_at, is_claimed, claimed_at, reset_at")
       .eq("user_id", userId) as any;
 
     if (error) {
@@ -50,7 +50,7 @@ export async function syncCompletedTasksToDB(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     // Only sync CLAIMED tasks (filter out completed but not claimed)
-    const claimedTasks = completedTasks.filter(t => t.claimed);
+    const claimedTasks = completedTasks.filter(t => t.is_claimed);
 
     if (claimedTasks.length === 0) {
       console.log("ℹ️ [TASK-DATA-SYNC] No claimed tasks to sync");
@@ -66,7 +66,7 @@ export async function syncCompletedTasksToDB(
       current_progress: task.current_progress,
       is_completed: task.is_completed,
       completed_at: task.completed_at,
-      claimed: task.claimed,
+      is_claimed: task.is_claimed,
       claimed_at: task.claimed_at,
       reset_at: task.reset_at || new Date().toISOString()
     }));
@@ -124,7 +124,7 @@ export function mergeCompletedTasks(
       merged.set(key, {
         ...localTask,
         // Server wins for claimed status (prevent duplicate claims)
-        claimed: serverTask.claimed || localTask.claimed,
+        is_claimed: serverTask.is_claimed || localTask.is_claimed,
         claimed_at: serverTask.claimed_at || localTask.claimed_at,
         // Take higher progress
         current_progress: Math.max(localTask.current_progress, serverTask.current_progress),

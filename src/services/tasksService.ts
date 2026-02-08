@@ -24,7 +24,7 @@ export interface TaskProgressData {
   taskType: "daily" | "weekly" | "milestone";
   currentProgress: number;
   isCompleted: boolean;
-  claimed: boolean;
+  isClaimed: boolean;
   completedAt: string | null;
   claimedAt: string | null;
   resetAt: string;
@@ -89,7 +89,7 @@ function getLocalTaskProgress(): Map<string, TaskProgressData> {
           taskType: task.taskType,
           currentProgress: 0,
           isCompleted: false,
-          claimed: false,
+          isClaimed: false,
           completedAt: null,
           claimedAt: null,
           resetAt: getResetDateString(task.taskType)
@@ -139,7 +139,7 @@ export function initializeTask(
       taskType,
       currentProgress: 0,
       isCompleted: false,
-      claimed: false,
+      isClaimed: false,
       completedAt: null,
       claimedAt: null,
       resetAt
@@ -162,7 +162,7 @@ export function updateTaskProgress(
   
   const resetAt = getResetDateString(taskType);
   
-  if (existing?.claimed && existing.resetAt === resetAt) {
+  if (existing?.isClaimed && existing.resetAt === resetAt) {
     return existing;
   }
 
@@ -173,7 +173,7 @@ export function updateTaskProgress(
     taskType,
     currentProgress,
     isCompleted,
-    claimed: existing?.claimed || false,
+    isClaimed: existing?.isClaimed || false,
     completedAt: isCompleted && !existing?.completedAt ? new Date().toISOString() : existing?.completedAt || null,
     claimedAt: existing?.claimedAt || null,
     resetAt
@@ -195,13 +195,13 @@ export function claimTaskReward(
   const progress = getLocalTaskProgress();
   const existing = progress.get(taskId);
   
-  if (!existing || !existing.isCompleted || existing.claimed) {
+  if (!existing || !existing.isCompleted || existing.isClaimed) {
     return null;
   }
   
   const updated: TaskProgressData = {
     ...existing,
-    claimed: true,
+    isClaimed: true,
     claimedAt: new Date().toISOString()
   };
   
@@ -282,7 +282,7 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
             ...task,
             currentProgress: 0,
             isCompleted: false,
-            claimed: false,
+            isClaimed: false,
             completedAt: null,
             claimedAt: null,
             resetAt: task.taskType === "daily" ? currentDailyReset : currentWeeklyReset
@@ -313,11 +313,11 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
         const local = localTasks.get(comp.task_id);
         
         if (local && local.taskType === "milestone") {
-          if (!local.isCompleted || !local.claimed) {
+          if (!local.isCompleted || !local.isClaimed) {
             localTasks.set(comp.task_id, {
               ...local,
               isCompleted: true,
-              claimed: true,
+              isClaimed: true,
               completedAt: comp.completed_at || new Date().toISOString(),
               claimedAt: comp.claimed_at || new Date().toISOString()
             });
@@ -333,7 +333,7 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
     }
 
     const allTasksArray = Array.from(localTasks.values());
-    const tasksToSync = allTasksArray.filter(t => t.isCompleted && t.claimed);
+    const tasksToSync = allTasksArray.filter(t => t.isCompleted && t.isClaimed);
     
     if (tasksToSync.length > 0) {
       console.log(`📤 [TASKS-SYNC] Syncing ${tasksToSync.length} claimed tasks to server...`);
@@ -343,7 +343,7 @@ export async function syncTasksWithServer(telegramId: number, userId: string): P
         current_progress: t.currentProgress,
         is_completed: t.isCompleted,
         completed_at: t.completedAt,
-        claimed: t.claimed,
+        is_claimed: t.isClaimed,
         claimed_at: t.claimedAt,
         reset_at: t.resetAt
       }));
