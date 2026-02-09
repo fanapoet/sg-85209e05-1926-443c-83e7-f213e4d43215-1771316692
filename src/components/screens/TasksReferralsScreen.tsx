@@ -440,7 +440,8 @@ export function TasksReferralsScreen() {
   ];
 
   const dailyTasks = tasks.filter(t => t.type === "daily");
-  const otherTasks = tasks.filter(t => t.type !== "daily");
+  const weeklyTasks = tasks.filter(t => t.type === "weekly");
+  const progressiveTasks = tasks.filter(t => t.type === "progressive");
 
   // Referral milestones
   const milestones = [
@@ -624,7 +625,8 @@ export function TasksReferralsScreen() {
               <Trophy className="h-5 w-5 text-purple-500" />
               <h3 className="font-semibold text-lg">Challenges & Milestones</h3>
             </div>
-            {otherTasks.map(renderTaskCard)}
+            {weeklyTasks.map(renderTaskCard)}
+            {progressiveTasks.map(renderTaskCard)}
           </div>
         </TabsContent>
 
