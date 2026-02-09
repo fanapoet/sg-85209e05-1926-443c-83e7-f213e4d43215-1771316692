@@ -27,11 +27,11 @@ export async function loadTaskProgressFromDB(
   try {
     console.log(`📥 [Task Data] Loading progress for telegram_id: ${telegramId}`);
 
-    // Use any cast to bypass strict typing issues with custom/renamed columns
-    const { data, error } = await supabase
-      .from("user_task_progress")
+    // Cast table ref to any to bypass "excessively deep" type instantiation error
+    const { data, error } = await (supabase
+      .from("user_task_progress") as any)
       .select("*")
-      .eq("telegram_id", parseInt(telegramId) as any) as any;
+      .eq("telegram_id", parseInt(telegramId));
 
     if (error) {
       console.error("❌ [Task Data] Load error:", JSON.stringify(error));
@@ -94,11 +94,11 @@ export async function syncTaskProgressToDB(
     // Prepare records for upsert
     const dbRecords = progressRecords.map((task) => ({
       user_id: profile.id,
-      telegram_id: parseInt(telegramId), // Ensure numeric for bigint column
+      telegram_id: parseInt(telegramId),
       task_id: task.taskId,
       current_progress: task.currentProgress,
-      completed: task.completed,
-      claimed: task.claimed,
+      completed: task.completed ?? false,
+      claimed: task.claimed ?? false,
       completed_at: task.completedAt || null,
       claimed_at: task.claimedAt || null,
       reset_at: task.resetAt,
