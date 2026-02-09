@@ -50,40 +50,64 @@ export async function getTaskState(telegramId: number): Promise<TaskStateRecord 
 
 export async function upsertTaskState(data: TaskStateData) {
   try {
+    // 1. Get Telegram User
     const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
     
     if (!tgUser) {
       return { success: false, error: "No Telegram user data" };
     }
     
+    // 2. Get Profile for UUID
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id")
       .eq("telegram_id", tgUser.id)
       .maybeSingle();
     
-    if (profileError) {
-      return { success: false, error: profileError.message };
-    }
-    
-    if (!profile) {
+    if (profileError || !profile) {
       return { success: false, error: "Profile not found" };
     }
 
-    const { data: result, error } = await supabase
-      .from("user_task_state")
-      .upsert({
-        telegram_id: data.telegramId,
-        user_id: profile.id,
-        last_daily_reset_date: data.lastDailyResetDate,
-        last_weekly_reset_date: data.lastWeeklyResetDate,
-        task_id: null,
-        updated_at: new Date().toISOString()
-      })
-      .eq("telegram_id", data.telegramId)
-      .eq("task_id", null)
-      .select()
-      .single();
+    // 3. Check for existing record
+    const existing = await getTaskState(data.telegramId);
+
+    let result;
+    let error;
+
+    if (existing) {
+      // UPDATE existing record
+      const updateResponse = await supabase
+        .from("user_task_state")
+        .update({
+          user_id: profile.id, // Ensure user_id matches profile
+          last_daily_reset_date: data.lastDailyResetDate,
+          last_weekly_reset_date: data.lastWeeklyResetDate,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", existing.id)
+        .select()
+        .single();
+        
+      result = updateResponse.data;
+      error = updateResponse.error;
+    } else {
+      // INSERT new record
+      const insertResponse = await supabase
+        .from("user_task_state")
+        .insert({
+          telegram_id: data.telegramId,
+          user_id: profile.id,
+          task_id: null,
+          last_daily_reset_date: data.lastDailyResetDate,
+          last_weekly_reset_date: data.lastWeeklyResetDate,
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+        
+      result = insertResponse.data;
+      error = insertResponse.error;
+    }
 
     if (error) {
       return { success: false, error: error.message };
@@ -118,20 +142,41 @@ export async function updateDailyResetDate(telegramId: number, resetDate: string
 
     const existing = await getTaskState(telegramId);
     
-    const { data: result, error } = await supabase
-      .from("user_task_state")
-      .upsert({
-        telegram_id: telegramId,
-        user_id: profile.id,
-        task_id: null,
-        last_daily_reset_date: resetDate,
-        last_weekly_reset_date: existing?.lastWeeklyResetDate || resetDate,
-        updated_at: new Date().toISOString()
-      })
-      .eq("telegram_id", telegramId)
-      .eq("task_id", null)
-      .select()
-      .single();
+    let result;
+    let error;
+
+    if (existing) {
+      // UPDATE existing
+      const response = await supabase
+        .from("user_task_state")
+        .update({
+          last_daily_reset_date: resetDate,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", existing.id)
+        .select()
+        .single();
+        
+      result = response.data;
+      error = response.error;
+    } else {
+      // INSERT new
+      const response = await supabase
+        .from("user_task_state")
+        .insert({
+          telegram_id: telegramId,
+          user_id: profile.id,
+          task_id: null,
+          last_daily_reset_date: resetDate,
+          last_weekly_reset_date: resetDate, // Initialize weekly too
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+        
+      result = response.data;
+      error = response.error;
+    }
 
     if (error) {
       return { success: false, error: error.message };
@@ -166,20 +211,41 @@ export async function updateWeeklyResetDate(telegramId: number, resetDate: strin
 
     const existing = await getTaskState(telegramId);
     
-    const { data: result, error } = await supabase
-      .from("user_task_state")
-      .upsert({
-        telegram_id: telegramId,
-        user_id: profile.id,
-        task_id: null,
-        last_daily_reset_date: existing?.lastDailyResetDate || resetDate,
-        last_weekly_reset_date: resetDate,
-        updated_at: new Date().toISOString()
-      })
-      .eq("telegram_id", telegramId)
-      .eq("task_id", null)
-      .select()
-      .single();
+    let result;
+    let error;
+
+    if (existing) {
+      // UPDATE existing
+      const response = await supabase
+        .from("user_task_state")
+        .update({
+          last_weekly_reset_date: resetDate,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", existing.id)
+        .select()
+        .single();
+        
+      result = response.data;
+      error = response.error;
+    } else {
+      // INSERT new
+      const response = await supabase
+        .from("user_task_state")
+        .insert({
+          telegram_id: telegramId,
+          user_id: profile.id,
+          task_id: null,
+          last_daily_reset_date: resetDate, // Initialize daily too
+          last_weekly_reset_date: resetDate,
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+        
+      result = response.data;
+      error = response.error;
+    }
 
     if (error) {
       return { success: false, error: error.message };
