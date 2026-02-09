@@ -2,56 +2,16 @@ import { supabase } from "@/integrations/supabase/client";
 
 export interface TaskStateData {
   telegramId: number;
-  userId?: string;
-  lastDailyResetDate: string | null;
-  lastWeeklyResetDate: string | null;
-}
-
-export interface TaskStateRecord {
-  id: string;
   userId: string;
-  telegramId: number;
   lastDailyResetDate: string | null;
   lastWeeklyResetDate: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export async function getTaskState(telegramId: number): Promise<TaskStateRecord | null> {
-  try {
-    const { data, error } = await supabase
-      .from("user_task_state")
-      .select("id, user_id, telegram_id, last_daily_reset_date, last_weekly_reset_date, created_at, updated_at")
-      .eq("telegram_id", telegramId)
-      .maybeSingle();
-
-    if (error) {
-      return null;
-    }
-
-    if (!data) {
-      return null;
-    }
-
-    return {
-      id: data.id,
-      userId: data.user_id,
-      telegramId: data.telegram_id,
-      lastDailyResetDate: data.last_daily_reset_date,
-      lastWeeklyResetDate: data.last_weekly_reset_date,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at
-    };
-  } catch (error) {
-    return null;
-  }
 }
 
 export async function upsertTaskState(data: TaskStateData) {
   try {
     console.log("💾 [Task State] Upserting:", data);
 
-    // EXACT REWARDS PATTERN: Get Telegram user ID
+    // Get Telegram user ID
     const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
     
     if (!tgUser) {
@@ -61,7 +21,7 @@ export async function upsertTaskState(data: TaskStateData) {
     
     console.log("🔵 [Task State] Telegram user ID:", tgUser.id);
     
-    // EXACT REWARDS PATTERN: Find user profile by telegram_id
+    // Find user profile by telegram_id
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id")
@@ -80,16 +40,48 @@ export async function upsertTaskState(data: TaskStateData) {
     
     console.log("🔵 [Task State] Found profile UUID:", profile.id);
 
-    // EXACT REWARDS PATTERN: Simple upsert with onConflict
+    // Check if record exists
+    const { data: existing } = await supabase
+      .from("user_task_state")
+      .select("id, last_daily_reset_date, last_weekly_reset_date")
+      .eq("telegram_id", data.telegramId)
+      .maybeSingle();
+
+    console.log("🔵 [Task State] Existing record:", existing);
+
+    // Build update object - only update non-null fields
+    const updateData: any = {
+      telegram_id: data.telegramId,
+      user_id: profile.id,
+      updated_at: new Date().toISOString()
+    };
+
+    // Only set daily date if it's provided (not null)
+    if (data.lastDailyResetDate !== null) {
+      updateData.last_daily_reset_date = data.lastDailyResetDate;
+      console.log("🔵 [Task State] Setting lastDailyResetDate:", data.lastDailyResetDate);
+    } else if (existing?.last_daily_reset_date) {
+      // Preserve existing value if not updating
+      updateData.last_daily_reset_date = existing.last_daily_reset_date;
+      console.log("🔵 [Task State] Preserving existing lastDailyResetDate:", existing.last_daily_reset_date);
+    }
+
+    // Only set weekly date if it's provided (not null)
+    if (data.lastWeeklyResetDate !== null) {
+      updateData.last_weekly_reset_date = data.lastWeeklyResetDate;
+      console.log("🔵 [Task State] Setting lastWeeklyResetDate:", data.lastWeeklyResetDate);
+    } else if (existing?.last_weekly_reset_date) {
+      // Preserve existing value if not updating
+      updateData.last_weekly_reset_date = existing.last_weekly_reset_date;
+      console.log("🔵 [Task State] Preserving existing lastWeeklyResetDate:", existing.last_weekly_reset_date);
+    }
+
+    console.log("🔵 [Task State] Final update data:", updateData);
+
+    // Upsert with the built object
     const { data: result, error } = await supabase
       .from("user_task_state")
-      .upsert({
-        telegram_id: data.telegramId,
-        user_id: profile.id,
-        last_daily_reset_date: data.lastDailyResetDate,
-        last_weekly_reset_date: data.lastWeeklyResetDate,
-        updated_at: new Date().toISOString()
-      }, {
+      .upsert(updateData, {
         onConflict: "telegram_id"
       })
       .select()
@@ -97,11 +89,10 @@ export async function upsertTaskState(data: TaskStateData) {
 
     if (error) {
       console.error("❌ [Task State] Upsert error:", error);
-      console.error("❌ [Task State] Error details:", JSON.stringify(error, null, 2));
       return { success: false, error: error.message };
     }
 
-    console.log("✅ [Task State] Upserted successfully:", result.id);
+    console.log("✅ [Task State] Upserted successfully:", result);
     return { success: true, data: result };
   } catch (error) {
     console.error("❌ [Task State] Upsert exception:", error);
@@ -112,21 +103,39 @@ export async function upsertTaskState(data: TaskStateData) {
   }
 }
 
+export async function getTaskState(telegramId: number) {
+  try {
+    const { data, error } = await supabase
+      .from("user_task_state")
+      .select("*")
+      .eq("telegram_id", telegramId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("❌ [Task State] Get error:", error);
+      return null;
+    }
+
+    return data;
+  } catch (error) {
+    console.error("❌ [Task State] Get exception:", error);
+    return null;
+  }
+}
+
 export async function updateDailyResetDate(telegramId: number, resetDate: string) {
-  console.log("💾 [Task State] Updating daily reset date:", { telegramId, resetDate });
-  
-  return await upsertTaskState({
+  return upsertTaskState({
     telegramId,
+    userId: "", // Will be fetched from profile lookup
     lastDailyResetDate: resetDate,
     lastWeeklyResetDate: null
   });
 }
 
 export async function updateWeeklyResetDate(telegramId: number, resetDate: string) {
-  console.log("💾 [Task State] Updating weekly reset date:", { telegramId, resetDate });
-  
-  return await upsertTaskState({
+  return upsertTaskState({
     telegramId,
+    userId: "", // Will be fetched from profile lookup
     lastDailyResetDate: null,
     lastWeeklyResetDate: resetDate
   });
