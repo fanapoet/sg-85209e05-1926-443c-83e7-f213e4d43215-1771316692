@@ -289,23 +289,14 @@ export function TasksReferralsScreen() {
       if (telegramId && userProfileId) {
         const syncResetDate = async () => {
           const today = new Date().toISOString().split('T')[0];
-          const { upsertTaskState } = await import("@/services/taskStateService");
           
           if (task.type === "daily") {
-            await upsertTaskState({
-              telegramId: telegramId,
-              userId: userProfileId,
-              lastDailyResetDate: today,
-              lastWeeklyResetDate: null
-            });
+            const { updateDailyResetDate } = await import("@/services/taskStateService");
+            await updateDailyResetDate(telegramId, today);
             console.log("✅ [Tasks-Claim] Updated last_daily_reset_date:", today);
           } else if (task.type === "weekly") {
-            await upsertTaskState({
-              telegramId: telegramId,
-              userId: userProfileId,
-              lastDailyResetDate: null,
-              lastWeeklyResetDate: today
-            });
+            const { updateWeeklyResetDate } = await import("@/services/taskStateService");
+            await updateWeeklyResetDate(telegramId, today);
             console.log("✅ [Tasks-Claim] Updated last_weekly_reset_date:", today);
           }
         };
