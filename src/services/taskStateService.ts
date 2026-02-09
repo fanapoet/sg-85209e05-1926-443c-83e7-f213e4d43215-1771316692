@@ -34,7 +34,7 @@ export async function getTaskState(telegramId: number): Promise<TaskStateRecord 
       .from("user_task_state")
       .select("id, user_id, telegram_id, last_daily_reset_date, last_weekly_reset_date, created_at, updated_at")
       .eq("telegram_id", telegramId)
-      .is("task_id", null) // Only get the reset date record (no specific task)
+      .is("task_id", null)
       .maybeSingle();
 
     if (error) {
@@ -107,10 +107,10 @@ export async function upsertTaskState(data: TaskStateData) {
         user_id: profile.id,
         last_daily_reset_date: data.lastDailyResetDate,
         last_weekly_reset_date: data.lastWeeklyResetDate,
-        task_id: null, // Reset record has no task_id
+        task_id: null,
         updated_at: new Date().toISOString()
       }, {
-        onConflict: "telegram_id"
+        onConflict: "telegram_id,task_id"
       })
       .select()
       .maybeSingle();
@@ -133,20 +133,50 @@ export async function upsertTaskState(data: TaskStateData) {
 }
 
 /**
- * Update daily reset date
+ * Update daily reset date (creates record if doesn't exist)
+ * REWRITTEN to use UPSERT pattern like Rewards
  */
 export async function updateDailyResetDate(telegramId: number, resetDate: string) {
   try {
     console.log("💾 [Task State] Updating daily reset date:", { telegramId, resetDate });
 
+    // 1. Get Telegram user and profile (REQUIRED for RLS)
+    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+    
+    if (!tgUser) {
+      console.error("❌ [Task State] No Telegram user data");
+      return { success: false, error: "No Telegram user data" };
+    }
+    
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", tgUser.id)
+      .maybeSingle();
+    
+    if (profileError || !profile) {
+      console.error("❌ [Task State] Profile lookup error:", profileError);
+      return { success: false, error: "Profile not found" };
+    }
+    
+    console.log("🔵 [Task State] Found profile UUID:", profile.id);
+
+    // 2. Get existing record (to preserve weekly date)
+    const existing = await getTaskState(telegramId);
+    
+    // 3. UPSERT with merged data
     const { data: result, error } = await supabase
       .from("user_task_state")
-      .update({
+      .upsert({
+        telegram_id: telegramId,
+        user_id: profile.id,
+        task_id: null,
         last_daily_reset_date: resetDate,
+        last_weekly_reset_date: existing?.lastWeeklyResetDate || resetDate,
         updated_at: new Date().toISOString()
+      }, {
+        onConflict: "telegram_id,task_id"
       })
-      .eq("telegram_id", telegramId)
-      .is("task_id", null)
       .select()
       .maybeSingle();
 
@@ -167,20 +197,50 @@ export async function updateDailyResetDate(telegramId: number, resetDate: string
 }
 
 /**
- * Update weekly reset date
+ * Update weekly reset date (creates record if doesn't exist)
+ * REWRITTEN to use UPSERT pattern like Rewards
  */
 export async function updateWeeklyResetDate(telegramId: number, resetDate: string) {
   try {
     console.log("💾 [Task State] Updating weekly reset date:", { telegramId, resetDate });
 
+    // 1. Get Telegram user and profile (REQUIRED for RLS)
+    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
+    
+    if (!tgUser) {
+      console.error("❌ [Task State] No Telegram user data");
+      return { success: false, error: "No Telegram user data" };
+    }
+    
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", tgUser.id)
+      .maybeSingle();
+    
+    if (profileError || !profile) {
+      console.error("❌ [Task State] Profile lookup error:", profileError);
+      return { success: false, error: "Profile not found" };
+    }
+    
+    console.log("🔵 [Task State] Found profile UUID:", profile.id);
+
+    // 2. Get existing record (to preserve daily date)
+    const existing = await getTaskState(telegramId);
+    
+    // 3. UPSERT with merged data
     const { data: result, error } = await supabase
       .from("user_task_state")
-      .update({
+      .upsert({
+        telegram_id: telegramId,
+        user_id: profile.id,
+        task_id: null,
+        last_daily_reset_date: existing?.lastDailyResetDate || resetDate,
         last_weekly_reset_date: resetDate,
         updated_at: new Date().toISOString()
+      }, {
+        onConflict: "telegram_id,task_id"
       })
-      .eq("telegram_id", telegramId)
-      .is("task_id", null)
       .select()
       .maybeSingle();
 
