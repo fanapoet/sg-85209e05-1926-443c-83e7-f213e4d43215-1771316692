@@ -207,6 +207,52 @@ export function RewardsNFTsScreen() {
     }
   }, [weeklyChallenges, loading]);
 
+  // Check for weekly reset after challenges are loaded and context is available
+  useEffect(() => {
+    if (!loading && lastDailyClaimDate) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const lastClaim = new Date(lastDailyClaimDate);
+      lastClaim.setHours(0, 0, 0, 0);
+      const daysSinceLastClaim = Math.floor((today.getTime() - lastClaim.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSinceLastClaim >= 7) {
+        console.log(`🔄 [Rewards] Weekly reset detected. Resetting challenges.`);
+        setWeeklyChallenges([
+          {
+            key: "builder",
+            name: "Master Builder",
+            icon: "Hammer",
+            description: "Perform 50 upgrades",
+            target: 50,
+            progress: 0,
+            reward: { type: "BZ", amount: 10000 },
+            claimed: false
+          },
+          {
+            key: "recruiter",
+            name: "Top Recruiter",
+            icon: "Users",
+            description: "Invite 5 friends",
+            target: 5,
+            progress: 0,
+            reward: { type: "BB", amount: 0.005 },
+            claimed: false
+          },
+          {
+            key: "converter",
+            name: "Exchange Guru",
+            icon: "ArrowLeftRight",
+            description: "Convert 10 times",
+            target: 10,
+            progress: 0,
+            reward: { type: "XP", amount: 5000 },
+            claimed: false
+          }
+        ]);
+      }
+    }
+  }, [weeklyChallenges, lastDailyClaimDate, loading]);
+
   const isStage2Complete = (): boolean => {
     try {
       const buildParts = localStorage.getItem("buildParts");
