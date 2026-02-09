@@ -347,11 +347,17 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           
           const today = new Date().toISOString().split("T")[0];
           console.log("📤 [TASK-STATE] Ensuring reset tracking record exists");
+          
+          // Get current state first (EXACT REWARDS PATTERN)
+          const { getTaskState } = await import("@/services/taskStateService");
+          const currentState = await getTaskState(authResult.profile.telegram_id);
+          
+          // Always pass both dates (use today if no existing values)
           await upsertTaskState({
             telegramId: authResult.profile.telegram_id,
             userId: authResult.profile.id,
-            lastDailyResetDate: today,
-            lastWeeklyResetDate: today
+            lastDailyResetDate: currentState?.lastDailyResetDate || today,
+            lastWeeklyResetDate: currentState?.lastWeeklyResetDate || today
           });
           console.log("✅ [TASK-STATE] Reset tracking record initialized");
         }
@@ -859,36 +865,31 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         throw new Error("Failed to claim task in local state");
       }
       
-      // 3. Sync to Database (Background) - EXACT REWARDS PATTERN
+      // 3. Sync to Database - EXACT REWARDS PATTERN
       if (telegramId && userId) {
         console.log("📤 [TASK-CLAIM] Syncing to database...");
         
         try {
           const today = new Date().toISOString().split("T")[0];
           console.log("📤 [TASK-CLAIM] Today date:", today);
-          console.log("📤 [TASK-CLAIM] Task type:", taskType);
           
-          if (taskType === "daily") {
-            console.log("📤 [TASK-CLAIM] Updating daily reset date...");
-            const result = await upsertTaskState({
-              telegramId,
-              userId,
-              lastDailyResetDate: today,
-              lastWeeklyResetDate: null
-            });
-            console.log("✅ [TASK-CLAIM] Daily reset date updated:", result);
-          } else if (taskType === "weekly") {
-            console.log("📤 [TASK-CLAIM] Updating weekly reset date...");
-            const result = await upsertTaskState({
-              telegramId,
-              userId,
-              lastDailyResetDate: null,
-              lastWeeklyResetDate: today
-            });
-            console.log("✅ [TASK-CLAIM] Weekly reset date updated:", result);
-          }
+          // Get current state from DB (like Rewards does)
+          const { getTaskState } = await import("@/services/taskStateService");
+          const currentState = await getTaskState(telegramId);
+          console.log("📤 [TASK-CLAIM] Current DB state:", currentState);
           
-          console.log("✅ [TASK-CLAIM] Database sync complete");
+          // Build update with both dates (EXACT REWARDS PATTERN)
+          const updateData = {
+            telegramId,
+            userId,
+            lastDailyResetDate: taskType === "daily" ? today : (currentState?.lastDailyResetDate || today),
+            lastWeeklyResetDate: taskType === "weekly" ? today : (currentState?.lastWeeklyResetDate || today)
+          };
+          
+          console.log("📤 [TASK-CLAIM] Update data:", updateData);
+          
+          const result = await upsertTaskState(updateData);
+          console.log("✅ [TASK-CLAIM] Database sync result:", result);
         } catch (dbError) {
           console.error("❌ [TASK-CLAIM] Database sync failed:", dbError);
         }

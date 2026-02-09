@@ -3,10 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 export interface TaskStateData {
   telegramId: number;
   userId: string;
-  lastDailyResetDate: string | null;
-  lastWeeklyResetDate: string | null;
+  lastDailyResetDate: string;
+  lastWeeklyResetDate: string;
 }
 
+/**
+ * Upsert task state - EXACT REWARDS PATTERN
+ * Always pass both dates, never NULL
+ */
 export async function upsertTaskState(data: TaskStateData) {
   try {
     console.log("💾 [Task State] Upserting:", data);
@@ -40,48 +44,16 @@ export async function upsertTaskState(data: TaskStateData) {
     
     console.log("🔵 [Task State] Found profile UUID:", profile.id);
 
-    // Check if record exists
-    const { data: existing } = await supabase
-      .from("user_task_state")
-      .select("id, last_daily_reset_date, last_weekly_reset_date")
-      .eq("telegram_id", data.telegramId)
-      .maybeSingle();
-
-    console.log("🔵 [Task State] Existing record:", existing);
-
-    // Build update object - only update non-null fields
-    const updateData: any = {
-      telegram_id: data.telegramId,
-      user_id: profile.id,
-      updated_at: new Date().toISOString()
-    };
-
-    // Only set daily date if it's provided (not null)
-    if (data.lastDailyResetDate !== null) {
-      updateData.last_daily_reset_date = data.lastDailyResetDate;
-      console.log("🔵 [Task State] Setting lastDailyResetDate:", data.lastDailyResetDate);
-    } else if (existing?.last_daily_reset_date) {
-      // Preserve existing value if not updating
-      updateData.last_daily_reset_date = existing.last_daily_reset_date;
-      console.log("🔵 [Task State] Preserving existing lastDailyResetDate:", existing.last_daily_reset_date);
-    }
-
-    // Only set weekly date if it's provided (not null)
-    if (data.lastWeeklyResetDate !== null) {
-      updateData.last_weekly_reset_date = data.lastWeeklyResetDate;
-      console.log("🔵 [Task State] Setting lastWeeklyResetDate:", data.lastWeeklyResetDate);
-    } else if (existing?.last_weekly_reset_date) {
-      // Preserve existing value if not updating
-      updateData.last_weekly_reset_date = existing.last_weekly_reset_date;
-      console.log("🔵 [Task State] Preserving existing lastWeeklyResetDate:", existing.last_weekly_reset_date);
-    }
-
-    console.log("🔵 [Task State] Final update data:", updateData);
-
-    // Upsert with the built object
+    // Upsert - EXACT REWARDS PATTERN
     const { data: result, error } = await supabase
       .from("user_task_state")
-      .upsert(updateData, {
+      .upsert({
+        telegram_id: data.telegramId,
+        user_id: profile.id,
+        last_daily_reset_date: data.lastDailyResetDate,
+        last_weekly_reset_date: data.lastWeeklyResetDate,
+        updated_at: new Date().toISOString()
+      }, {
         onConflict: "telegram_id"
       })
       .select()
@@ -103,6 +75,9 @@ export async function upsertTaskState(data: TaskStateData) {
   }
 }
 
+/**
+ * Get task state from DB
+ */
 export async function getTaskState(telegramId: number) {
   try {
     const { data, error } = await supabase
@@ -116,27 +91,19 @@ export async function getTaskState(telegramId: number) {
       return null;
     }
 
-    return data;
+    if (!data) {
+      return null;
+    }
+
+    return {
+      telegramId: data.telegram_id,
+      userId: data.user_id,
+      lastDailyResetDate: data.last_daily_reset_date,
+      lastWeeklyResetDate: data.last_weekly_reset_date,
+      updatedAt: data.updated_at
+    };
   } catch (error) {
     console.error("❌ [Task State] Get exception:", error);
     return null;
   }
-}
-
-export async function updateDailyResetDate(telegramId: number, resetDate: string) {
-  return upsertTaskState({
-    telegramId,
-    userId: "", // Will be fetched from profile lookup
-    lastDailyResetDate: resetDate,
-    lastWeeklyResetDate: null
-  });
-}
-
-export async function updateWeeklyResetDate(telegramId: number, resetDate: string) {
-  return upsertTaskState({
-    telegramId,
-    userId: "", // Will be fetched from profile lookup
-    lastDailyResetDate: null,
-    lastWeeklyResetDate: resetDate
-  });
 }

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { CheckCircle2, Trophy, Star, Loader2, Users, Gift, TrendingUp, Award, Copy, Share2, Zap } from "lucide-react";
+import { CheckCircle2, Trophy, Star, Loader2, Users, Gift, TrendingUp, Award, Copy, Share2, Zap, Target } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -30,6 +30,7 @@ import {
   checkAndResetTasks,
   type TaskProgressData 
 } from "@/services/tasksService";
+import type React from "react";
 
 interface Task {
   id: string;
@@ -41,6 +42,7 @@ interface Task {
   current?: number;
   action?: string;
   link?: string;
+  icon?: React.ReactNode;
 }
 
 export function TasksReferralsScreen() {
@@ -368,13 +370,13 @@ export function TasksReferralsScreen() {
       current: 1
     },
     {
-      id: "daily_taps",
+      id: "daily_tap_100",
       title: "Tap 100 Times",
-      description: "Tap the bunny 100 times today",
-      reward: { type: "XP", amount: 1000 },
-      type: "daily",
+      description: "Tap the bunny 100 times in a day",
+      type: "daily" as const,
       target: 100,
-      current: todayTaps
+      reward: { type: "BZ" as const, amount: 5000 },
+      icon: <Target className="w-5 h-5" />
     },
     {
       id: "daily_idle",

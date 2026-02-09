@@ -1,4 +1,5 @@
 import { useGameState } from "@/contexts/GameStateContext";
+import { updateTaskProgress } from "@/services/tasksService";
 import { Zap } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
@@ -81,6 +82,13 @@ export function TapScreen() {
     addBZ(reward);
     subtractEnergy(energyCostPerTap);
     incrementTotalTaps();
+
+    // Update task progress for "Tap 100 Times"
+    const tapTask = "daily_tap_100";
+    updateTaskProgress(tapTask, {
+      currentProgress: totalTaps + 1,
+      isCompleted: (totalTaps + 1) >= 100
+    });
 
     // Visual Effects
     const rect = e.currentTarget.getBoundingClientRect();
