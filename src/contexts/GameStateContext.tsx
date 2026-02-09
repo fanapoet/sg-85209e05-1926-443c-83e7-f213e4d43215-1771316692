@@ -20,8 +20,10 @@ import {
 import { 
   loadTasksFromDB, 
   syncTasksWithServer,
-  checkAndResetTasks
+  checkAndResetTasks,
+  claimTaskReward
 } from "@/services/tasksService";
+import { upsertTaskState } from "@/services/taskStateService";
 import { useToast } from "@/hooks/use-toast";
 
 type Tier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
@@ -338,28 +340,20 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           safeSetItem("ownedNFTs", merged);
         }
 
-        // Load Task State
+        // Load Task State & Initialize reset tracking record
         if (userId && telegramId) {
           await loadTasksFromDB();
           console.log("✅ [GameState] Tasks loaded and merged");
           
-          // Initialize task reset tracking record (if not exists)
-          const { getTaskState, upsertTaskState } = await import("@/services/taskStateService");
-          const taskState = await getTaskState(authResult.profile.telegram_id);
-          
-          if (!taskState) {
-            const today = new Date().toISOString().split("T")[0];
-            console.log("📤 [TASK-STATE] Creating initial reset tracking record");
-            await upsertTaskState({
-              telegramId: authResult.profile.telegram_id,
-              userId: authResult.profile.id,
-              lastDailyResetDate: today,
-              lastWeeklyResetDate: today
-            });
-            console.log("✅ [TASK-STATE] Initial reset tracking record created");
-          } else {
-            console.log("✅ [TASK-STATE] Reset tracking record exists:", taskState);
-          }
+          const today = new Date().toISOString().split("T")[0];
+          console.log("📤 [TASK-STATE] Ensuring reset tracking record exists");
+          await upsertTaskState({
+            telegramId: authResult.profile.telegram_id,
+            userId: authResult.profile.id,
+            lastDailyResetDate: today,
+            lastWeeklyResetDate: today
+          });
+          console.log("✅ [TASK-STATE] Reset tracking record initialized");
         }
       }
     };
@@ -846,32 +840,65 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     rewardType: "BZ" | "BB" | "XP",
     rewardAmount: number
   ) => {
+    console.log("📋 [TASK-CLAIM] Starting claim process...");
+    console.log("📋 [TASK-CLAIM] Params:", { taskId, taskType, rewardType, rewardAmount });
+    console.log("📋 [TASK-CLAIM] Auth state:", { telegramId, userId });
+
     try {
+      // 1. Update Balances (Instant UX)
       if (rewardType === "BZ") addBZ(rewardAmount);
       if (rewardType === "BB") addBB(rewardAmount);
       if (rewardType === "XP") addXP(rewardAmount);
+      console.log("✅ [TASK-CLAIM] Balance updated");
       
-      const { claimTaskReward } = await import("@/services/tasksService");
+      // 2. Update Local Task State
       const success = claimTaskReward(taskId);
+      console.log("✅ [TASK-CLAIM] Local state updated:", success);
       
       if (!success) {
         throw new Error("Failed to claim task in local state");
       }
       
-      if (taskType !== "progressive" && telegramId && userId) {
-        const today = new Date().toISOString().split('T')[0];
+      // 3. Sync to Database (Background) - EXACT REWARDS PATTERN
+      if (telegramId && userId) {
+        console.log("📤 [TASK-CLAIM] Syncing to database...");
         
-        if (taskType === "daily") {
-          const { updateDailyResetDate } = await import("@/services/taskStateService");
-          await updateDailyResetDate(telegramId, today);
-        } else if (taskType === "weekly") {
-          const { updateWeeklyResetDate } = await import("@/services/taskStateService");
-          await updateWeeklyResetDate(telegramId, today);
+        try {
+          const today = new Date().toISOString().split("T")[0];
+          console.log("📤 [TASK-CLAIM] Today date:", today);
+          console.log("📤 [TASK-CLAIM] Task type:", taskType);
+          
+          if (taskType === "daily") {
+            console.log("📤 [TASK-CLAIM] Updating daily reset date...");
+            const result = await upsertTaskState({
+              telegramId,
+              userId,
+              lastDailyResetDate: today,
+              lastWeeklyResetDate: null
+            });
+            console.log("✅ [TASK-CLAIM] Daily reset date updated:", result);
+          } else if (taskType === "weekly") {
+            console.log("📤 [TASK-CLAIM] Updating weekly reset date...");
+            const result = await upsertTaskState({
+              telegramId,
+              userId,
+              lastDailyResetDate: null,
+              lastWeeklyResetDate: today
+            });
+            console.log("✅ [TASK-CLAIM] Weekly reset date updated:", result);
+          }
+          
+          console.log("✅ [TASK-CLAIM] Database sync complete");
+        } catch (dbError) {
+          console.error("❌ [TASK-CLAIM] Database sync failed:", dbError);
         }
+      } else {
+        console.warn("⚠️ [TASK-CLAIM] Missing telegramId or userId - skipping DB sync");
       }
       
       return { success: true };
     } catch (error) {
+      console.error("❌ [TASK-CLAIM] Claim failed:", error);
       return { success: false, error };
     }
   };
