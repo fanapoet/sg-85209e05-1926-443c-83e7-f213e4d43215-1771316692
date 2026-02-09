@@ -314,7 +314,7 @@ export async function syncTasksWithServer(): Promise<void> {
       timestamp: task.lastUpdated
     }));
 
-    // Sync to database
+    // Sync task progress to database
     const result = await syncTaskProgressToDB(tgUser.id, profile.id, progressRecords);
     
     if (result.success) {
@@ -322,6 +322,41 @@ export async function syncTasksWithServer(): Promise<void> {
     } else {
       console.error("❌ [Tasks-Sync] Sync failed:", result.error);
     }
+
+    // CRITICAL: Sync reset dates to user_task_state table (EXACT REWARDS PATTERN)
+    const today = new Date().toISOString().split("T")[0];
+    
+    // Find most recent daily and weekly reset dates from tasks
+    let lastDailyReset = today;
+    let lastWeeklyReset = today;
+    
+    allTasks.forEach(task => {
+      if (task.resetAt) {
+        if (task.taskType === "daily" && task.resetAt > lastDailyReset) {
+          lastDailyReset = task.resetAt;
+        }
+        if (task.taskType === "weekly" && task.resetAt > lastWeeklyReset) {
+          lastWeeklyReset = task.resetAt;
+        }
+      }
+    });
+
+    // Get current state from DB
+    const currentState = await getTaskState(tgUser.id);
+    
+    // Upsert with Math.max logic (never overwrite with older dates)
+    await upsertTaskState({
+      telegramId: tgUser.id,
+      userId: profile.id,
+      lastDailyResetDate: currentState?.lastDailyResetDate && currentState.lastDailyResetDate > lastDailyReset 
+        ? currentState.lastDailyResetDate 
+        : lastDailyReset,
+      lastWeeklyResetDate: currentState?.lastWeeklyResetDate && currentState.lastWeeklyResetDate > lastWeeklyReset
+        ? currentState.lastWeeklyResetDate
+        : lastWeeklyReset
+    });
+    
+    console.log("✅ [Tasks-Sync] Reset dates synced to user_task_state");
   } catch (error) {
     console.error("❌ [Tasks-Sync] Exception:", error);
   }
