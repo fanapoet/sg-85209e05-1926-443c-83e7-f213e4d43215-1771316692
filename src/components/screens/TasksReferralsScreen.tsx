@@ -268,7 +268,12 @@ export function TasksReferralsScreen() {
   };
 
   const handleClaim = async (task: Task) => {
-    if (isClaimed(task)) return;
+    // Check if already claimed using the synced state
+    const currentProgress = getTaskProgress(task.id);
+    if (currentProgress?.claimed) {
+      console.log(`[Claim] Task ${task.id} already claimed, skipping`);
+      return;
+    }
 
     await performTaskClaim(task.id, task.type, task.reward.type, task.reward.amount);
     
@@ -451,6 +456,9 @@ export function TasksReferralsScreen() {
     const isCompleted = taskProgress?.completed || false;
     const isClaimed = taskProgress?.claimed || false;
     const currentProgress = taskProgress?.currentProgress || 0;
+    
+    // Debug logging
+    console.log(`[Task-${task.id}] Progress:`, { isCompleted, isClaimed, currentProgress, taskProgress });
     
     // For social tasks, if not tracked by system, assume manual completion
     const progress = Math.min(currentProgress, task.target);
