@@ -53,7 +53,9 @@ export function TasksReferralsScreen() {
     hasClaimedIdleToday, 
     totalUpgrades, 
     totalConversions, 
-    totalTaps 
+    totalTaps,
+    telegramId,
+    userId: userProfileId
   } = useGameState();
   const { toast } = useToast();
   
@@ -284,7 +286,7 @@ export function TasksReferralsScreen() {
       });
       
       // 3. Sync reset dates to database (same pattern as Rewards)
-      if (telegramId && userId) {
+      if (telegramId && userProfileId) {
         const syncResetDate = async () => {
           const today = new Date().toISOString().split('T')[0];
           const { upsertTaskState } = await import("@/services/taskStateService");
@@ -292,7 +294,7 @@ export function TasksReferralsScreen() {
           if (task.type === "daily") {
             await upsertTaskState({
               telegramId: telegramId,
-              userId: userId,
+              userId: userProfileId,
               lastDailyResetDate: today,
               lastWeeklyResetDate: null
             });
@@ -300,7 +302,7 @@ export function TasksReferralsScreen() {
           } else if (task.type === "weekly") {
             await upsertTaskState({
               telegramId: telegramId,
-              userId: userId,
+              userId: userProfileId,
               lastDailyResetDate: null,
               lastWeeklyResetDate: today
             });
