@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
  * Task Data Service
  * Handles task progress records (transactions)
  * Follows EXACT pattern from rewardDataService.ts
+ * USES user_task_progress TABLE (not user_task_state)
  */
 
 export interface TaskProgressRecord {
@@ -49,6 +50,7 @@ function toISOString(timestamp: number): string {
 
 /**
  * Load task progress from database
+ * USES user_task_progress TABLE
  */
 export async function loadTaskProgressFromDB(
   telegramId: number
@@ -57,10 +59,9 @@ export async function loadTaskProgressFromDB(
     console.log("📥 [TASK-PROGRESS] Loading from DB for telegram_id:", telegramId);
 
     const { data, error } = await supabase
-      .from("user_task_state")
+      .from("user_task_progress")
       .select("*")
       .eq("telegram_id", telegramId)
-      .not("task_id", "is", null) // Only get task progress records (not reset dates)
       .order("updated_at", { ascending: false });
 
     if (error) {
@@ -97,6 +98,7 @@ export async function loadTaskProgressFromDB(
 
 /**
  * Sync task progress to database (UPSERT all local progress)
+ * USES user_task_progress TABLE
  */
 export async function syncTaskProgressToDB(
   telegramId: number,
@@ -134,7 +136,7 @@ export async function syncTaskProgressToDB(
     console.log("📤 [TASK-PROGRESS-SYNC] Upsert data sample:", upsertData[0]);
 
     const { error } = await supabase
-      .from("user_task_state")
+      .from("user_task_progress")
       .upsert(upsertData, {
         onConflict: "user_id,task_id",
         ignoreDuplicates: false

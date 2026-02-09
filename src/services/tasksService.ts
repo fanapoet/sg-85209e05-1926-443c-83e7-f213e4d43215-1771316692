@@ -8,6 +8,33 @@ import { getCurrentTelegramUser } from "@/services/authService";
 import { loadTaskProgressFromDB, syncTaskProgressToDB, mergeTaskProgress, TaskProgressRecord } from "@/services/taskDataService";
 import { getTaskState, upsertTaskState } from "@/services/taskStateService";
 
+/**
+ * Validate and normalize date to YYYY-MM-DD format
+ */
+function normalizeDate(dateStr: string | undefined): string {
+  if (!dateStr) {
+    return new Date().toISOString().split("T")[0];
+  }
+  
+  // If already in YYYY-MM-DD format, return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+  
+  // Try to parse and convert to YYYY-MM-DD
+  try {
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split("T")[0];
+    }
+  } catch (e) {
+    console.warn("⚠️ [Tasks] Invalid date format:", dateStr);
+  }
+  
+  // Fallback to today
+  return new Date().toISOString().split("T")[0];
+}
+
 export interface TaskProgressData {
   taskId: string;
   taskType: "daily" | "weekly" | "progressive";
@@ -332,11 +359,13 @@ export async function syncTasksWithServer(): Promise<void> {
     
     allTasks.forEach(task => {
       if (task.resetAt) {
-        if (task.taskType === "daily" && task.resetAt > lastDailyReset) {
-          lastDailyReset = task.resetAt;
+        const normalizedResetDate = normalizeDate(task.resetAt);
+        
+        if (task.taskType === "daily" && normalizedResetDate > lastDailyReset) {
+          lastDailyReset = normalizedResetDate;
         }
-        if (task.taskType === "weekly" && task.resetAt > lastWeeklyReset) {
-          lastWeeklyReset = task.resetAt;
+        if (task.taskType === "weekly" && normalizedResetDate > lastWeeklyReset) {
+          lastWeeklyReset = normalizedResetDate;
         }
       }
     });
