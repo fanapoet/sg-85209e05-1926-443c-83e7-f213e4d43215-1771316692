@@ -58,7 +58,8 @@ export async function loadTaskProgressFromDB(
   try {
     console.log("📥 [TASK-PROGRESS] Loading from DB for telegram_id:", telegramId);
 
-    const { data, error } = await supabase
+    // Cast to any to avoid "Type instantiation is excessively deep" error
+    const { data, error } = await (supabase as any)
       .from("user_task_progress")
       .select("*")
       .eq("telegram_id", telegramId)
@@ -135,7 +136,8 @@ export async function syncTaskProgressToDB(
 
     console.log("📤 [TASK-PROGRESS-SYNC] Upsert data sample:", upsertData[0]);
 
-    const { error } = await supabase
+    // Cast to any to avoid "Type instantiation is excessively deep" error
+    const { error } = await (supabase as any)
       .from("user_task_progress")
       .upsert(upsertData, {
         onConflict: "user_id,task_id",
