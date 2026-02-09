@@ -282,9 +282,39 @@ export function TasksReferralsScreen() {
         title: "Reward Claimed!",
         description: `You earned ${task.reward.amount} ${task.reward.type}`,
       });
+      
+      // 3. Sync reset dates to database (same pattern as Rewards)
+      if (telegramId && userId) {
+        const syncResetDate = async () => {
+          const today = new Date().toISOString().split('T')[0];
+          const { upsertTaskState } = await import("@/services/taskStateService");
+          
+          if (task.type === "daily") {
+            await upsertTaskState({
+              telegramId: telegramId,
+              userId: userId,
+              lastDailyResetDate: today,
+              lastWeeklyResetDate: null
+            });
+            console.log("✅ [Tasks-Claim] Updated last_daily_reset_date:", today);
+          } else if (task.type === "weekly") {
+            await upsertTaskState({
+              telegramId: telegramId,
+              userId: userId,
+              lastDailyResetDate: null,
+              lastWeeklyResetDate: today
+            });
+            console.log("✅ [Tasks-Claim] Updated last_weekly_reset_date:", today);
+          }
+        };
+        
+        syncResetDate().catch(err => {
+          console.error("❌ [Tasks-Claim] Failed to sync reset date:", err);
+        });
+      }
     }
 
-    // 3. Update Legacy State (Double write for safety)
+    // 4. Update Legacy State (Double write for safety)
     const newClaimed = { ...claimedTasks, [task.id]: Date.now() };
     setClaimedTasks(newClaimed);
     localStorage.setItem("bunergy_claimed_tasks", JSON.stringify(newClaimed));
