@@ -55,7 +55,8 @@ export function TasksReferralsScreen() {
     totalConversions, 
     totalTaps,
     telegramId,
-    userId: userProfileId
+    userId: userProfileId,
+    performTaskClaim
   } = useGameState();
   const { toast } = useToast();
   
@@ -264,50 +265,21 @@ export function TasksReferralsScreen() {
     return true;
   };
 
-  const handleClaim = (task: Task) => {
+  const handleClaim = async (task: Task) => {
     if (isClaimed(task)) return;
 
-    // 1. Process Reward
-    if (task.reward.type === "BZ") addBZ(task.reward.amount);
-    if (task.reward.type === "BB") addBB(task.reward.amount);
-    if (task.reward.type === "XP") addXP(task.reward.amount);
-
-    // 2. Update Sync Service (Local + Background DB)
-    const success = claimTaskReward(task.id);
-    if (success) {
-      const updated = getTaskProgress(task.id);
-      if (updated) {
-        setTaskProgress(prev => new Map(prev).set(task.id, updated));
-      }
-      
-      toast({
-        title: "Reward Claimed!",
-        description: `You earned ${task.reward.amount} ${task.reward.type}`,
-      });
-      
-      // 3. Sync reset dates to database (same pattern as Rewards)
-      if (telegramId && userProfileId) {
-        const syncResetDate = async () => {
-          const today = new Date().toISOString().split('T')[0];
-          
-          if (task.type === "daily") {
-            const { updateDailyResetDate } = await import("@/services/taskStateService");
-            await updateDailyResetDate(telegramId, today);
-            console.log("✅ [Tasks-Claim] Updated last_daily_reset_date:", today);
-          } else if (task.type === "weekly") {
-            const { updateWeeklyResetDate } = await import("@/services/taskStateService");
-            await updateWeeklyResetDate(telegramId, today);
-            console.log("✅ [Tasks-Claim] Updated last_weekly_reset_date:", today);
-          }
-        };
-        
-        syncResetDate().catch(err => {
-          console.error("❌ [Tasks-Claim] Failed to sync reset date:", err);
-        });
-      }
+    await performTaskClaim(task.id, task.type, task.reward.type, task.reward.amount);
+    
+    toast({
+      title: "Reward Claimed!",
+      description: `You earned ${task.reward.amount} ${task.reward.type}`,
+    });
+    
+    const updated = getTaskProgress(task.id);
+    if (updated) {
+      setTaskProgress(prev => new Map(prev).set(task.id, updated));
     }
-
-    // 4. Update Legacy State (Double write for safety)
+    
     const newClaimed = { ...claimedTasks, [task.id]: Date.now() };
     setClaimedTasks(newClaimed);
     localStorage.setItem("bunergy_claimed_tasks", JSON.stringify(newClaimed));

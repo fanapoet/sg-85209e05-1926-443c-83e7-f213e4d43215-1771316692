@@ -111,6 +111,12 @@ interface GameState {
   addReward: (amount: number) => void;
   claimReward: () => void;
   performDailyClaim: (day: number, week: number, type: "BZ" | "BB" | "XP", amount: number) => Promise<void>;
+  performTaskClaim: (
+    taskId: string,
+    taskType: "daily" | "weekly" | "progressive",
+    rewardType: "BZ" | "BB" | "XP",
+    rewardAmount: number
+  ) => Promise<{ success: boolean; error?: any }>;
   purchaseNFT: (nftId: string, priceInBB: number) => void;
 }
 
@@ -834,6 +840,42 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const performTaskClaim = async (
+    taskId: string,
+    taskType: "daily" | "weekly" | "progressive",
+    rewardType: "BZ" | "BB" | "XP",
+    rewardAmount: number
+  ) => {
+    try {
+      if (rewardType === "BZ") addBZ(rewardAmount);
+      if (rewardType === "BB") addBB(rewardAmount);
+      if (rewardType === "XP") addXP(rewardAmount);
+      
+      const { claimTaskReward } = await import("@/services/tasksService");
+      const success = claimTaskReward(taskId);
+      
+      if (!success) {
+        throw new Error("Failed to claim task in local state");
+      }
+      
+      if (taskType !== "progressive" && telegramId && userId) {
+        const today = new Date().toISOString().split('T')[0];
+        
+        if (taskType === "daily") {
+          const { updateDailyResetDate } = await import("@/services/taskStateService");
+          await updateDailyResetDate(telegramId, today);
+        } else if (taskType === "weekly") {
+          const { updateWeeklyResetDate } = await import("@/services/taskStateService");
+          await updateWeeklyResetDate(telegramId, today);
+        }
+      }
+      
+      return { success: true };
+    } catch (error) {
+      return { success: false, error };
+    }
+  };
+
   const purchaseNFT = (nftId: string, priceInBB: number) => {
     // 1. Deduct BB
     if (!subtractBB(priceInBB)) {
@@ -883,6 +925,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       addReward,
       claimReward,
       performDailyClaim,
+      performTaskClaim,
       purchaseNFT,
       telegramUser,
       isProfileOpen,
