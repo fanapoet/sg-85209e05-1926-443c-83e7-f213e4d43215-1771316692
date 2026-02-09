@@ -44,8 +44,8 @@ export interface TaskProgressData {
   taskId: string;
   taskType: "daily" | "weekly" | "progressive";
   currentProgress: number;
-  isCompleted: boolean;
-  isClaimed: boolean;
+  completed: boolean;
+  claimed: boolean;
   completedAt?: string;
   claimedAt?: string;
   resetAt?: string;
@@ -336,11 +336,13 @@ export async function syncTasksWithServer(): Promise<void> {
     const progressRecords: TaskProgress[] = Array.from(allTasks.values()).map(task => ({
       taskId: task.taskId,
       currentProgress: task.currentProgress,
-      isCompleted: task.isCompleted,
+      completed: task.isCompleted, // Map isCompleted -> completed
       claimed: task.isClaimed, // Map isClaimed -> claimed
       completedAt: task.completedAt,
       claimedAt: task.claimedAt,
-      resetAt: normalizeDate(task.resetAt)
+      resetAt: normalizeDate(task.resetAt),
+      taskType: task.taskType, // Include taskType for DB
+      expiresAt: task.expiresAt // Include expiresAt for DB
     }));
 
     // Sync task progress to database (only 2 args needed now)
@@ -434,11 +436,13 @@ export async function loadTasksFromDB(): Promise<void> {
     const localProgress: TaskProgress[] = Array.from(localTasks.values()).map(task => ({
       taskId: task.taskId,
       currentProgress: task.currentProgress,
-      isCompleted: task.isCompleted,
+      completed: task.isCompleted, // Map isCompleted -> completed
       claimed: task.isClaimed, // Map isClaimed -> claimed
       completedAt: task.completedAt,
       claimedAt: task.claimedAt,
-      resetAt: normalizeDate(task.resetAt)
+      resetAt: normalizeDate(task.resetAt),
+      taskType: task.taskType,
+      expiresAt: task.expiresAt
     }));
 
     const mergedProgress = mergeTaskProgress(localProgress, serverProgress);
@@ -446,22 +450,17 @@ export async function loadTasksFromDB(): Promise<void> {
     // Convert back to TaskProgressData and save
     const mergedTasks = new Map<string, TaskProgressData>();
     
-    // We need to preserve taskType from local tasks if possible, otherwise default
     mergedProgress.forEach(record => {
-      // Try to find existing local task to preserve taskType
-      const existingLocal = localTasks.get(record.taskId);
-      const taskType = existingLocal?.taskType || "daily"; // Default fallback
-      
       mergedTasks.set(record.taskId, {
         taskId: record.taskId,
-        taskType: taskType,
+        taskType: record.taskType,
         currentProgress: record.currentProgress,
-        isCompleted: record.isCompleted,
+        isCompleted: record.completed, // Map completed -> isCompleted
         isClaimed: record.claimed, // Map claimed -> isClaimed
         completedAt: record.completedAt,
         claimedAt: record.claimedAt,
         resetAt: record.resetAt,
-        expiresAt: existingLocal?.expiresAt, // Preserve if exists
+        expiresAt: record.expiresAt,
         lastUpdated: Date.now()
       });
     });
