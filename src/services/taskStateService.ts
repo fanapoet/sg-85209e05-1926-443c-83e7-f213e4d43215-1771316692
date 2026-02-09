@@ -54,7 +54,8 @@ export async function upsertTaskState(data: TaskStateData) {
         last_weekly_reset_date: data.lastWeeklyResetDate,
         updated_at: new Date().toISOString()
       }, {
-        onConflict: "telegram_id"
+        onConflict: "telegram_id",
+        ignoreDuplicates: false
       })
       .select()
       .single();
