@@ -186,7 +186,7 @@ export function TasksReferralsScreen() {
       // Update service - Takes only 2 arguments: taskId and updates object
       updateTaskProgress(taskId, { 
         currentProgress: current,
-        isCompleted: isCompleted
+        completed: isCompleted
       });
       
       // Update local state
@@ -198,7 +198,7 @@ export function TasksReferralsScreen() {
 
     // Daily Check-in (Auto-complete on load)
     const checkInTask = taskProgress.get("daily_check_in");
-    if (!checkInTask || (!checkInTask.isCompleted && !checkInTask.isClaimed)) {
+    if (!checkInTask || (!checkInTask.completed && !checkInTask.claimed)) {
       console.log("[Tasks] Auto-completing daily check-in");
       updateAndSync("daily_check_in", 1, 1);
     }
@@ -242,7 +242,7 @@ export function TasksReferralsScreen() {
   const isClaimed = (task: Task) => {
     // Check local sync state first
     const progress = taskProgress.get(task.id);
-    if (progress?.isClaimed) return true;
+    if (progress?.claimed) return true;
 
     // Fallback to legacy claimed tasks (migration support)
     const claimedTime = claimedTasks[task.id];
@@ -447,13 +447,14 @@ export function TasksReferralsScreen() {
 
   const renderTaskCard = (task: Task) => {
     // Use synced progress if available, otherwise fallback to context/props
-    const syncedData = taskProgress.get(task.id);
-    const currentProgress = syncedData ? syncedData.currentProgress : (task.current || 0);
-    const claimed = isClaimed(task);
+    const taskProgress = getTaskProgress(task.id);
+    const isCompleted = taskProgress?.completed || false;
+    const isClaimed = taskProgress?.claimed || false;
+    const currentProgress = taskProgress?.currentProgress || 0;
     
+    // For social tasks, if not tracked by system, assume manual completion
     const progress = Math.min(currentProgress, task.target);
     const progressPercent = (progress / task.target) * 100;
-    const isCompleted = progress >= task.target;
 
     return (
       <Card key={task.id} className="p-4 mb-3">
@@ -461,11 +462,11 @@ export function TasksReferralsScreen() {
           <div className="flex-1">
             <h3 className="font-semibold flex items-center gap-2">
               {task.title}
-              {claimed && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+              {isClaimed && <CheckCircle2 className="h-4 w-4 text-green-500" />}
             </h3>
             <p className="text-sm text-muted-foreground">{task.description}</p>
           </div>
-          <Badge variant={claimed ? "secondary" : "outline"} className="ml-2">
+          <Badge variant={isClaimed ? "secondary" : "outline"} className="ml-2">
             +{task.reward.amount} {task.reward.type}
           </Badge>
         </div>
@@ -479,7 +480,7 @@ export function TasksReferralsScreen() {
         </div>
 
         <div className="mt-3 flex justify-end">
-          {claimed ? (
+          {isClaimed ? (
             <Button variant="ghost" size="sm" disabled className="w-full sm:w-auto text-green-600">
               <CheckCircle2 className="mr-2 h-4 w-4" />
               Claimed

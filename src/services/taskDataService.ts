@@ -27,10 +27,11 @@ export async function loadTaskProgressFromDB(
   try {
     console.log(`📥 [Task Data] Loading progress for telegram_id: ${telegramId}`);
 
+    // Use any cast to bypass strict typing issues with custom/renamed columns
     const { data, error } = await supabase
       .from("user_task_progress")
       .select("*")
-      .eq("telegram_id", telegramId);
+      .eq("telegram_id", parseInt(telegramId) as any);
 
     if (error) {
       console.error("❌ [Task Data] Load error:", error);
@@ -42,12 +43,12 @@ export async function loadTaskProgressFromDB(
       return [];
     }
 
-    // Map DB columns to interface
-    const progress: TaskProgress[] = data.map((row) => ({
+    // Map DB columns to interface with explicit casting for safety
+    const progress: TaskProgress[] = (data as any[]).map((row) => ({
       taskId: row.task_id,
       currentProgress: row.current_progress,
-      completed: row.completed,
-      claimed: row.claimed,
+      completed: row.completed, // Now matches DB column name
+      claimed: row.claimed,     // Now matches DB column name
       completedAt: row.completed_at,
       claimedAt: row.claimed_at,
       resetAt: row.reset_at,
@@ -69,11 +70,11 @@ export async function loadTaskProgressFromDB(
 export async function syncTaskProgressToDB(
   telegramId: string,
   progressRecords: TaskProgress[]
-): Promise<boolean> {
+): Promise<{ success: boolean; error?: any }> {
   try {
     if (progressRecords.length === 0) {
       console.log("ℹ️ [Task Data] No progress to sync");
-      return true;
+      return { success: true };
     }
 
     console.log(`🔄 [Task Data] Syncing ${progressRecords.length} records for telegram_id: ${telegramId}`);
@@ -87,13 +88,13 @@ export async function syncTaskProgressToDB(
 
     if (profileError || !profile) {
       console.error("❌ [Task Data] Profile not found:", profileError);
-      return false;
+      return { success: false, error: profileError };
     }
 
     // Prepare records for upsert
     const dbRecords = progressRecords.map((task) => ({
       user_id: profile.id,
-      telegram_id: telegramId,
+      telegram_id: parseInt(telegramId), // Ensure numeric for bigint column
       task_id: task.taskId,
       current_progress: task.currentProgress,
       completed: task.completed,
@@ -107,23 +108,24 @@ export async function syncTaskProgressToDB(
     }));
 
     // Upsert with composite unique key (user_id, task_id, reset_at)
+    // Cast to any to bypass type checks on dynamic/renamed columns
     const { error: upsertError } = await supabase
       .from("user_task_progress")
-      .upsert(dbRecords, {
+      .upsert(dbRecords as any, {
         onConflict: "user_id,task_id,reset_at",
         ignoreDuplicates: false,
       });
 
     if (upsertError) {
       console.error("❌ [Task Data] Sync error:", upsertError);
-      return false;
+      return { success: false, error: upsertError };
     }
 
     console.log(`✅ [Task Data] Synced ${progressRecords.length} records successfully`);
-    return true;
+    return { success: true };
   } catch (error) {
     console.error("❌ [Task Data] Unexpected sync error:", error);
-    return false;
+    return { success: false, error };
   }
 }
 

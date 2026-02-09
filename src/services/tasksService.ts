@@ -108,8 +108,8 @@ export function initializeTask(
     taskId,
     taskType,
     currentProgress: 0,
-    isCompleted: false,
-    isClaimed: false,
+    completed: false,
+    claimed: false,
     lastUpdated: now,
   };
 
@@ -198,18 +198,18 @@ export function claimTaskReward(taskId: string): boolean {
     return false;
   }
 
-  if (!task.isCompleted) {
+  if (!task.completed) {
     console.error(`❌ [Tasks-Claim] Task ${taskId} not completed yet`);
     return false;
   }
 
-  if (task.isClaimed) {
+  if (task.claimed) {
     console.error(`❌ [Tasks-Claim] Task ${taskId} already claimed`);
     return false;
   }
 
   const now = new Date().toISOString();
-  task.isClaimed = true;
+  task.claimed = true;
   task.claimedAt = now;
   task.lastUpdated = Date.now();
 
@@ -247,8 +247,8 @@ export function checkAndResetTasks(): void {
       
       // Reset progress but keep task structure
       task.currentProgress = 0;
-      task.isCompleted = false;
-      task.isClaimed = false;
+      task.completed = false;
+      task.claimed = false;
       task.completedAt = undefined;
       task.claimedAt = undefined;
       task.lastUpdated = Date.now();
@@ -336,17 +336,17 @@ export async function syncTasksWithServer(): Promise<void> {
     const progressRecords: TaskProgress[] = Array.from(allTasks.values()).map(task => ({
       taskId: task.taskId,
       currentProgress: task.currentProgress,
-      completed: task.isCompleted, // Map isCompleted -> completed
-      claimed: task.isClaimed, // Map isClaimed -> claimed
+      completed: task.completed,
+      claimed: task.claimed,
       completedAt: task.completedAt,
       claimedAt: task.claimedAt,
       resetAt: normalizeDate(task.resetAt),
-      taskType: task.taskType, // Include taskType for DB
-      expiresAt: task.expiresAt // Include expiresAt for DB
+      taskType: task.taskType,
+      expiresAt: task.expiresAt
     }));
 
     // Sync task progress to database (only 2 args needed now)
-    const result = await syncTaskProgressToDB(tgUser.id, progressRecords);
+    const result = await syncTaskProgressToDB(tgUser.id.toString(), progressRecords);
     
     if (result.success) {
       console.log(`✅ [Tasks-Sync] Synced ${progressRecords.length} tasks successfully`);
@@ -422,7 +422,7 @@ export async function loadTasksFromDB(): Promise<void> {
 
     console.log("📥 [Tasks-Load] Fetching tasks from DB for telegram_id:", tgUser.id);
 
-    const serverProgress = await loadTaskProgressFromDB(tgUser.id);
+    const serverProgress = await loadTaskProgressFromDB(tgUser.id.toString());
 
     if (!serverProgress || serverProgress.length === 0) {
       console.log("ℹ️ [Tasks-Load] No tasks found in DB (new user or first sync)");
@@ -436,8 +436,8 @@ export async function loadTasksFromDB(): Promise<void> {
     const localProgress: TaskProgress[] = Array.from(localTasks.values()).map(task => ({
       taskId: task.taskId,
       currentProgress: task.currentProgress,
-      completed: task.isCompleted, // Map isCompleted -> completed
-      claimed: task.isClaimed, // Map isClaimed -> claimed
+      completed: task.completed,
+      claimed: task.claimed,
       completedAt: task.completedAt,
       claimedAt: task.claimedAt,
       resetAt: normalizeDate(task.resetAt),
@@ -453,10 +453,10 @@ export async function loadTasksFromDB(): Promise<void> {
     mergedProgress.forEach(record => {
       mergedTasks.set(record.taskId, {
         taskId: record.taskId,
-        taskType: record.taskType,
+        taskType: record.taskType as "daily" | "weekly" | "progressive",
         currentProgress: record.currentProgress,
-        isCompleted: record.completed, // Map completed -> isCompleted
-        isClaimed: record.claimed, // Map claimed -> isClaimed
+        completed: record.completed,
+        claimed: record.claimed,
         completedAt: record.completedAt,
         claimedAt: record.claimedAt,
         resetAt: record.resetAt,

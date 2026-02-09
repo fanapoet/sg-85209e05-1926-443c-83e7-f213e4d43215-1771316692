@@ -87,7 +87,7 @@ export function TapScreen() {
     const tapTask = "daily_tap_100";
     updateTaskProgress(tapTask, {
       currentProgress: totalTaps + 1,
-      isCompleted: (totalTaps + 1) >= 100
+      completed: (totalTaps + 1) >= 100
     });
 
     // Visual Effects
