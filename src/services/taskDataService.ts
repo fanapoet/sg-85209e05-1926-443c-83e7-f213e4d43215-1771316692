@@ -31,10 +31,10 @@ export async function loadTaskProgressFromDB(
     const { data, error } = await supabase
       .from("user_task_progress")
       .select("*")
-      .eq("telegram_id", parseInt(telegramId) as any);
+      .eq("telegram_id", parseInt(telegramId) as any) as any;
 
     if (error) {
-      console.error("❌ [Task Data] Load error:", error);
+      console.error("❌ [Task Data] Load error:", JSON.stringify(error));
       return [];
     }
 
@@ -83,11 +83,11 @@ export async function syncTaskProgressToDB(
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id")
-      .eq("telegram_id", telegramId)
+      .eq("telegram_id", parseInt(telegramId))
       .single();
 
     if (profileError || !profile) {
-      console.error("❌ [Task Data] Profile not found:", profileError);
+      console.error("❌ [Task Data] Profile not found:", JSON.stringify(profileError));
       return { success: false, error: profileError };
     }
 
@@ -117,7 +117,7 @@ export async function syncTaskProgressToDB(
       });
 
     if (upsertError) {
-      console.error("❌ [Task Data] Sync error:", upsertError);
+      console.error("❌ [Task Data] Sync error:", JSON.stringify(upsertError));
       return { success: false, error: upsertError };
     }
 
