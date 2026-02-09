@@ -623,9 +623,16 @@ export function TasksReferralsScreen() {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-purple-500" />
-              <h3 className="font-semibold text-lg">Challenges & Milestones</h3>
+              <h3 className="font-semibold text-lg">Weekly Tasks</h3>
             </div>
             {weeklyTasks.map(renderTaskCard)}
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Trophy className="h-5 w-5 text-purple-500" />
+              <h3 className="font-semibold text-lg">Challenges & Milestones</h3>
+            </div>
             {progressiveTasks.map(renderTaskCard)}
           </div>
         </TabsContent>
