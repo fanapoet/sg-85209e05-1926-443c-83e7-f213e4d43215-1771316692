@@ -27,6 +27,7 @@ import {
   syncTasksWithServer,
   updateTaskProgress,
   claimTaskReward,
+  checkAndResetTasks,
   type TaskProgressData 
 } from "@/services/tasksService";
 
@@ -566,6 +567,29 @@ export function TasksReferralsScreen() {
     
     initializeTasksWithAuth();
   }, []);
+
+  // Check and reset tasks after initialization (same pattern as Rewards screen)
+  useEffect(() => {
+    const checkTaskResets = () => {
+      console.log("🔄 [Tasks-Reset] Running reset check on mount...");
+      checkAndResetTasks();
+      
+      // Reload progress after reset
+      const updatedMap = new Map<string, TaskProgressData>();
+      tasks.forEach(task => {
+        const progress = getTaskProgress(task.id);
+        if (progress) {
+          updatedMap.set(task.id, progress);
+        }
+      });
+      setTaskProgress(updatedMap);
+      console.log("✅ [Tasks-Reset] UI refreshed after reset check");
+    };
+    
+    if (isInitialized) {
+      checkTaskResets();
+    }
+  }, [isInitialized]);
 
   return (
     <div className="pb-24 p-4 max-w-2xl mx-auto space-y-6">
