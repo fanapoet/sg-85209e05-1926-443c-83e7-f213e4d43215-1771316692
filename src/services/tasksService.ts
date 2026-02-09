@@ -5,7 +5,12 @@
  */
 
 import { getCurrentTelegramUser } from "@/services/authService";
-import { loadTaskProgressFromDB, syncTaskProgressToDB, mergeTaskProgress, TaskProgressRecord } from "@/services/taskDataService";
+import { 
+  loadTaskProgressFromDB, 
+  syncTaskProgressToDB, 
+  mergeTaskProgress,
+  TaskProgress 
+} from "@/services/taskDataService";
 import { getTaskState, upsertTaskState } from "@/services/taskStateService";
 
 /**
@@ -327,22 +332,19 @@ export async function syncTasksWithServer(): Promise<void> {
       return;
     }
 
-    // Convert to TaskProgressRecord format
-    const progressRecords: TaskProgressRecord[] = Array.from(allTasks.values()).map(task => ({
+    // Convert to TaskProgress format for DB sync
+    const progressRecords: TaskProgress[] = Array.from(allTasks.values()).map(task => ({
       taskId: task.taskId,
-      taskType: task.taskType,
       currentProgress: task.currentProgress,
       isCompleted: task.isCompleted,
-      isClaimed: task.isClaimed,
+      claimed: task.isClaimed, // Map isClaimed -> claimed
       completedAt: task.completedAt,
       claimedAt: task.claimedAt,
-      resetAt: task.resetAt,
-      expiresAt: task.expiresAt,
-      timestamp: task.lastUpdated
+      resetAt: normalizeDate(task.resetAt)
     }));
 
-    // Sync task progress to database
-    const result = await syncTaskProgressToDB(tgUser.id, profile.id, progressRecords);
+    // Sync task progress to database (only 2 args needed now)
+    const result = await syncTaskProgressToDB(tgUser.id, progressRecords);
     
     if (result.success) {
       console.log(`✅ [Tasks-Sync] Synced ${progressRecords.length} tasks successfully`);
@@ -429,35 +431,38 @@ export async function loadTasksFromDB(): Promise<void> {
 
     // Merge with local state
     const localTasks = getLocalTaskProgress();
-    const localProgress: TaskProgressRecord[] = Array.from(localTasks.values()).map(task => ({
+    const localProgress: TaskProgress[] = Array.from(localTasks.values()).map(task => ({
       taskId: task.taskId,
-      taskType: task.taskType,
       currentProgress: task.currentProgress,
       isCompleted: task.isCompleted,
-      isClaimed: task.isClaimed,
+      claimed: task.isClaimed, // Map isClaimed -> claimed
       completedAt: task.completedAt,
       claimedAt: task.claimedAt,
-      resetAt: task.resetAt,
-      expiresAt: task.expiresAt,
-      timestamp: task.lastUpdated
+      resetAt: normalizeDate(task.resetAt)
     }));
 
     const mergedProgress = mergeTaskProgress(localProgress, serverProgress);
 
     // Convert back to TaskProgressData and save
     const mergedTasks = new Map<string, TaskProgressData>();
+    
+    // We need to preserve taskType from local tasks if possible, otherwise default
     mergedProgress.forEach(record => {
+      // Try to find existing local task to preserve taskType
+      const existingLocal = localTasks.get(record.taskId);
+      const taskType = existingLocal?.taskType || "daily"; // Default fallback
+      
       mergedTasks.set(record.taskId, {
         taskId: record.taskId,
-        taskType: record.taskType,
+        taskType: taskType,
         currentProgress: record.currentProgress,
         isCompleted: record.isCompleted,
-        isClaimed: record.isClaimed,
+        isClaimed: record.claimed, // Map claimed -> isClaimed
         completedAt: record.completedAt,
         claimedAt: record.claimedAt,
         resetAt: record.resetAt,
-        expiresAt: record.expiresAt,
-        lastUpdated: record.timestamp
+        expiresAt: existingLocal?.expiresAt, // Preserve if exists
+        lastUpdated: Date.now()
       });
     });
 

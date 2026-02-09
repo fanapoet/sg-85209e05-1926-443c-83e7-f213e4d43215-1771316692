@@ -2,185 +2,163 @@ import { supabase } from "@/integrations/supabase/client";
 
 /**
  * Task Data Service
- * Handles task progress records (transactions)
- * Follows EXACT pattern from rewardDataService.ts
- * USES user_task_progress TABLE (not user_task_state)
+ * Handles syncing task progress to/from user_task_progress table
  */
 
-export interface TaskProgressRecord {
+export interface TaskProgress {
   taskId: string;
-  taskType: "daily" | "weekly" | "progressive";
   currentProgress: number;
   isCompleted: boolean;
-  isClaimed: boolean;
+  claimed: boolean;
   completedAt?: string;
   claimedAt?: string;
-  resetAt?: string;
-  expiresAt?: string;
-  timestamp: number;
+  resetAt: string;
 }
 
 /**
- * Validate timestamp
- */
-function validateTimestamp(timestamp: number): number {
-  if (!timestamp || isNaN(timestamp) || timestamp <= 0) {
-    return Date.now();
-  }
-  return timestamp;
-}
-
-/**
- * Validate and convert timestamp to ISO string
- */
-function toISOString(timestamp: number): string {
-  if (!timestamp || isNaN(timestamp) || timestamp <= 0) {
-    console.warn("⚠️ Invalid timestamp:", timestamp, "- using current time");
-    return new Date().toISOString();
-  }
-  
-  const date = new Date(timestamp);
-  if (isNaN(date.getTime())) {
-    console.warn("⚠️ Invalid date from timestamp:", timestamp, "- using current time");
-    return new Date().toISOString();
-  }
-  
-  return date.toISOString();
-}
-
-/**
- * Load task progress from database
- * USES user_task_progress TABLE
+ * Load all task progress from database for a user
  */
 export async function loadTaskProgressFromDB(
   telegramId: number
-): Promise<TaskProgressRecord[] | null> {
+): Promise<TaskProgress[]> {
   try {
-    console.log("📥 [TASK-PROGRESS] Loading from DB for telegram_id:", telegramId);
+    console.log("📥 [Task Data] Loading progress for telegram_id:", telegramId);
 
-    // Cast to any to avoid "Type instantiation is excessively deep" error
-    const { data, error } = await (supabase as any)
-      .from("user_task_progress")
-      .select("*")
+    // Get user_id from profiles table first
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
       .eq("telegram_id", telegramId)
-      .order("updated_at", { ascending: false });
+      .maybeSingle();
 
-    if (error) {
-      console.error("❌ [TASK-PROGRESS] Load error:", error);
-      return null;
-    }
-
-    if (!data || data.length === 0) {
-      console.log("📥 [TASK-PROGRESS] No progress found in DB (fresh start)");
+    if (profileError || !profile) {
+      console.error("❌ [Task Data] Profile lookup error:", profileError);
       return [];
     }
 
-    const records = data.map((row: any) => ({
-      taskId: row.task_id,
-      taskType: row.task_type as "daily" | "weekly" | "progressive",
-      currentProgress: row.current_progress || 0,
-      isCompleted: row.is_completed || false,
-      isClaimed: row.is_claimed || false,
-      completedAt: row.completed_at || undefined,
-      claimedAt: row.claimed_at || undefined,
-      resetAt: row.reset_at || undefined,
-      expiresAt: row.expires_at || undefined,
-      timestamp: new Date(row.updated_at).getTime()
+    // Now fetch task progress using the user_id (UUID from profiles, which is also in users table)
+    const { data, error } = (await supabase
+      .from("user_task_progress")
+      .select("*")
+      .eq("user_id", profile.id)
+      .order("reset_at", { ascending: false })) as any;
+
+    if (error) {
+      console.error("❌ [Task Data] Load error:", error);
+      return [];
+    }
+
+    if (!data || data.length === 0) {
+      console.log("ℹ️ [Task Data] No progress found");
+      return [];
+    }
+
+    console.log(`✅ [Task Data] Loaded ${data.length} task progress records`);
+
+    return data.map((record: any) => ({
+      taskId: record.task_id,
+      currentProgress: record.current_progress || 0,
+      isCompleted: record.is_completed || false,
+      claimed: record.claimed || false,
+      completedAt: record.completed_at,
+      claimedAt: record.claimed_at,
+      resetAt: record.reset_at
     }));
-
-    console.log(`✅ [TASK-PROGRESS] Loaded ${records.length} progress records from DB`);
-    return records;
-
-  } catch (error: any) {
-    console.error("❌ [TASK-PROGRESS] Load exception:", error);
-    return null;
+  } catch (error) {
+    console.error("❌ [Task Data] Load exception:", error);
+    return [];
   }
 }
 
 /**
- * Sync task progress to database (UPSERT all local progress)
- * USES user_task_progress TABLE
+ * Sync task progress to database
+ * Uses composite unique key (user_id, task_id, reset_at)
  */
 export async function syncTaskProgressToDB(
   telegramId: number,
-  userId: string,
-  progressRecords: TaskProgressRecord[]
+  progressData: TaskProgress[]
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    if (progressRecords.length === 0) {
-      console.log("⏭️ [TASK-PROGRESS-SYNC] No progress to sync");
+    console.log(`💾 [Task Data] Syncing ${progressData.length} tasks for telegram_id:`, telegramId);
+
+    if (progressData.length === 0) {
+      console.log("ℹ️ [Task Data] No progress to sync");
       return { success: true };
     }
 
-    console.log(`📤 [TASK-PROGRESS-SYNC] Syncing ${progressRecords.length} progress records to DB...`);
-    console.log("📤 [TASK-PROGRESS-SYNC] Sample record:", progressRecords[0]);
+    // Get user_id from profiles table first
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", telegramId)
+      .maybeSingle();
 
-    const upsertData = progressRecords.map(record => {
-      const updatedAt = toISOString(record.timestamp);
-      
-      return {
-        user_id: userId,
-        telegram_id: telegramId,
-        task_id: record.taskId,
-        task_type: record.taskType,
-        current_progress: record.currentProgress,
-        is_completed: record.isCompleted,
-        is_claimed: record.isClaimed,
-        completed_at: record.completedAt || null,
-        claimed_at: record.claimedAt || null,
-        reset_at: record.resetAt || null,
-        expires_at: record.expiresAt || null,
-        updated_at: updatedAt
-      };
-    });
+    if (profileError || !profile) {
+      console.error("❌ [Task Data] Profile lookup error:", profileError);
+      return { success: false, error: "Profile not found" };
+    }
 
-    console.log("📤 [TASK-PROGRESS-SYNC] Upsert data sample:", upsertData[0]);
+    console.log("🔵 [Task Data] Using user_id:", profile.id);
 
-    // Cast to any to avoid "Type instantiation is excessively deep" error
-    const { error } = await (supabase as any)
+    // Upsert all task progress records
+    const records = progressData.map(task => ({
+      user_id: profile.id, // UUID from profiles (same as users.id)
+      task_id: task.taskId,
+      current_progress: task.currentProgress,
+      is_completed: task.isCompleted,
+      claimed: task.claimed,
+      completed_at: task.completedAt || null,
+      claimed_at: task.claimedAt || null,
+      reset_at: task.resetAt,
+      updated_at: new Date().toISOString()
+    }));
+
+    // CRITICAL: Use composite key (user_id, task_id, reset_at) for onConflict
+    const { error } = (await supabase
       .from("user_task_progress")
-      .upsert(upsertData, {
-        onConflict: "user_id,task_id",
-        ignoreDuplicates: false
-      });
+      .upsert(records, {
+        onConflict: "user_id,task_id,reset_at" // Composite unique constraint
+      })) as any;
 
     if (error) {
-      console.error("❌ [TASK-PROGRESS-SYNC] Sync failed:", error);
+      console.error("❌ [Task Data] Sync error:", error);
       return { success: false, error: error.message };
     }
 
-    console.log(`✅ [TASK-PROGRESS-SYNC] ${progressRecords.length} progress records synced successfully!`);
+    console.log(`✅ [Task Data] Synced ${records.length} task progress records`);
     return { success: true };
-
-  } catch (error: any) {
-    console.error("❌ [TASK-PROGRESS-SYNC] Sync exception:", error);
-    return { success: false, error: error.message };
+  } catch (error) {
+    console.error("❌ [Task Data] Sync exception:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error"
+    };
   }
 }
 
 /**
- * Merge local and server task progress (keep most recent by timestamp)
+ * Merge local and server task progress
+ * Server data takes precedence for conflicts
  */
 export function mergeTaskProgress(
-  localProgress: TaskProgressRecord[],
-  serverProgress: TaskProgressRecord[]
-): TaskProgressRecord[] {
-  const mergedMap = new Map<string, TaskProgressRecord>();
+  local: TaskProgress[],
+  server: TaskProgress[]
+): TaskProgress[] {
+  const merged = new Map<string, TaskProgress>();
 
-  // Add all local progress
-  localProgress.forEach(record => {
-    mergedMap.set(record.taskId, record);
+  // Add all local progress first
+  local.forEach(task => {
+    const key = `${task.taskId}_${task.resetAt}`;
+    merged.set(key, task);
   });
 
-  // Merge server progress (keep most recent)
-  serverProgress.forEach(record => {
-    const existing = mergedMap.get(record.taskId);
-    if (!existing || record.timestamp > existing.timestamp) {
-      mergedMap.set(record.taskId, record);
-    }
+  // Server data overwrites local for same task+reset
+  server.forEach(task => {
+    const key = `${task.taskId}_${task.resetAt}`;
+    merged.set(key, task);
   });
 
-  const merged = Array.from(mergedMap.values());
-  console.log(`🔀 [TASK-PROGRESS] Merged: ${localProgress.length} local + ${serverProgress.length} server = ${merged.length} unique`);
-  return merged;
+  const result = Array.from(merged.values());
+  console.log(`🔄 [Task Data] Merged: ${local.length} local + ${server.length} server = ${result.length} unique`);
+  return result;
 }
