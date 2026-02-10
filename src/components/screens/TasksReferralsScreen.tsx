@@ -549,6 +549,46 @@ export function TasksReferralsScreen() {
       
       if (tgUser?.id) {
         try {
+          // CRITICAL: Load lastWeeklyResetDate from database (same pattern as Rewards)
+          console.log("🔄 [Tasks-Weekly] Loading weekly reset date from database...");
+          const { getTaskState } = await import("@/services/taskStateService");
+          const taskState = await getTaskState(tgUser.id);
+          
+          if (taskState?.lastWeeklyResetDate) {
+            console.log("✅ [Tasks-Weekly] Loaded lastWeeklyResetDate from DB:", taskState.lastWeeklyResetDate);
+            
+            // Check if weekly reset is needed (7+ days since last reset)
+            const today = new Date().toISOString().split("T")[0];
+            const lastReset = new Date(taskState.lastWeeklyResetDate);
+            const todayDate = new Date(today);
+            const daysPassed = Math.floor((todayDate.getTime() - lastReset.getTime()) / (1000 * 60 * 60 * 24));
+            
+            console.log("🔄 [Tasks-Weekly] Days since last weekly reset:", daysPassed);
+            
+            if (daysPassed >= 7) {
+              console.log("🔄 [Tasks-Weekly] 7+ days passed! Triggering weekly task reset...");
+              
+              // Reset weekly tasks in localStorage
+              const { checkAndResetTasks } = await import("@/services/tasksService");
+              checkAndResetTasks();
+              
+              // Update lastWeeklyResetDate in database to today
+              const { upsertTaskState } = await import("@/services/taskStateService");
+              await upsertTaskState({
+                telegramId: tgUser.id,
+                userId: taskState.userId,
+                lastDailyResetDate: taskState.lastDailyResetDate || today,
+                lastWeeklyResetDate: today
+              });
+              
+              console.log("✅ [Tasks-Weekly] Weekly tasks reset completed!");
+            } else {
+              console.log(`ℹ️ [Tasks-Weekly] Only ${daysPassed} days passed, weekly reset not needed yet`);
+            }
+          } else {
+            console.log("ℹ️ [Tasks-Weekly] No task state in DB yet (new user)");
+          }
+          
           // Now sync with database (Public RLS allows this without session)
           console.log(`[Tasks] Starting DB sync for user ${tgUser.id}`);
           await syncTasksWithServer();
@@ -574,29 +614,6 @@ export function TasksReferralsScreen() {
     
     initializeTasksWithAuth();
   }, []);
-
-  // Check and reset tasks after initialization (same pattern as Rewards screen)
-  useEffect(() => {
-    const checkTaskResets = () => {
-      console.log("🔄 [Tasks-Reset] Running reset check on mount...");
-      checkAndResetTasks();
-      
-      // Reload progress after reset
-      const updatedMap = new Map<string, TaskProgressData>();
-      tasks.forEach(task => {
-        const progress = getTaskProgress(task.id);
-        if (progress) {
-          updatedMap.set(task.id, progress);
-        }
-      });
-      setTaskProgress(updatedMap);
-      console.log("✅ [Tasks-Reset] UI refreshed after reset check");
-    };
-    
-    if (isInitialized) {
-      checkTaskResets();
-    }
-  }, [isInitialized]);
 
   return (
     <div className="pb-24 p-4 max-w-2xl mx-auto space-y-6">
