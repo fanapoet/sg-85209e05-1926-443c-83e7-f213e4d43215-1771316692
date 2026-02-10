@@ -122,6 +122,7 @@ interface GameState {
   ) => Promise<{ success: boolean; error?: any }>;
   purchaseNFT: (nftId: string, priceInBB: number) => void;
   resetWeeklyPeriod: () => Promise<void>;
+  resetWeeklyTasks: () => Promise<void>;
 }
 
 const GameStateContext = createContext<GameState | null>(null);
@@ -929,6 +930,33 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const resetWeeklyTasks = async () => {
+    if (!telegramId) return;
+    const now = new Date().toISOString();
+    
+    // 1. Update local state immediately
+    const today = new Date().toISOString().split("T")[0];
+    await upsertTaskState({
+      telegramId,
+      userId,
+      lastDailyResetDate: today,
+      lastWeeklyResetDate: today
+    });
+    
+    // 2. Sync to DB
+    try {
+      await upsertTaskState({
+        telegramId,
+        userId,
+        lastDailyResetDate: today,
+        lastWeeklyResetDate: today
+      });
+      console.log("✅ [Weekly Reset] Database updated with new period start:", now);
+    } catch (error) {
+      console.error("❌ [Weekly Reset] Failed to update database:", error);
+    }
+  };
+
   const purchaseNFT = (nftId: string, priceInBB: number) => {
     // 1. Deduct BB
     if (!subtractBB(priceInBB)) {
@@ -981,6 +1009,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       performTaskClaim,
       purchaseNFT,
       resetWeeklyPeriod,
+      resetWeeklyTasks,
       telegramUser,
       isProfileOpen,
       setProfileOpen
