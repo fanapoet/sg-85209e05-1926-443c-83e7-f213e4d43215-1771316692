@@ -199,7 +199,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const saved = safeGetItem("bunergy_qc_cooldown", null);
     return saved !== null ? Number(saved) : null;
   });
-  const [quickChargeLastResetDate, setQuickChargeLastResetDate] = useState(() 
+  const [quickChargeLastResetDate, setQuickChargeLastResetDate] = useState(() => 
     safeGetItem("bunergy_qc_last_reset", new Date().toDateString())
   );
 
