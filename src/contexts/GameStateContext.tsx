@@ -938,19 +938,29 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   };
 
   const resetWeeklyTasks = async () => {
-    if (!telegramId) return;
-    const now = new Date().toISOString();
+    if (!telegramId || !userId) return;
     
     // 1. Update local state immediately
     const today = new Date().toISOString().split("T")[0];
     setLastWeeklyResetDate(today);
-
-    await upsertTaskState({
-      telegramId,
-      userId,
-      lastDailyResetDate: today,
-      lastWeeklyResetDate: today
-    });
+    
+    // 2. Get current state to preserve lastDailyResetDate
+    try {
+      const { getTaskState } = await import("@/services/taskStateService");
+      const currentState = await getTaskState(telegramId);
+      
+      // 3. Update ONLY lastWeeklyResetDate, preserve lastDailyResetDate
+      await upsertTaskState({
+        telegramId,
+        userId,
+        lastDailyResetDate: currentState?.lastDailyResetDate || today,
+        lastWeeklyResetDate: today
+      });
+      
+      console.log("✅ [Weekly Tasks Reset] Database updated with new weekly reset date:", today);
+    } catch (error) {
+      console.error("❌ [Weekly Tasks Reset] Failed to update database:", error);
+    }
   };
 
   const purchaseNFT = (nftId: string, priceInBB: number) => {
