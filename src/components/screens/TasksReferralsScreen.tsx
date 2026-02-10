@@ -60,9 +60,8 @@ export function TasksReferralsScreen() {
     telegramId,
     userId: userProfileId,
     performTaskClaim,
-    currentWeeklyPeriodStart,
-    resetWeeklyPeriod,
-    lastWeeklyResetDate
+    lastWeeklyResetDate,
+    resetWeeklyTasks
   } = useGameState();
   const { toast } = useToast();
   
@@ -606,14 +605,14 @@ export function TasksReferralsScreen() {
         
         // Update database with new weekly reset date (EXACT REWARDS PATTERN)
         console.log("🔄 [Tasks-Weekly] Calling resetWeeklyTasks() to update database...");
-        resetWeeklyPeriod();
+        resetWeeklyTasks();
       } else {
         console.log(`ℹ️ [Tasks-Weekly] Only ${daysSinceReset} days passed, need 7+ days.`);
       }
     } else {
       console.log("⏳ [Tasks-Weekly] Waiting for data:", { isLoading, lastWeeklyResetDate });
     }
-  }, [lastWeeklyResetDate, isLoading, resetWeeklyPeriod, taskProgress, tasks]);
+  }, [lastWeeklyResetDate, isLoading, resetWeeklyTasks, taskProgress, tasks]);
 
   return (
     <div className="pb-24 p-4 max-w-2xl mx-auto space-y-6">
