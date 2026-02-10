@@ -28,6 +28,7 @@ import {
   updateTaskProgress,
   claimTaskReward,
   checkAndResetTasks,
+  loadTasksFromDB,
   type TaskProgressData 
 } from "@/services/tasksService";
 import type React from "react";
@@ -60,7 +61,8 @@ export function TasksReferralsScreen() {
     userId: userProfileId,
     performTaskClaim,
     currentWeeklyPeriodStart,
-    resetWeeklyPeriod
+    resetWeeklyPeriod,
+    lastWeeklyResetDate
   } = useGameState();
   const { toast } = useToast();
   
@@ -524,104 +526,36 @@ export function TasksReferralsScreen() {
 
   // Initialize tasks and load from database on mount
   useEffect(() => {
+    console.log("📋📋📋 [Tasks] ========== INITIALIZATION START ==========");
+    console.log("📋 [Tasks] SCREEN MOUNTED - STARTING INIT");
+    
     const initializeTasksWithAuth = async () => {
-      console.log("📋📋📋 [Tasks] ========== INITIALIZATION START ==========");
-      console.log("📋 [Tasks] SCREEN MOUNTED - STARTING INIT");
-      
-      // Initialize tasks in localStorage
-      tasks.forEach(task => {
-        initializeTask(task.id, task.type);
-      });
-      
-      // Load current progress from localStorage
-      const progressMap = new Map<string, TaskProgressData>();
-      
-      tasks.forEach(task => {
-        const progress = getTaskProgress(task.id);
-        if (progress) {
-          progressMap.set(task.id, progress);
-        }
-      });
-      
-      setTaskProgress(progressMap);
-      setIsInitialized(true);
-      console.log("✅ [Tasks] Initialized UI from localStorage");
-      
-      // Background sync: Load from database
-      const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
-      
-      if (tgUser?.id) {
-        try {
-          // CRITICAL: Load lastWeeklyResetDate from database FIRST (before any sync)
-          console.log("🔄 [Tasks-Weekly] Loading weekly reset date from database...");
-          const { getTaskState } = await import("@/services/taskStateService");
-          const taskState = await getTaskState(tgUser.id);
+      try {
+        console.log("📋 [Tasks] Checking for cached Telegram user...");
+        const cachedUser = getCurrentTelegramUser();
+        
+        if (cachedUser?.id) {
+          console.log("✅ [Tasks] Using cached Telegram user:", cachedUser.id);
           
-          let shouldResetWeekly = false;
-          let newWeeklyResetDate: string | null = null;
-          
-          if (taskState?.lastWeeklyResetDate) {
-            console.log("✅ [Tasks-Weekly] Loaded lastWeeklyResetDate from DB:", taskState.lastWeeklyResetDate);
-            
-            // Check if weekly reset is needed (7+ days since last reset)
-            const today = new Date().toISOString().split("T")[0];
-            const lastReset = new Date(taskState.lastWeeklyResetDate);
-            const todayDate = new Date(today);
-            const daysPassed = Math.floor((todayDate.getTime() - lastReset.getTime()) / (1000 * 60 * 60 * 24));
-            
-            console.log("🔄 [Tasks-Weekly] Days since last weekly reset:", daysPassed);
-            
-            if (daysPassed >= 7) {
-              console.log("🔄 [Tasks-Weekly] 7+ days passed! Weekly reset needed!");
-              shouldResetWeekly = true;
-              newWeeklyResetDate = today;
-              
-              // Reset weekly tasks in localStorage BEFORE syncing
-              const { checkAndResetTasks } = await import("@/services/tasksService");
-              checkAndResetTasks();
-              console.log("✅ [Tasks-Weekly] Weekly tasks reset in localStorage completed!");
-            } else {
-              console.log(`ℹ️ [Tasks-Weekly] Only ${daysPassed} days passed, weekly reset not needed yet`);
-            }
-          } else {
-            console.log("ℹ️ [Tasks-Weekly] No task state in DB yet (new user) - will create with today's date");
-            newWeeklyResetDate = new Date().toISOString().split("T")[0];
-          }
-          
-          // Now sync with database
-          console.log(`[Tasks] Starting DB sync for user ${tgUser.id}`);
-          
-          // If we need to update the weekly reset date, do it during sync
-          if (shouldResetWeekly && taskState && newWeeklyResetDate) {
-            const { upsertTaskState } = await import("@/services/taskStateService");
-            await upsertTaskState({
-              telegramId: tgUser.id,
-              userId: taskState.userId,
-              lastDailyResetDate: taskState.lastDailyResetDate || newWeeklyResetDate,
-              lastWeeklyResetDate: newWeeklyResetDate
-            });
-            console.log("✅ [Tasks-Weekly] Updated lastWeeklyResetDate in DB to:", newWeeklyResetDate);
-          }
-          
-          // Sync task progress with server
-          await syncTasksWithServer();
-          console.log("✅ [Tasks] DB merge finished, refreshing UI...");
-          
-          // Reload progress after merge
-          const updatedMap = new Map<string, TaskProgressData>();
+          // Initialize UI from localStorage immediately (instant UX)
           tasks.forEach(task => {
-            const progress = getTaskProgress(task.id);
-            if (progress) {
-              updatedMap.set(task.id, progress);
-            }
+            initializeTask(task.id, task.type);
           });
-          setTaskProgress(updatedMap);
-          console.log("✅ [Tasks] UI refreshed after database sync");
-        } catch (err) {
-          console.error("❌ [Tasks] Background merge failed:", err);
+          console.log("✅ [Tasks] Initialized UI from localStorage");
+          
+          // Load from database in background
+          console.log("📥 [Tasks] Loading task data from database...");
+          await loadTasksFromDB();
+          console.log("✅ [Tasks] Database load completed");
+          
+          setIsLoading(false);
+        } else {
+          console.warn("⚠️ [Tasks] No Telegram user found, skipping DB sync");
+          setIsLoading(false);
         }
-      } else {
-        console.warn("⚠️ [Tasks] No Telegram user found, skipping DB sync");
+      } catch (error) {
+        console.error("❌ [Tasks] Initialization failed:", error);
+        setIsLoading(false);
       }
     };
     
@@ -630,70 +564,56 @@ export function TasksReferralsScreen() {
 
   // Check for weekly reset after challenges are loaded and context is available
   useEffect(() => {
-    console.log("🔍 [Weekly Reset Check] Effect triggered");
-    console.log("🔍 [Weekly Reset Check] isLoading:", isLoading);
-    console.log("🔍 [Weekly Reset Check] currentWeeklyPeriodStart:", currentWeeklyPeriodStart);
+    console.log("🔄 [Tasks-Weekly] ========== WEEKLY RESET CHECK USEEFFECT ==========");
     
-    if (!isLoading && currentWeeklyPeriodStart) {
+    if (!isLoading && lastWeeklyResetDate) {
+      console.log("🔄 [Tasks-Weekly] Check conditions met - proceeding with weekly reset check");
+      console.log("🔄 [Tasks-Weekly] lastWeeklyResetDate from context:", lastWeeklyResetDate);
+      
       const now = new Date();
-      const periodStart = new Date(currentWeeklyPeriodStart);
+      const resetDate = new Date(lastWeeklyResetDate);
+      const daysSinceReset = Math.floor((now.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
       
-      // Calculate difference in days
-      const diffTime = Math.abs(now.getTime() - periodStart.getTime());
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      console.log("🔄 [Tasks-Weekly] Current time:", now.toISOString());
+      console.log("🔄 [Tasks-Weekly] Reset date:", resetDate.toISOString());
+      console.log("🔄 [Tasks-Weekly] Days since last weekly reset:", daysSinceReset);
       
-      console.log("📅 [Weekly Reset Check] Current time:", now.toISOString());
-      console.log("📅 [Weekly Reset Check] Period start:", periodStart.toISOString());
-      console.log("📅 [Weekly Reset Check] Days passed:", diffDays);
-
-      if (diffDays >= 7) {
-        console.log("🔄 [Weekly Reset] 7+ days detected! Resetting weekly tasks...");
+      if (daysSinceReset >= 7) {
+        console.log("🔄 [Tasks-Weekly] ✅ 7+ days passed! Resetting weekly tasks...");
         
-        // 1. Reset Local Task State for Weekly Tasks
-        setTaskProgress(prev => {
-          const newMap = new Map(prev);
-          let hasChanges = false;
-
-          tasks.forEach(task => {
-            if (task.type === "weekly") {
-              const current = newMap.get(task.id);
-              if (current && (current.currentProgress > 0 || current.completed || current.claimed)) {
-                console.log(`🔄 [Weekly Reset] Resetting task: ${task.id}`);
-                newMap.set(task.id, {
-                  ...current,
-                  currentProgress: 0,
-                  completed: false,
-                  claimed: false,
-                  lastUpdated: Date.now()
-                });
-                
-                // Also update service
-                updateTaskProgress(task.id, {
-                  currentProgress: 0,
-                  completed: false,
-                  claimed: false
-                });
-                hasChanges = true;
-              }
+        // Reset weekly tasks locally
+        const updatedProgress = new Map(taskProgress);
+        let resetCount = 0;
+        
+        tasks.forEach(task => {
+          if (task.type === "weekly") {
+            const taskData = updatedProgress.get(task.id);
+            if (taskData) {
+              updatedProgress.set(task.id, {
+                ...taskData,
+                currentProgress: 0,
+                completed: false,
+                claimed: false
+              });
+              resetCount++;
+              console.log(`🔄 [Tasks-Weekly] Reset task: ${task.id}`);
             }
-          });
-          
-          return hasChanges ? newMap : prev;
+          }
         });
         
-        // 2. Update Database & Context with NEW period start date
-        console.log("🔄 [Weekly Reset] Calling resetWeeklyPeriod...");
+        setTaskProgress(updatedProgress);
+        console.log(`✅ [Tasks-Weekly] Reset ${resetCount} weekly tasks locally`);
+        
+        // Update database with new weekly reset date
+        console.log("🔄 [Tasks-Weekly] Calling resetWeeklyTasks() to update database...");
         resetWeeklyPeriod();
       } else {
-        console.log("✅ [Weekly Reset Check] Still within 7-day period, no reset needed");
+        console.log(`ℹ️ [Tasks-Weekly] Only ${daysSinceReset} days passed, need 7+ days.`);
       }
-    } else if (!isLoading && !currentWeeklyPeriodStart) {
-      console.log("⚠️ [Weekly Reset Check] Missing currentWeeklyPeriodStart - initializing");
-      resetWeeklyPeriod();
     } else {
-      console.log("⏳ [Weekly Reset Check] Still loading or waiting for data");
+      console.log("⏳ [Tasks-Weekly] Waiting for data:", { isLoading, lastWeeklyResetDate });
     }
-  }, [currentWeeklyPeriodStart, isLoading, resetWeeklyPeriod]);
+  }, [lastWeeklyResetDate, isLoading, resetWeeklyPeriod]);
 
   return (
     <div className="pb-24 p-4 max-w-2xl mx-auto space-y-6">

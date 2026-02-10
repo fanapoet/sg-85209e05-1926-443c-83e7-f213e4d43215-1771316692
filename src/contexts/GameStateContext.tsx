@@ -66,6 +66,7 @@ interface GameState {
   currentRewardWeek: number;
   lastDailyClaimDate: string | null;
   currentWeeklyPeriodStart: string | null;
+  lastWeeklyResetDate: string | null;
   claimedDailyRewards: Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>;
   ownedNFTs: Array<{ nftId: string; purchasePrice: number; timestamp: number }>;
   
@@ -173,6 +174,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [currentRewardWeek, setCurrentRewardWeek] = useState(() => safeGetItem("currentRewardWeek", 1));
   const [lastDailyClaimDate, setLastDailyClaimDate] = useState<string | null>(() => safeGetItem("lastDailyClaimDate", null));
   const [currentWeeklyPeriodStart, setCurrentWeeklyPeriodStart] = useState<string | null>(() => safeGetItem("currentWeeklyPeriodStart", null));
+  const [lastWeeklyResetDate, setLastWeeklyResetDate] = useState<string | null>(() => safeGetItem("lastWeeklyResetDate", null));
   const [claimedDailyRewards, setClaimedDailyRewards] = useState<Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>>(() => safeGetItem("claimedDailyRewards", []));
   const [ownedNFTs, setOwnedNFTs] = useState<Array<{ nftId: string; purchasePrice: number; timestamp: number }>>(() => safeGetItem("ownedNFTs", []));
 
@@ -200,7 +202,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const saved = safeGetItem("bunergy_qc_cooldown", null);
     return saved !== null ? Number(saved) : null;
   });
-  const [quickChargeLastResetDate, setQuickChargeLastResetDate] = useState(() => 
+  const [quickChargeLastResetDate, setQuickChargeLastResetDate] = useState(() 
     safeGetItem("bunergy_qc_last_reset", new Date().toDateString())
   );
 
@@ -233,6 +235,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => { safeSetItem("currentRewardWeek", currentRewardWeek); }, [currentRewardWeek]);
   useEffect(() => { safeSetItem("lastDailyClaimDate", lastDailyClaimDate); }, [lastDailyClaimDate]);
   useEffect(() => { safeSetItem("currentWeeklyPeriodStart", currentWeeklyPeriodStart); }, [currentWeeklyPeriodStart]);
+  useEffect(() => { safeSetItem("lastWeeklyResetDate", lastWeeklyResetDate); }, [lastWeeklyResetDate]);
   useEffect(() => { safeSetItem("claimedDailyRewards", claimedDailyRewards); }, [claimedDailyRewards]);
   useEffect(() => { safeSetItem("ownedNFTs", ownedNFTs); }, [ownedNFTs]);
   useEffect(() => { safeSetItem("boosters", boosters); }, [boosters]);
@@ -362,6 +365,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           const { getTaskState } = await import("@/services/taskStateService");
           const currentState = await getTaskState(authResult.profile.telegram_id);
           
+          if (currentState?.lastWeeklyResetDate) {
+            setLastWeeklyResetDate(currentState.lastWeeklyResetDate);
+          }
+
           // Always pass both dates (use today if no existing values)
           await upsertTaskState({
             telegramId: authResult.profile.telegram_id,
@@ -936,25 +943,14 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     
     // 1. Update local state immediately
     const today = new Date().toISOString().split("T")[0];
+    setLastWeeklyResetDate(today);
+
     await upsertTaskState({
       telegramId,
       userId,
       lastDailyResetDate: today,
       lastWeeklyResetDate: today
     });
-    
-    // 2. Sync to DB
-    try {
-      await upsertTaskState({
-        telegramId,
-        userId,
-        lastDailyResetDate: today,
-        lastWeeklyResetDate: today
-      });
-      console.log("✅ [Weekly Reset] Database updated with new period start:", now);
-    } catch (error) {
-      console.error("❌ [Weekly Reset] Failed to update database:", error);
-    }
   };
 
   const purchaseNFT = (nftId: string, priceInBB: number) => {
@@ -991,7 +987,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       telegramId,
       userId,
       bz, bb, energy, maxEnergy, bzPerHour, tier, xp, referralCount,
-      dailyStreak, currentRewardWeek, lastDailyClaimDate, currentWeeklyPeriodStart,
+      dailyStreak, currentRewardWeek, lastDailyClaimDate, currentWeeklyPeriodStart, lastWeeklyResetDate,
       claimedDailyRewards, ownedNFTs,
       totalTaps, todayTaps, totalTapIncome, totalUpgrades, totalConversions,
       hasClaimedIdleToday, lastClaimTimestamp,
