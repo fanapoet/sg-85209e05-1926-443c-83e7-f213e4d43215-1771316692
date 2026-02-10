@@ -354,8 +354,9 @@ export async function syncTasksWithServer(): Promise<void> {
       console.error("❌ [Tasks-Sync] Sync failed:", result.error);
     }
 
-    // CRITICAL: Sync reset dates to user_task_state table (EXACT REWARDS PATTERN)
-    const today = new Date().toISOString().split("T")[0];
+    // CRITICAL: Get current state from database FIRST (BEFORE any date calculations)
+    const currentState = await getTaskState(tgUser.id);
+    console.log("🔄 [Tasks-Sync] Current DB state:", currentState);
     
     // Find most recent daily and weekly reset dates from tasks
     let lastDailyReset = today;
@@ -376,10 +377,6 @@ export async function syncTasksWithServer(): Promise<void> {
 
     console.log("🔄 [Tasks-Sync] Reset dates from local tasks:", { lastDailyReset, lastWeeklyReset });
 
-    // Get current state from DB
-    const currentState = await getTaskState(tgUser.id);
-    console.log("🔄 [Tasks-Sync] Current DB state:", currentState);
-    
     // Upsert with Math.max logic (never overwrite with older dates)
     const finalDailyReset = currentState?.lastDailyResetDate && currentState.lastDailyResetDate > lastDailyReset 
       ? currentState.lastDailyResetDate 
