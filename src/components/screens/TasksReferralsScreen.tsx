@@ -549,10 +549,13 @@ export function TasksReferralsScreen() {
       
       if (tgUser?.id) {
         try {
-          // CRITICAL: Load lastWeeklyResetDate from database (same pattern as Rewards)
+          // CRITICAL: Load lastWeeklyResetDate from database FIRST (before any sync)
           console.log("🔄 [Tasks-Weekly] Loading weekly reset date from database...");
           const { getTaskState } = await import("@/services/taskStateService");
           const taskState = await getTaskState(tgUser.id);
+          
+          let shouldResetWeekly = false;
+          let newWeeklyResetDate: string | null = null;
           
           if (taskState?.lastWeeklyResetDate) {
             console.log("✅ [Tasks-Weekly] Loaded lastWeeklyResetDate from DB:", taskState.lastWeeklyResetDate);
@@ -566,31 +569,38 @@ export function TasksReferralsScreen() {
             console.log("🔄 [Tasks-Weekly] Days since last weekly reset:", daysPassed);
             
             if (daysPassed >= 7) {
-              console.log("🔄 [Tasks-Weekly] 7+ days passed! Triggering weekly task reset...");
+              console.log("🔄 [Tasks-Weekly] 7+ days passed! Weekly reset needed!");
+              shouldResetWeekly = true;
+              newWeeklyResetDate = today;
               
-              // Reset weekly tasks in localStorage
+              // Reset weekly tasks in localStorage BEFORE syncing
               const { checkAndResetTasks } = await import("@/services/tasksService");
               checkAndResetTasks();
-              
-              // Update lastWeeklyResetDate in database to today
-              const { upsertTaskState } = await import("@/services/taskStateService");
-              await upsertTaskState({
-                telegramId: tgUser.id,
-                userId: taskState.userId,
-                lastDailyResetDate: taskState.lastDailyResetDate || today,
-                lastWeeklyResetDate: today
-              });
-              
-              console.log("✅ [Tasks-Weekly] Weekly tasks reset completed!");
+              console.log("✅ [Tasks-Weekly] Weekly tasks reset in localStorage completed!");
             } else {
               console.log(`ℹ️ [Tasks-Weekly] Only ${daysPassed} days passed, weekly reset not needed yet`);
             }
           } else {
-            console.log("ℹ️ [Tasks-Weekly] No task state in DB yet (new user)");
+            console.log("ℹ️ [Tasks-Weekly] No task state in DB yet (new user) - will create with today's date");
+            newWeeklyResetDate = new Date().toISOString().split("T")[0];
           }
           
-          // Now sync with database (Public RLS allows this without session)
+          // Now sync with database
           console.log(`[Tasks] Starting DB sync for user ${tgUser.id}`);
+          
+          // If we need to update the weekly reset date, do it during sync
+          if (shouldResetWeekly && taskState && newWeeklyResetDate) {
+            const { upsertTaskState } = await import("@/services/taskStateService");
+            await upsertTaskState({
+              telegramId: tgUser.id,
+              userId: taskState.userId,
+              lastDailyResetDate: taskState.lastDailyResetDate || newWeeklyResetDate,
+              lastWeeklyResetDate: newWeeklyResetDate
+            });
+            console.log("✅ [Tasks-Weekly] Updated lastWeeklyResetDate in DB to:", newWeeklyResetDate);
+          }
+          
+          // Sync task progress with server
           await syncTasksWithServer();
           console.log("✅ [Tasks] DB merge finished, refreshing UI...");
           
