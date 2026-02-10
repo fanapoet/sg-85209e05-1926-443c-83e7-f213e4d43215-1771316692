@@ -304,6 +304,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           if (rewardData.lastDailyClaimDate) {
             setLastDailyClaimDate(rewardData.lastDailyClaimDate);
           }
+          // CRITICAL: Load currentWeeklyPeriodStart from database
+          if (rewardData.currentWeeklyPeriodStart) {
+            setCurrentWeeklyPeriodStart(rewardData.currentWeeklyPeriodStart);
+            console.log("✅ [REWARDS-SYNC] Loaded currentWeeklyPeriodStart:", rewardData.currentWeeklyPeriodStart);
+          }
         } else {
           // No DB record exists - create initial record with current localStorage values
           console.log("📤 [REWARDS-SYNC] No DB record found - creating initial record");
