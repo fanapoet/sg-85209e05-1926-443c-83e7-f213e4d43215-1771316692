@@ -209,8 +209,12 @@ export function RewardsNFTsScreen() {
     }
   }, [weeklyChallenges, loading]);
 
-  // Check for weekly reset
+  // Check for weekly reset after challenges are loaded and context is available
   useEffect(() => {
+    console.log("🔍 [Weekly Reset Check] Effect triggered");
+    console.log("🔍 [Weekly Reset Check] loading:", loading);
+    console.log("🔍 [Weekly Reset Check] currentWeeklyPeriodStart:", currentWeeklyPeriodStart);
+    
     if (!loading && currentWeeklyPeriodStart) {
       const now = new Date();
       const periodStart = new Date(currentWeeklyPeriodStart);
@@ -219,10 +223,12 @@ export function RewardsNFTsScreen() {
       const diffTime = Math.abs(now.getTime() - periodStart.getTime());
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
       
-      console.log(`🔍 [Rewards] Checking weekly reset. Days passed: ${diffDays} (Start: ${periodStart.toISOString()})`);
+      console.log("📅 [Weekly Reset Check] Current time:", now.toISOString());
+      console.log("📅 [Weekly Reset Check] Period start:", periodStart.toISOString());
+      console.log("📅 [Weekly Reset Check] Days passed:", diffDays);
 
       if (diffDays >= 7) {
-        console.log(`🔄 [Rewards] Weekly reset triggered! (> 7 days)`);
+        console.log("🔄 [Weekly Reset] 7+ days detected! Resetting challenges...");
         
         // 1. Reset Local Challenges
         setWeeklyChallenges([
@@ -259,13 +265,16 @@ export function RewardsNFTsScreen() {
         ]);
         
         // 2. Update Database & Context with NEW period start date
-        // This is crucial: updating currentWeeklyPeriodStart prevents this block from running again immediately
+        console.log("🔄 [Weekly Reset] Calling resetWeeklyPeriod...");
         resetWeeklyPeriod();
+      } else {
+        console.log("✅ [Weekly Reset Check] Still within 7-day period, no reset needed");
       }
     } else if (!loading && !currentWeeklyPeriodStart) {
-      // Initialize if missing
-      console.log("ℹ️ [Rewards] Initializing missing weekly period start date");
+      console.log("⚠️ [Weekly Reset Check] Missing currentWeeklyPeriodStart - initializing");
       resetWeeklyPeriod();
+    } else {
+      console.log("⏳ [Weekly Reset Check] Still loading or waiting for data");
     }
   }, [currentWeeklyPeriodStart, loading, resetWeeklyPeriod]);
 
