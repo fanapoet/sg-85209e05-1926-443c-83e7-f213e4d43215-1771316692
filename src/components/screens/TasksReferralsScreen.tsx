@@ -581,7 +581,7 @@ export function TasksReferralsScreen() {
       if (daysSinceReset >= 7) {
         console.log("🔄 [Tasks-Weekly] ✅ 7+ days passed! Resetting weekly tasks...");
         
-        // Reset weekly tasks locally
+        // Reset weekly tasks locally (EXACT REWARDS PATTERN)
         const updatedProgress = new Map(taskProgress);
         let resetCount = 0;
         
@@ -604,7 +604,7 @@ export function TasksReferralsScreen() {
         setTaskProgress(updatedProgress);
         console.log(`✅ [Tasks-Weekly] Reset ${resetCount} weekly tasks locally`);
         
-        // Update database with new weekly reset date
+        // Update database with new weekly reset date (EXACT REWARDS PATTERN)
         console.log("🔄 [Tasks-Weekly] Calling resetWeeklyTasks() to update database...");
         resetWeeklyPeriod();
       } else {
@@ -613,7 +613,7 @@ export function TasksReferralsScreen() {
     } else {
       console.log("⏳ [Tasks-Weekly] Waiting for data:", { isLoading, lastWeeklyResetDate });
     }
-  }, [lastWeeklyResetDate, isLoading, resetWeeklyPeriod]);
+  }, [lastWeeklyResetDate, isLoading, resetWeeklyPeriod, taskProgress, tasks]);
 
   return (
     <div className="pb-24 p-4 max-w-2xl mx-auto space-y-6">
