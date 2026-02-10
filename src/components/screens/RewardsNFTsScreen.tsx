@@ -100,6 +100,9 @@ export function RewardsNFTsScreen() {
     resetWeeklyPeriod
   } = useGameState();
   
+  console.log("[Weekly Reset] 🎬 RewardsNFTsScreen mounted/rendered");
+  console.log("[Weekly Reset] 📊 currentWeeklyPeriodStart from context:", currentWeeklyPeriodStart);
+  
   const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
   const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallenge[]>([]);
   const [loading, setLoading] = useState(true);
