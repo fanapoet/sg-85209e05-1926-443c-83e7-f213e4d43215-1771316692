@@ -58,7 +58,9 @@ export function TasksReferralsScreen() {
     totalTaps,
     telegramId,
     userId: userProfileId,
-    performTaskClaim
+    performTaskClaim,
+    currentWeeklyPeriodStart,
+    resetWeeklyPeriod
   } = useGameState();
   const { toast } = useToast();
   
@@ -523,6 +525,7 @@ export function TasksReferralsScreen() {
   // Initialize tasks and load from database on mount
   useEffect(() => {
     const initializeTasksWithAuth = async () => {
+      console.log("📋📋📋 [Tasks] ========== INITIALIZATION START ==========");
       console.log("📋 [Tasks] SCREEN MOUNTED - STARTING INIT");
       
       // Initialize tasks in localStorage
@@ -624,6 +627,73 @@ export function TasksReferralsScreen() {
     
     initializeTasksWithAuth();
   }, []);
+
+  // Check for weekly reset after challenges are loaded and context is available
+  useEffect(() => {
+    console.log("🔍 [Weekly Reset Check] Effect triggered");
+    console.log("🔍 [Weekly Reset Check] isLoading:", isLoading);
+    console.log("🔍 [Weekly Reset Check] currentWeeklyPeriodStart:", currentWeeklyPeriodStart);
+    
+    if (!isLoading && currentWeeklyPeriodStart) {
+      const now = new Date();
+      const periodStart = new Date(currentWeeklyPeriodStart);
+      
+      // Calculate difference in days
+      const diffTime = Math.abs(now.getTime() - periodStart.getTime());
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+      console.log("📅 [Weekly Reset Check] Current time:", now.toISOString());
+      console.log("📅 [Weekly Reset Check] Period start:", periodStart.toISOString());
+      console.log("📅 [Weekly Reset Check] Days passed:", diffDays);
+
+      if (diffDays >= 7) {
+        console.log("🔄 [Weekly Reset] 7+ days detected! Resetting weekly tasks...");
+        
+        // 1. Reset Local Task State for Weekly Tasks
+        setTaskProgress(prev => {
+          const newMap = new Map(prev);
+          let hasChanges = false;
+
+          tasks.forEach(task => {
+            if (task.type === "weekly") {
+              const current = newMap.get(task.id);
+              if (current && (current.currentProgress > 0 || current.completed || current.claimed)) {
+                console.log(`🔄 [Weekly Reset] Resetting task: ${task.id}`);
+                newMap.set(task.id, {
+                  ...current,
+                  currentProgress: 0,
+                  completed: false,
+                  claimed: false,
+                  lastUpdated: Date.now()
+                });
+                
+                // Also update service
+                updateTaskProgress(task.id, {
+                  currentProgress: 0,
+                  completed: false,
+                  claimed: false
+                });
+                hasChanges = true;
+              }
+            }
+          });
+          
+          return hasChanges ? newMap : prev;
+        });
+        
+        // 2. Update Database & Context with NEW period start date
+        console.log("🔄 [Weekly Reset] Calling resetWeeklyPeriod...");
+        resetWeeklyPeriod();
+      } else {
+        console.log("✅ [Weekly Reset Check] Still within 7-day period, no reset needed");
+      }
+    } else if (!isLoading && !currentWeeklyPeriodStart) {
+      console.log("⚠️ [Weekly Reset Check] Missing currentWeeklyPeriodStart - initializing");
+      resetWeeklyPeriod();
+    } else {
+      console.log("⏳ [Weekly Reset Check] Still loading or waiting for data");
+    }
+  }, [currentWeeklyPeriodStart, isLoading, resetWeeklyPeriod]);
 
   return (
     <div className="pb-24 p-4 max-w-2xl mx-auto space-y-6">
