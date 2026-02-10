@@ -9,78 +9,103 @@ interface DebugLog {
   type: "info" | "success" | "error";
 }
 
+// Global log storage so we capture logs even before component mounts
+const globalLogs: DebugLog[] = [];
+let isInterceptionSetup = false;
+
+// Set up console interception globally
+if (typeof window !== "undefined" && !isInterceptionSetup) {
+  const originalLog = console.log;
+  const originalError = console.error;
+
+  console.log = (...args: any[]) => {
+    const message = args.join(" ");
+    // Capture all relevant logs
+    if (message.includes("[MANUAL SYNC]") || 
+        message.includes("[AUTO-SYNC]") || 
+        message.includes("[Tap]") || 
+        message.includes("[Sync]") || 
+        message.includes("[BOOSTER]") || 
+        message.includes("[REWARDS-SYNC]") || 
+        message.includes("[TASKS-SYNC]") || 
+        message.includes("[Tasks]") ||
+        message.includes("[Daily Reset]") ||
+        message.includes("[Weekly Reset]")) {
+      
+      globalLogs.push({
+        timestamp: new Date().toLocaleTimeString(),
+        message,
+        type: message.includes("✅") || message.includes("SUCCESS") ? "success" : 
+              message.includes("❌") || message.includes("Error") || message.includes("failed") ? "error" : "info"
+      });
+      // Keep only last 50 logs
+      if (globalLogs.length > 50) globalLogs.shift();
+    }
+    originalLog.apply(console, args);
+  };
+
+  console.error = (...args: any[]) => {
+    const message = args.join(" ");
+    if (message.includes("Sync") || message.includes("sync") || 
+        message.includes("Rewards") || message.includes("Tasks") || 
+        message.includes("Daily Reset") || message.includes("Weekly Reset")) {
+      globalLogs.push({
+        timestamp: new Date().toLocaleTimeString(),
+        message,
+        type: "error"
+      });
+      if (globalLogs.length > 50) globalLogs.shift();
+    }
+    originalError.apply(console, args);
+  };
+
+  isInterceptionSetup = true;
+}
+
 export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
   const gameState = useGameState();
-  const [logs, setLogs] = useState<DebugLog[]>([]);
+  const [logs, setLogs] = useState<DebugLog[]>([...globalLogs]);
 
-  // Intercept console.log for sync-related messages
+  // Update logs from global storage every second
   useEffect(() => {
-    const originalLog = console.log;
-    const originalError = console.error;
-
-    console.log = (...args: any[]) => {
-      const message = args.join(" ");
-      // Capture all relevant logs including Daily Reset
-      if (message.includes("[MANUAL SYNC]") || 
-          message.includes("[AUTO-SYNC]") || 
-          message.includes("[Tap]") || 
-          message.includes("[Sync]") || 
-          message.includes("[BOOSTER]") || 
-          message.includes("[REWARDS-SYNC]") || 
-          message.includes("[TASKS-SYNC]") || 
-          message.includes("[Tasks]") ||
-          message.includes("[Daily Reset]")) {
-        
-        setLogs(prev => [...prev.slice(-49), {
-          timestamp: new Date().toLocaleTimeString(),
-          message,
-          type: message.includes("✅") || message.includes("SUCCESS") ? "success" : 
-                message.includes("❌") || message.includes("Error") || message.includes("failed") ? "error" : "info"
-        }]);
-      }
-      originalLog.apply(console, args);
-    };
-
-    console.error = (...args: any[]) => {
-      const message = args.join(" ");
-      if (message.includes("Sync") || message.includes("sync") || 
-          message.includes("Rewards") || message.includes("Tasks") || 
-          message.includes("Daily Reset") || message.includes("Weekly Reset")) {
-        setLogs(prev => [...prev.slice(-49), {
-          timestamp: new Date().toLocaleTimeString(),
-          message,
-          type: "error"
-        }]);
-      }
-      originalError.apply(console, args);
-    };
-
-    return () => {
-      console.log = originalLog;
-      console.error = originalError;
-    };
+    const interval = setInterval(() => {
+      setLogs([...globalLogs]);
+    }, 500);
+    return () => clearInterval(interval);
   }, []);
 
   const testSync = async () => {
-    setLogs(prev => [...prev, {
-      timestamp: new Date().toLocaleTimeString(),
-      message: "🔵 Test Sync: Manually calling gameState.manualSync()",
-      type: "info"
-    }]);
+    console.log("🔵 [MANUAL SYNC] Test Sync: Manually calling gameState.manualSync()");
     
     try {
       await gameState.manualSync();
-      setLogs(prev => [...prev, {
-        timestamp: new Date().toLocaleTimeString(),
-        message: "✅ Test Sync: manualSync() completed",
-        type: "success"
-      }]);
+      console.log("✅ [MANUAL SYNC] Test Sync: manualSync() completed");
     } catch (error: any) {
-      setLogs(prev => [...prev, {
-        timestamp: new Date().toLocaleTimeString(),
-        message: `❌ Test Sync Error: ${error.message}`,
-        type: "error"
-      }]);
+      console.error(`❌ [MANUAL SYNC] Test Sync Error: ${error.message}`);
+    }
+  };
+
+  const testWeeklyReset = () => {
+    console.log("🧪 [Weekly Reset] TEST: Manual test button clicked");
+    console.log(`🧪 [Weekly Reset] TEST: currentWeeklyPeriodStart = ${gameState.currentWeeklyPeriodStart}`);
+    
+    if (gameState.currentWeeklyPeriodStart) {
+      const now = new Date();
+      const periodStart = new Date(gameState.currentWeeklyPeriodStart);
+      const daysPassed = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
+      
+      console.log(`🧪 [Weekly Reset] TEST: Current time = ${now.toISOString()}`);
+      console.log(`🧪 [Weekly Reset] TEST: Period start = ${periodStart.toISOString()}`);
+      console.log(`🧪 [Weekly Reset] TEST: Days passed = ${daysPassed}`);
+      
+      if (daysPassed >= 7) {
+        console.log("🧪 [Weekly Reset] TEST: 7+ days detected! Should trigger reset.");
+        gameState.resetWeeklyPeriod();
+      } else {
+        console.log(`🧪 [Weekly Reset] TEST: Only ${daysPassed} days passed, need 7+ days.`);
+      }
+    } else {
+      console.log("🧪 [Weekly Reset] TEST: currentWeeklyPeriodStart is null/undefined!");
     }
   };
 
@@ -106,6 +131,21 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
+      {/* Weekly Reset Status */}
+      <div className="bg-purple-900 p-4 rounded-lg mb-4">
+        <h3 className="font-bold mb-2">📅 Weekly Reset Status</h3>
+        <div className="text-xs space-y-1 font-mono">
+          <div>Current Weekly Period: <span className="text-blue-400">
+            {gameState.currentWeeklyPeriodStart || "NOT SET"}
+          </span></div>
+          {gameState.currentWeeklyPeriodStart && (
+            <div>Days Since Start: <span className="text-yellow-400">
+              {Math.floor((Date.now() - new Date(gameState.currentWeeklyPeriodStart).getTime()) / (1000 * 60 * 60 * 24))}
+            </span></div>
+          )}
+        </div>
+      </div>
+
       {/* Game State */}
       <div className="bg-purple-900 p-4 rounded-lg mb-4">
         <h3 className="font-bold mb-2">🎮 Current Game State</h3>
@@ -120,21 +160,30 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      {/* Manual Test Button */}
-      <Button 
-        onClick={testSync} 
-        className="w-full mb-4 bg-green-600 hover:bg-green-700"
-        disabled={gameState.isSyncing}
-      >
-        {gameState.isSyncing ? "Syncing..." : "🧪 Test Manual Sync Now"}
-      </Button>
+      {/* Manual Test Buttons */}
+      <div className="space-y-2 mb-4">
+        <Button 
+          onClick={testSync} 
+          className="w-full bg-green-600 hover:bg-green-700"
+          disabled={gameState.isSyncing}
+        >
+          {gameState.isSyncing ? "Syncing..." : "🧪 Test Manual Sync Now"}
+        </Button>
+        
+        <Button 
+          onClick={testWeeklyReset} 
+          className="w-full bg-orange-600 hover:bg-orange-700"
+        >
+          🧪 Test Weekly Reset Detection
+        </Button>
+      </div>
 
       {/* Sync Logs */}
       <div className="bg-purple-900 p-4 rounded-lg">
-        <h3 className="font-bold mb-2">📝 Sync Logs (Last 20)</h3>
+        <h3 className="font-bold mb-2">📝 Sync Logs (Last 50)</h3>
         <div className="text-xs space-y-2 max-h-96 overflow-auto font-mono">
           {logs.length === 0 ? (
-            <div className="text-gray-400">No logs yet... Click "Test Manual Sync" or wait for auto-sync</div>
+            <div className="text-gray-400">No logs yet... Click test buttons or wait for auto-sync</div>
           ) : (
             logs.map((log, i) => (
               <div key={i} className={`p-2 rounded ${
