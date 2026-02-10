@@ -345,7 +345,7 @@ export async function syncTasksWithServer(): Promise<void> {
       expiresAt: task.expiresAt
     }));
 
-    // Sync task progress to database (only 2 args needed now)
+    // Sync task progress to database
     const result = await syncTaskProgressToDB(tgUser.id.toString(), progressRecords);
     
     if (result.success) {
@@ -355,29 +355,35 @@ export async function syncTasksWithServer(): Promise<void> {
     }
 
     // CRITICAL: Get current state from database FIRST (BEFORE any date calculations)
+    const today = new Date().toISOString().split("T")[0];
     const currentState = await getTaskState(tgUser.id);
     console.log("🔄 [Tasks-Sync] Current DB state:", currentState);
     
-    // Find most recent daily and weekly reset dates from tasks
-    let lastDailyReset = today;
-    let lastWeeklyReset = today;
+    // Initialize with database values as baseline (NOT today!)
+    let lastDailyReset = currentState?.lastDailyResetDate || today;
+    let lastWeeklyReset = currentState?.lastWeeklyResetDate || today;
     
+    console.log("🔄 [Tasks-Sync] Starting baseline from DB:", { lastDailyReset, lastWeeklyReset });
+    
+    // Find NEWER reset dates from localStorage tasks (only update if localStorage has more recent dates)
     allTasks.forEach(task => {
       if (task.resetAt) {
         const normalizedResetDate = normalizeDate(task.resetAt);
         
         if (task.taskType === "daily" && normalizedResetDate > lastDailyReset) {
+          console.log(`🔄 [Tasks-Sync] Found newer daily reset in localStorage: ${normalizedResetDate}`);
           lastDailyReset = normalizedResetDate;
         }
         if (task.taskType === "weekly" && normalizedResetDate > lastWeeklyReset) {
+          console.log(`🔄 [Tasks-Sync] Found newer weekly reset in localStorage: ${normalizedResetDate}`);
           lastWeeklyReset = normalizedResetDate;
         }
       }
     });
 
-    console.log("🔄 [Tasks-Sync] Reset dates from local tasks:", { lastDailyReset, lastWeeklyReset });
+    console.log("🔄 [Tasks-Sync] After checking localStorage:", { lastDailyReset, lastWeeklyReset });
 
-    // Upsert with Math.max logic (never overwrite with older dates)
+    // Final Math.max check to ensure we NEVER overwrite with older dates
     const finalDailyReset = currentState?.lastDailyResetDate && currentState.lastDailyResetDate > lastDailyReset 
       ? currentState.lastDailyResetDate 
       : lastDailyReset;
@@ -388,17 +394,22 @@ export async function syncTasksWithServer(): Promise<void> {
 
     console.log("🔄 [Tasks-Sync] Final reset dates to sync:", { finalDailyReset, finalWeeklyReset });
 
-    const stateResult = await upsertTaskState({
-      telegramId: tgUser.id,
-      userId: profile.id,
-      lastDailyResetDate: finalDailyReset,
-      lastWeeklyResetDate: finalWeeklyReset
-    });
-    
-    if (stateResult.success) {
-      console.log("✅ [Tasks-Sync] Reset dates synced to user_task_state");
+    // Only upsert if dates have actually changed
+    if (finalDailyReset !== currentState?.lastDailyResetDate || finalWeeklyReset !== currentState?.lastWeeklyResetDate) {
+      const stateResult = await upsertTaskState({
+        telegramId: tgUser.id,
+        userId: profile.id,
+        lastDailyResetDate: finalDailyReset,
+        lastWeeklyResetDate: finalWeeklyReset
+      });
+      
+      if (stateResult.success) {
+        console.log("✅ [Tasks-Sync] Reset dates synced to user_task_state");
+      } else {
+        console.error("❌ [Tasks-Sync] Reset date sync failed:", stateResult.error);
+      }
     } else {
-      console.error("❌ [Tasks-Sync] Reset date sync failed:", stateResult.error);
+      console.log("ℹ️ [Tasks-Sync] Reset dates unchanged, skipping upsert");
     }
   } catch (error) {
     console.error("❌ [Tasks-Sync] Exception:", error);
