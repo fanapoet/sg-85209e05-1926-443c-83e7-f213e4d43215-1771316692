@@ -9,7 +9,7 @@ import {
   getSyncStatus, 
   checkOnlineStatus 
 } from "@/services/syncService";
-import { getRewardState, upsertRewardState } from "@/services/rewardStateService";
+import { getRewardState, upsertRewardState, startNewWeeklyPeriod } from "@/services/rewardStateService";
 import { claimDailyReward } from "@/services/rewardsService";
 import { 
   loadDailyClaimsFromDB, 
@@ -65,6 +65,7 @@ interface GameState {
   dailyStreak: number;
   currentRewardWeek: number;
   lastDailyClaimDate: string | null;
+  currentWeeklyPeriodStart: string | null;
   claimedDailyRewards: Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>;
   ownedNFTs: Array<{ nftId: string; purchasePrice: number; timestamp: number }>;
   
@@ -198,7 +199,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const saved = safeGetItem("bunergy_qc_cooldown", null);
     return saved !== null ? Number(saved) : null;
   });
-  const [quickChargeLastResetDate, setQuickChargeLastResetDate] = useState(() => 
+  const [quickChargeLastResetDate, setQuickChargeLastResetDate] = useState(() 
     safeGetItem("bunergy_qc_last_reset", new Date().toDateString())
   );
 
