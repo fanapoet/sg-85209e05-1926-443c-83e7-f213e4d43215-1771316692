@@ -958,7 +958,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       telegramId,
       userId,
       bz, bb, energy, maxEnergy, bzPerHour, tier, xp, referralCount,
-      dailyStreak, currentRewardWeek, lastDailyClaimDate,
+      dailyStreak, currentRewardWeek, lastDailyClaimDate, currentWeeklyPeriodStart,
       claimedDailyRewards, ownedNFTs,
       totalTaps, todayTaps, totalTapIncome, totalUpgrades, totalConversions,
       hasClaimedIdleToday, lastClaimTimestamp,
