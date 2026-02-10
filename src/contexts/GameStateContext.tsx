@@ -120,6 +120,7 @@ interface GameState {
     rewardAmount: number
   ) => Promise<{ success: boolean; error?: any }>;
   purchaseNFT: (nftId: string, priceInBB: number) => void;
+  resetWeeklyPeriod: () => Promise<void>;
 }
 
 const GameStateContext = createContext<GameState | null>(null);
@@ -169,6 +170,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [dailyStreak, setDailyStreak] = useState(() => safeGetItem("dailyStreak", 0));
   const [currentRewardWeek, setCurrentRewardWeek] = useState(() => safeGetItem("currentRewardWeek", 1));
   const [lastDailyClaimDate, setLastDailyClaimDate] = useState<string | null>(() => safeGetItem("lastDailyClaimDate", null));
+  const [currentWeeklyPeriodStart, setCurrentWeeklyPeriodStart] = useState<string | null>(() => safeGetItem("currentWeeklyPeriodStart", null));
   const [claimedDailyRewards, setClaimedDailyRewards] = useState<Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>>(() => safeGetItem("claimedDailyRewards", []));
   const [ownedNFTs, setOwnedNFTs] = useState<Array<{ nftId: string; purchasePrice: number; timestamp: number }>>(() => safeGetItem("ownedNFTs", []));
 
@@ -228,6 +230,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => { safeSetItem("dailyStreak", dailyStreak); }, [dailyStreak]);
   useEffect(() => { safeSetItem("currentRewardWeek", currentRewardWeek); }, [currentRewardWeek]);
   useEffect(() => { safeSetItem("lastDailyClaimDate", lastDailyClaimDate); }, [lastDailyClaimDate]);
+  useEffect(() => { safeSetItem("currentWeeklyPeriodStart", currentWeeklyPeriodStart); }, [currentWeeklyPeriodStart]);
   useEffect(() => { safeSetItem("claimedDailyRewards", claimedDailyRewards); }, [claimedDailyRewards]);
   useEffect(() => { safeSetItem("ownedNFTs", ownedNFTs); }, [ownedNFTs]);
   useEffect(() => { safeSetItem("boosters", boosters); }, [boosters]);
@@ -904,6 +907,22 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const resetWeeklyPeriod = async () => {
+    if (!telegramId) return;
+    const now = new Date().toISOString();
+    
+    // 1. Update local state immediately
+    setCurrentWeeklyPeriodStart(now);
+    
+    // 2. Sync to DB
+    try {
+      await startNewWeeklyPeriod(telegramId, now);
+      console.log("✅ [Weekly Reset] Database updated with new period start:", now);
+    } catch (error) {
+      console.error("❌ [Weekly Reset] Failed to update database:", error);
+    }
+  };
+
   const purchaseNFT = (nftId: string, priceInBB: number) => {
     // 1. Deduct BB
     if (!subtractBB(priceInBB)) {
@@ -955,6 +974,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       performDailyClaim,
       performTaskClaim,
       purchaseNFT,
+      resetWeeklyPeriod,
       telegramUser,
       isProfileOpen,
       setProfileOpen

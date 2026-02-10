@@ -19,7 +19,6 @@ import {
   Target,
   TrendingUp
 } from "lucide-react";
-import { startNewWeeklyPeriod } from "@/utils/weeklyPeriod";
 
 interface DailyReward {
   day: number;
@@ -81,6 +80,7 @@ export function RewardsNFTsScreen() {
     dailyStreak, 
     currentRewardWeek, 
     lastDailyClaimDate,
+    currentWeeklyPeriodStart,
     
     // Stats for Challenges
     totalUpgrades, 
@@ -96,7 +96,8 @@ export function RewardsNFTsScreen() {
     addBZ, 
     addBB, 
     addXP,
-    purchaseNFT
+    purchaseNFT,
+    resetWeeklyPeriod
   } = useGameState();
   
   const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
@@ -208,16 +209,22 @@ export function RewardsNFTsScreen() {
     }
   }, [weeklyChallenges, loading]);
 
-  // Check for weekly reset after challenges are loaded and context is available
+  // Check for weekly reset
   useEffect(() => {
     if (!loading && currentWeeklyPeriodStart) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      const now = new Date();
       const periodStart = new Date(currentWeeklyPeriodStart);
-      periodStart.setHours(0, 0, 0, 0);
-      const daysSincePeriodStart = Math.floor((today.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysSincePeriodStart >= 7) {
-        console.log(`🔄 [Rewards] Weekly reset detected. Resetting challenges.`);
+      
+      // Calculate difference in days
+      const diffTime = Math.abs(now.getTime() - periodStart.getTime());
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      
+      console.log(`🔍 [Rewards] Checking weekly reset. Days passed: ${diffDays} (Start: ${periodStart.toISOString()})`);
+
+      if (diffDays >= 7) {
+        console.log(`🔄 [Rewards] Weekly reset triggered! (> 7 days)`);
+        
+        // 1. Reset Local Challenges
         setWeeklyChallenges([
           {
             key: "builder",
@@ -250,9 +257,17 @@ export function RewardsNFTsScreen() {
             claimed: false
           }
         ]);
+        
+        // 2. Update Database & Context with NEW period start date
+        // This is crucial: updating currentWeeklyPeriodStart prevents this block from running again immediately
+        resetWeeklyPeriod();
       }
+    } else if (!loading && !currentWeeklyPeriodStart) {
+      // Initialize if missing
+      console.log("ℹ️ [Rewards] Initializing missing weekly period start date");
+      resetWeeklyPeriod();
     }
-  }, [weeklyChallenges, currentWeeklyPeriodStart, loading]);
+  }, [currentWeeklyPeriodStart, loading, resetWeeklyPeriod]);
 
   const isStage2Complete = (): boolean => {
     try {
