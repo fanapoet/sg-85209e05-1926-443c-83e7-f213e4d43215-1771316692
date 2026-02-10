@@ -443,6 +443,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const manualSync = async () => {
     console.log("🔘 [MANUAL SYNC] ========== FUNCTION CALLED ==========");
     console.log("🔘 [MANUAL SYNC] Step 1: Preparing game state...");
+    console.log("🔘 [MANUAL SYNC] Auth State Check:", { telegramId, userId, hasBoth: !!(telegramId && userId) });
     
     setIsSyncing(true);
     try {
@@ -485,8 +486,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         // Sync Task Progress
         if (telegramId && userId) {
           console.log("📋 [MANUAL SYNC] Syncing task progress...");
+          console.log("📋 [MANUAL SYNC] telegramId:", telegramId, "userId:", userId);
           await syncTasksWithServer();
           console.log("✅ [MANUAL SYNC] Task sync completed");
+        } else {
+          console.warn("⚠️ [MANUAL SYNC] Skipping task sync - missing auth:", { telegramId, userId });
         }
         
         toast({ 
