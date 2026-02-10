@@ -19,6 +19,7 @@ import {
   Target,
   TrendingUp
 } from "lucide-react";
+import { startNewWeeklyPeriod } from "@/utils/weeklyPeriod";
 
 interface DailyReward {
   day: number;
@@ -209,13 +210,13 @@ export function RewardsNFTsScreen() {
 
   // Check for weekly reset after challenges are loaded and context is available
   useEffect(() => {
-    if (!loading && lastDailyClaimDate) {
+    if (!loading && currentWeeklyPeriodStart) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const lastClaim = new Date(lastDailyClaimDate);
-      lastClaim.setHours(0, 0, 0, 0);
-      const daysSinceLastClaim = Math.floor((today.getTime() - lastClaim.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysSinceLastClaim >= 7) {
+      const periodStart = new Date(currentWeeklyPeriodStart);
+      periodStart.setHours(0, 0, 0, 0);
+      const daysSincePeriodStart = Math.floor((today.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSincePeriodStart >= 7) {
         console.log(`🔄 [Rewards] Weekly reset detected. Resetting challenges.`);
         setWeeklyChallenges([
           {
@@ -251,7 +252,7 @@ export function RewardsNFTsScreen() {
         ]);
       }
     }
-  }, [weeklyChallenges, lastDailyClaimDate, loading]);
+  }, [weeklyChallenges, currentWeeklyPeriodStart, loading]);
 
   const isStage2Complete = (): boolean => {
     try {
