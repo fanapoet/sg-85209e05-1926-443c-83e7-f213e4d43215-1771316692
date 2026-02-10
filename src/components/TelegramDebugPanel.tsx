@@ -45,7 +45,7 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
       const message = args.join(" ");
       if (message.includes("Sync") || message.includes("sync") || 
           message.includes("Rewards") || message.includes("Tasks") || 
-          message.includes("Daily Reset")) {
+          message.includes("Daily Reset") || message.includes("Weekly Reset")) {
         setLogs(prev => [...prev.slice(-49), {
           timestamp: new Date().toLocaleTimeString(),
           message,
