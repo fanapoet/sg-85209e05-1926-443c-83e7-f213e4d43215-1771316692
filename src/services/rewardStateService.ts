@@ -112,7 +112,7 @@ export async function upsertRewardState(data: RewardStateData) {
         daily_streak: data.dailyStreak,
         current_reward_week: data.currentRewardWeek,
         last_daily_claim_date: data.lastDailyClaimDate,
-        current_weekly_period_start: data.currentWeeklyPeriodStart || new Date().toISOString(),
+        current_weekly_period_start: data.currentWeeklyPeriodStart,
         updated_at: new Date().toISOString()
       }, {
         onConflict: "telegram_id"

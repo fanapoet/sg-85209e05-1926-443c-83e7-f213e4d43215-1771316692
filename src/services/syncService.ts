@@ -330,8 +330,7 @@ export async function syncPlayerState(gameState: Partial<{
           userId: profile.id,
           dailyStreak: gameState.dailyStreak || 0,
           currentRewardWeek: gameState.currentRewardWeek || 1,
-          lastDailyClaimDate: gameState.lastDailyClaimDate || null,
-          currentWeeklyPeriodStart: new Date().toISOString()
+          lastDailyClaimDate: gameState.lastDailyClaimDate || null
         });
         
         if (rewardSyncResult.success) {
