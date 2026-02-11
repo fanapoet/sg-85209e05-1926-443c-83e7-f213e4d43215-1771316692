@@ -863,16 +863,13 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       if (rewardType === "XP") addXP(rewardAmount);
       console.log("✅ [TASK-CLAIM] Balance updated");
       
-      // 2. Update Local Task State
-      const success = claimTaskReward(taskId);
-      console.log("✅ [TASK-CLAIM] Local state updated:", success);
+      // 2. Update Local Task State AND sync to database
+      const success = await claimTaskReward(taskId);
+      console.log("✅ [TASK-CLAIM] Task claimed and synced to DB:", success);
       
       if (!success) {
-        throw new Error("Failed to claim task in local state");
+        throw new Error("Failed to claim task");
       }
-      
-      // Note: Reset dates are updated by resetDailyTasks() and resetWeeklyTasks(), 
-      // NOT by performTaskClaim(). This matches the Rewards pattern.
       
       return { success: true };
     } catch (error) {

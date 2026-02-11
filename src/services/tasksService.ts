@@ -186,7 +186,7 @@ export function updateTaskProgress(
 /**
  * Claim task reward (local-first)
  */
-export function claimTaskReward(taskId: string): boolean {
+export async function claimTaskReward(taskId: string): Promise<boolean> {
   console.log(`📋 [Tasks-Claim] Claiming reward for ${taskId}`);
   
   const tasks = getLocalTaskProgress();
@@ -215,10 +215,10 @@ export function claimTaskReward(taskId: string): boolean {
   tasks.set(taskId, task);
   saveLocalTaskProgress(tasks);
   
-  console.log(`✅ [Tasks-Claim] Claimed ${taskId} locally`);
+  console.log(`✅ [Tasks-Claim] Claimed ${taskId} locally, syncing to DB...`);
   
-  // Schedule background sync
-  scheduleSyncToServer();
+  // Immediate sync to database (matching rewards pattern)
+  await syncTasksWithServer();
   
   return true;
 }
