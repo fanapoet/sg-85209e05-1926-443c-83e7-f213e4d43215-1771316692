@@ -125,6 +125,7 @@ interface GameState {
   purchaseNFT: (nftId: string, priceInBB: number) => void;
   resetWeeklyPeriod: () => Promise<void>;
   resetWeeklyTasks: () => Promise<void>;
+  resetDailyTasks: () => Promise<void>;
 }
 
 const GameStateContext = createContext<GameState | null>(null);
@@ -855,37 +856,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         throw new Error("Failed to claim task in local state");
       }
       
-      // 3. Sync to Database - EXACT REWARDS PATTERN
-      if (telegramId && userId) {
-        console.log("📤 [TASK-CLAIM] Syncing to database...");
-        
-        try {
-          const today = new Date().toISOString().split("T")[0];
-          console.log("📤 [TASK-CLAIM] Today date:", today);
-          
-          // Get current state from DB (like Rewards does)
-          const { getTaskState } = await import("@/services/taskStateService");
-          const currentState = await getTaskState(telegramId);
-          console.log("📤 [TASK-CLAIM] Current DB state:", currentState);
-          
-          // Build update with both dates (EXACT REWARDS PATTERN)
-          const updateData = {
-            telegramId,
-            userId,
-            lastDailyResetDate: taskType === "daily" ? today : (currentState?.lastDailyResetDate || today),
-            lastWeeklyResetDate: taskType === "weekly" ? today : (currentState?.lastWeeklyResetDate || today)
-          };
-          
-          console.log("📤 [TASK-CLAIM] Update data:", updateData);
-          
-          const result = await upsertTaskState(updateData);
-          console.log("✅ [TASK-CLAIM] Database sync result:", result);
-        } catch (dbError) {
-          console.error("❌ [TASK-CLAIM] Database sync failed:", dbError);
-        }
-      } else {
-        console.warn("⚠️ [TASK-CLAIM] Missing telegramId or userId - skipping DB sync");
-      }
+      // Note: Reset dates are updated by resetDailyTasks() and resetWeeklyTasks(), 
+      // NOT by performTaskClaim(). This matches the Rewards pattern.
       
       return { success: true };
     } catch (error) {
@@ -933,6 +905,32 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       console.log("✅ [Weekly Tasks Reset] Database updated with new weekly reset date:", today);
     } catch (error) {
       console.error("❌ [Weekly Tasks Reset] Failed to update database:", error);
+    }
+  };
+
+  const resetDailyTasks = async () => {
+    if (!telegramId || !userId) return;
+    
+    // 1. Update local state immediately
+    const today = new Date().toISOString().split("T")[0];
+    setLastDailyResetDate(today);
+    
+    // 2. Get current state to preserve lastWeeklyResetDate
+    try {
+      const { getTaskState } = await import("@/services/taskStateService");
+      const currentState = await getTaskState(telegramId);
+      
+      // 3. Update ONLY lastDailyResetDate, preserve lastWeeklyResetDate
+      await upsertTaskState({
+        telegramId,
+        userId,
+        lastDailyResetDate: today,
+        lastWeeklyResetDate: currentState?.lastWeeklyResetDate || today
+      });
+      
+      console.log("✅ [Daily Tasks Reset] Database updated with new daily reset date:", today);
+    } catch (error) {
+      console.error("❌ [Daily Tasks Reset] Failed to update database:", error);
     }
   };
 
@@ -989,6 +987,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       purchaseNFT,
       resetWeeklyPeriod,
       resetWeeklyTasks,
+      resetDailyTasks,
       telegramUser,
       isProfileOpen,
       setProfileOpen
