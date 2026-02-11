@@ -235,18 +235,31 @@ export function TasksReferralsScreen() {
     }
   }, [weeklyTasks, loading]);
 
-  // Progress Update Effect (Syncs context stats to task progress)
+  // Update task progress based on context values
   useEffect(() => {
     if (loading) return;
+
+    console.log("🔄 [Tasks-Progress] Updating task progress from context");
+    console.log("🔄 [Tasks-Progress] todayTaps:", todayTaps);
+    console.log("🔄 [Tasks-Progress] totalUpgrades:", totalUpgrades);
+    console.log("🔄 [Tasks-Progress] totalConversions:", totalConversions);
+    console.log("🔄 [Tasks-Progress] referralCount:", referralCount);
 
     // Update Daily Tasks
     setDailyTasks(prev => prev.map(task => {
       if (task.claimed) return task;
       
       let newCurrent = task.current || 0;
-      if (task.id === "daily_check_in") newCurrent = 1; // Auto complete
-      if (task.id === "daily_tap_100") newCurrent = todayTaps;
-      if (task.id === "daily_idle") newCurrent = hasClaimedIdleToday ? 1 : 0;
+      if (task.id === "daily_check_in") {
+        newCurrent = 1; // Auto complete on login
+      }
+      if (task.id === "daily_tap_100") {
+        newCurrent = todayTaps;
+        console.log("🔄 [Tasks-Progress] Updating daily_tap_100:", { oldCurrent: task.current, newCurrent, target: task.target });
+      }
+      if (task.id === "daily_idle") {
+        newCurrent = hasClaimedIdleToday ? 1 : 0;
+      }
 
       const isCompleted = newCurrent >= task.target;
       return { ...task, current: newCurrent, completed: isCompleted };
@@ -257,9 +270,15 @@ export function TasksReferralsScreen() {
       if (task.claimed) return task;
       
       let newCurrent = task.current || 0;
-      if (task.id === "weekly_upgrade") newCurrent = totalUpgrades;
-      if (task.id === "weekly_convert") newCurrent = totalConversions;
-      if (task.id === "weekly_invite") newCurrent = referralCount;
+      if (task.id === "weekly_upgrade") {
+        newCurrent = totalUpgrades;
+      }
+      if (task.id === "weekly_convert") {
+        newCurrent = totalConversions;
+      }
+      if (task.id === "weekly_invite") {
+        newCurrent = referralCount;
+      }
 
       const isCompleted = newCurrent >= task.target;
       return { ...task, current: newCurrent, completed: isCompleted };
@@ -267,13 +286,17 @@ export function TasksReferralsScreen() {
 
   }, [todayTaps, hasClaimedIdleToday, totalUpgrades, totalConversions, referralCount, loading]);
 
-  // Daily Reset Check
+  // Check for daily reset
   useEffect(() => {
     console.log("🔍 [Tasks-Daily] Daily reset check triggered");
+    console.log("🔍 [Tasks-Daily] loading:", loading);
+    console.log("🔍 [Tasks-Daily] lastDailyResetDate:", lastDailyResetDate);
     
     if (!loading && lastDailyResetDate) {
       const today = new Date().toISOString().split("T")[0];
       const lastReset = new Date(lastDailyResetDate).toISOString().split("T")[0];
+      
+      console.log("📅 [Tasks-Daily] Comparing dates:", { today, lastReset });
       
       if (today !== lastReset) {
         console.log("🔄 [Tasks-Daily] New day detected! Resetting daily tasks...");
@@ -286,10 +309,42 @@ export function TasksReferralsScreen() {
           current: task.id === "daily_check_in" ? 1 : 0
         })));
         
-        // Database update for daily reset is handled by GameStateContext automatically on init
+        // Database update for daily reset
+        const updateDailyReset = async () => {
+          if (!telegramId || !userId) {
+            console.warn("⚠️ [Tasks-Daily] Cannot update database - missing auth");
+            return;
+          }
+          
+          console.log("📤 [Tasks-Daily] Updating database with new daily reset date:", today);
+          
+          try {
+            const { upsertTaskState } = await import("@/services/taskStateService");
+            const { getTaskState } = await import("@/services/taskStateService");
+            
+            // Get current state to preserve weekly reset date
+            const currentState = await getTaskState(telegramId);
+            
+            // Update only lastDailyResetDate
+            await upsertTaskState({
+              telegramId,
+              userId,
+              lastDailyResetDate: today,
+              lastWeeklyResetDate: currentState?.lastWeeklyResetDate || today
+            });
+            
+            console.log("✅ [Tasks-Daily] Database updated successfully");
+          } catch (error) {
+            console.error("❌ [Tasks-Daily] Failed to update database:", error);
+          }
+        };
+        
+        updateDailyReset();
+      } else {
+        console.log("ℹ️ [Tasks-Daily] Same day - no reset needed");
       }
     }
-  }, [lastDailyResetDate, loading]);
+  }, [lastDailyResetDate, loading, telegramId, userId]);
 
   // Weekly Reset Check
   useEffect(() => {
