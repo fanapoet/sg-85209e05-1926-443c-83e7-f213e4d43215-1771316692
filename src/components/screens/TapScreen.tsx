@@ -15,6 +15,8 @@ export function TapScreen() {
     subtractEnergy,
     totalTaps,
     incrementTotalTaps,
+    incrementTaps,
+    todayTaps,
     tier,
     quickChargeUsesRemaining
   } = useGameState();
