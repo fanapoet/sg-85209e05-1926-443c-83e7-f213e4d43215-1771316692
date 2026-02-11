@@ -257,7 +257,12 @@ export function TasksReferralsScreen() {
       }
       if (task.id === "daily_tap_100") {
         newCurrent = todayTaps;
-        console.log("🔄 [Tasks-Progress] Updating daily_tap_100:", { oldCurrent: task.current, newCurrent, target: task.target });
+        console.log("🔄 [Tasks-Progress] Updating daily_tap_100:", { 
+          oldCurrent: task.current, 
+          newCurrent, 
+          target: task.target,
+          willComplete: newCurrent >= task.target
+        });
       }
       if (task.id === "daily_idle") {
         newCurrent = hasClaimedIdleToday ? 1 : 0;
@@ -319,6 +324,7 @@ export function TasksReferralsScreen() {
           }
           
           console.log("📤 [Tasks-Daily] Updating database with new daily reset date:", today);
+          console.log("📤 [Tasks-Daily] Auth info:", { telegramId, authUserId });
           
           try {
             const { upsertTaskState } = await import("@/services/taskStateService");
@@ -326,6 +332,7 @@ export function TasksReferralsScreen() {
             
             // Get current state to preserve weekly reset date
             const currentState = await getTaskState(telegramId);
+            console.log("📤 [Tasks-Daily] Current state from DB:", currentState);
             
             // Update only lastDailyResetDate
             await upsertTaskState({
