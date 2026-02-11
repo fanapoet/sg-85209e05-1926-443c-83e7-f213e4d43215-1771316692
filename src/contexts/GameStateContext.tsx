@@ -532,6 +532,21 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           title: "🌅 New Day!",
           description: "Daily tasks and limits have been reset.",
         });
+        
+        // CRITICAL FIX: Immediately sync QuickCharge reset to database
+        setTimeout(() => {
+          syncPlayerState({
+            ...getFullStateForSync(),
+            quickChargeUsesRemaining: 5,
+            quickChargeCooldownUntil: null
+          }).then(result => {
+            if (result.success) {
+              console.log("✅ [Daily Reset] QuickCharge reset synced to database");
+            }
+          }).catch(err => {
+            console.error("❌ [Daily Reset] Failed to sync QuickCharge reset:", err);
+          });
+        }, 100);
       } else {
         console.log(`[Daily Reset] ℹ️ Same day - no reset needed`);
       }
