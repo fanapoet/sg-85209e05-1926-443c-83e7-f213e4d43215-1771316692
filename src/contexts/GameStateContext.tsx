@@ -67,6 +67,7 @@ interface GameState {
   lastDailyClaimDate: string | null;
   currentWeeklyPeriodStart: string | null;
   lastWeeklyResetDate: string | null;
+  lastDailyResetDate: string | null;
   claimedDailyRewards: Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>;
   ownedNFTs: Array<{ nftId: string; purchasePrice: number; timestamp: number }>;
   
@@ -175,6 +176,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [lastDailyClaimDate, setLastDailyClaimDate] = useState<string | null>(() => safeGetItem("lastDailyClaimDate", null));
   const [currentWeeklyPeriodStart, setCurrentWeeklyPeriodStart] = useState<string | null>(() => safeGetItem("currentWeeklyPeriodStart", null));
   const [lastWeeklyResetDate, setLastWeeklyResetDate] = useState<string | null>(() => safeGetItem("lastWeeklyResetDate", null));
+  const [lastDailyResetDate, setLastDailyResetDate] = useState<string | null>(() => safeGetItem("lastDailyResetDate", null));
   const [claimedDailyRewards, setClaimedDailyRewards] = useState<Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>>(() => safeGetItem("claimedDailyRewards", []));
   const [ownedNFTs, setOwnedNFTs] = useState<Array<{ nftId: string; purchasePrice: number; timestamp: number }>>(() => safeGetItem("ownedNFTs", []));
 
@@ -236,6 +238,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => { safeSetItem("lastDailyClaimDate", lastDailyClaimDate); }, [lastDailyClaimDate]);
   useEffect(() => { safeSetItem("currentWeeklyPeriodStart", currentWeeklyPeriodStart); }, [currentWeeklyPeriodStart]);
   useEffect(() => { safeSetItem("lastWeeklyResetDate", lastWeeklyResetDate); }, [lastWeeklyResetDate]);
+  useEffect(() => { safeSetItem("lastDailyResetDate", lastDailyResetDate); }, [lastDailyResetDate]);
   useEffect(() => { safeSetItem("claimedDailyRewards", claimedDailyRewards); }, [claimedDailyRewards]);
   useEffect(() => { safeSetItem("ownedNFTs", ownedNFTs); }, [ownedNFTs]);
   useEffect(() => { safeSetItem("boosters", boosters); }, [boosters]);
@@ -313,44 +316,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
             setCurrentWeeklyPeriodStart(rewardData.currentWeeklyPeriodStart);
             console.log("✅ [REWARDS-SYNC] Loaded currentWeeklyPeriodStart:", rewardData.currentWeeklyPeriodStart);
           }
-        } else {
-          // No DB record exists - create initial record with current localStorage values
-          console.log("📤 [REWARDS-SYNC] No DB record found - creating initial record");
-          console.log("📤 [REWARDS-SYNC] Current localStorage state:", {
-            dailyStreak,
-            currentRewardWeek,
-            lastDailyClaimDate
-          });
-          
-          try {
-            await upsertRewardState({
-              telegramId: authResult.profile.telegram_id,
-              userId: authResult.profile.id,
-              dailyStreak: dailyStreak,
-              currentRewardWeek: currentRewardWeek,
-              lastDailyClaimDate: lastDailyClaimDate,
-              currentWeeklyPeriodStart: new Date().toISOString()
-            });
-            console.log("✅ [REWARDS-SYNC] Initial DB record created successfully");
-          } catch (error) {
-            console.error("❌ [REWARDS-SYNC] Failed to create initial DB record:", error);
-          }
-        }
-
-        // Load and merge daily claims
-        const serverClaims = await loadDailyClaimsFromDB(authResult.profile.telegram_id);
-        if (serverClaims !== null) {
-          const merged = mergeDailyClaims(claimedDailyRewards, serverClaims);
-          setClaimedDailyRewards(merged);
-          safeSetItem("claimedDailyRewards", merged);
-        }
-
-        // Load and merge NFTs
-        const serverNFTs = await loadNFTsFromDB(authResult.profile.telegram_id);
-        if (serverNFTs !== null) {
-          const merged = mergeNFTs(ownedNFTs, serverNFTs);
-          setOwnedNFTs(merged);
-          safeSetItem("ownedNFTs", merged);
         }
 
         // Load Task State & Initialize reset tracking record
@@ -367,6 +332,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           
           if (currentState?.lastWeeklyResetDate) {
             setLastWeeklyResetDate(currentState.lastWeeklyResetDate);
+          }
+          
+          if (currentState?.lastDailyResetDate) {
+            setLastDailyResetDate(currentState.lastDailyResetDate);
           }
 
           // Always pass both dates (use today if no existing values)
@@ -1001,7 +970,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       telegramId,
       userId,
       bz, bb, energy, maxEnergy, bzPerHour, tier, xp, referralCount,
-      dailyStreak, currentRewardWeek, lastDailyClaimDate, currentWeeklyPeriodStart, lastWeeklyResetDate,
+      dailyStreak, currentRewardWeek, lastDailyClaimDate, currentWeeklyPeriodStart, lastWeeklyResetDate, lastDailyResetDate,
       claimedDailyRewards, ownedNFTs,
       totalTaps, todayTaps, totalTapIncome, totalUpgrades, totalConversions,
       hasClaimedIdleToday, lastClaimTimestamp,
