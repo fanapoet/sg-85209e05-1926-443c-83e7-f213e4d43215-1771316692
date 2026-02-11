@@ -412,10 +412,10 @@ export function TasksReferralsScreen() {
   };
 
   const handleClaimPendingEarnings = async () => {
-    if (!authUserId || !referralStats) return;
+    if (!userId || !referralStats) return;
 
     try {
-      const result = await claimPendingEarnings(authUserId);
+      const result = await claimPendingEarnings(userId);
       if (result.success && result.amount > 0) {
         addBZ(result.amount);
         toast({
@@ -423,7 +423,7 @@ export function TasksReferralsScreen() {
           description: `You received ${result.amount.toLocaleString()} BZ from referrals!`,
         });
         
-        const newStats = await getReferralStats(authUserId);
+        const newStats = await getReferralStats(userId);
         setReferralStats(newStats);
       } else {
         toast({
@@ -443,10 +443,10 @@ export function TasksReferralsScreen() {
   };
 
   const handleClaimMilestone = async (milestoneCount: number, xpReward: number) => {
-    if (!authUserId || claimedMilestones.includes(milestoneCount)) return;
+    if (!userId || claimedMilestones.includes(milestoneCount)) return;
 
     try {
-      const result = await checkAndClaimMilestone(authUserId, referralCount);
+      const result = await checkAndClaimMilestone(userId, referralCount);
       if (result.milestone && result.xpReward) {
         addXP(result.xpReward);
         setClaimedMilestones([...claimedMilestones, result.milestone]);
