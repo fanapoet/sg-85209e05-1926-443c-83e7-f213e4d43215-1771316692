@@ -81,7 +81,11 @@ export function TapScreen() {
     const reward = calculateTapReward();
     addBZ(reward);
     subtractEnergy(energyCostPerTap);
+    
+    console.log("🎯 [TAP] Before increment - todayTaps:", todayTaps, "totalTaps:", totalTaps);
     incrementTotalTaps();
+    incrementTaps(1, reward);
+    console.log("🎯 [TAP] After increment - called incrementTaps(1,", reward, ")");
 
     // Update task progress for "Tap 100 Times"
     const tapTask = "daily_tap_100";

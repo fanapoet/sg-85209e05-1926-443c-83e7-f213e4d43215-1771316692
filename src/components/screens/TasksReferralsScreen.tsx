@@ -245,6 +245,7 @@ export function TasksReferralsScreen() {
     
     console.log("🔄 [Tasks-Progress] Updating task progress...");
     console.log("🔄 [Tasks-Progress] Context values:", { todayTaps, totalUpgrades, totalConversions, referralCount });
+    console.log("🔄 [Tasks-Progress] 🎯 todayTaps value:", todayTaps, "type:", typeof todayTaps);
     
     // Update Daily Tasks
     setDailyTasks(prev => prev.map(task => {
@@ -254,7 +255,13 @@ export function TasksReferralsScreen() {
       if (task.id === "daily_check_in") newCurrent = 1;
       if (task.id === "daily_tap_100") {
         newCurrent = todayTaps;
-        console.log("🔄 [Tasks-Progress] Updated daily_tap_100:", { current: newCurrent, target: task.target });
+        console.log("🔄 [Tasks-Progress] 🎯 daily_tap_100 UPDATE:", { 
+          oldCurrent: task.current, 
+          newCurrent, 
+          todayTaps, 
+          target: task.target,
+          willBeCompleted: newCurrent >= task.target
+        });
       }
       if (task.id === "daily_idle") newCurrent = hasClaimedIdleToday ? 1 : 0;
       
