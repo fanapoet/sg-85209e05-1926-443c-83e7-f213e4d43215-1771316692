@@ -197,6 +197,33 @@ export function TasksReferralsScreen() {
     loadReferralData();
   }, []);
 
+  // Initialize daily and weekly tasks from localStorage or defaults
+  useEffect(() => {
+    console.log("🎬 [Tasks-Init] Initializing Tasks screen...");
+    
+    try {
+      // Load daily tasks
+      const savedDailyTasks = localStorage.getItem("dailyTasks");
+      if (savedDailyTasks) {
+        console.log("📂 [Tasks-Init] Loading daily tasks from localStorage");
+        setDailyTasks(JSON.parse(savedDailyTasks));
+      }
+      
+      // Load weekly tasks
+      const savedWeeklyTasks = localStorage.getItem("weeklyTasks");
+      if (savedWeeklyTasks) {
+        console.log("📂 [Tasks-Init] Loading weekly tasks from localStorage");
+        setWeeklyTasks(JSON.parse(savedWeeklyTasks));
+      }
+    } catch (error) {
+      console.error("❌ [Tasks-Init] Failed to load tasks from localStorage:", error);
+    }
+    
+    // Mark initialization complete
+    setLoading(false);
+    console.log("✅ [Tasks-Init] Initialization complete, loading set to false");
+  }, []); // Run once on mount
+
   // Load task progress from service on mount
   useEffect(() => {
     const loadTaskProgress = () => {
@@ -212,6 +239,20 @@ export function TasksReferralsScreen() {
     
     loadTaskProgress();
   }, [tasks]);
+
+  // Persist daily tasks to localStorage
+  useEffect(() => {
+    if (!loading && dailyTasks.length > 0) {
+      localStorage.setItem("dailyTasks", JSON.stringify(dailyTasks));
+    }
+  }, [dailyTasks, loading]);
+
+  // Persist weekly tasks to localStorage
+  useEffect(() => {
+    if (!loading && weeklyTasks.length > 0) {
+      localStorage.setItem("weeklyTasks", JSON.stringify(weeklyTasks));
+    }
+  }, [weeklyTasks, loading]);
 
   // Update task progress based on context values
   useEffect(() => {
@@ -270,9 +311,9 @@ export function TasksReferralsScreen() {
 
   }, [todayTaps, hasClaimedIdleToday, totalUpgrades, totalConversions, referralCount, totalTaps, loading, taskProgress]);
 
-  // Weekly reset check - EXACT REWARDS PATTERN
+  // Weekly reset check - EXACT pattern from Rewards
   useEffect(() => {
-    console.log("🔍 [Tasks-Weekly] Effect triggered");
+    console.log("🔍 [Tasks-Weekly] Weekly reset check triggered");
     console.log("🔍 [Tasks-Weekly] loading:", loading);
     console.log("🔍 [Tasks-Weekly] lastWeeklyResetDate:", lastWeeklyResetDate);
     
