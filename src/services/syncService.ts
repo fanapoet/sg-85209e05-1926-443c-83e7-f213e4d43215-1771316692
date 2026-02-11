@@ -346,6 +346,33 @@ export async function syncPlayerState(gameState: Partial<{
       console.log("⏭️ [REWARDS-SYNC-CHECK] No reward data in gameState");
     }
 
+    // Sync task state if provided (EXACT REWARDS PATTERN)
+    if (gameState.lastDailyResetDate !== undefined || gameState.lastWeeklyResetDate !== undefined) {
+      console.log("📋 [TASKS-SYNC] Syncing task state:", {
+        lastDailyResetDate: gameState.lastDailyResetDate,
+        lastWeeklyResetDate: gameState.lastWeeklyResetDate
+      });
+      
+      try {
+        const { upsertTaskState } = await import("./taskStateService");
+        
+        const taskSyncResult = await upsertTaskState({
+          telegramId: tgUser.id,
+          userId: profile.id,
+          lastDailyResetDate: gameState.lastDailyResetDate || new Date().toISOString().split('T')[0],
+          lastWeeklyResetDate: gameState.lastWeeklyResetDate || new Date().toISOString().split('T')[0]
+        });
+        
+        if (taskSyncResult.success) {
+          console.log("✅ [TASKS-SYNC] Task state synced successfully!");
+        } else {
+          console.error("❌ [TASKS-SYNC] Task state sync failed:", taskSyncResult.error);
+        }
+      } catch (error: any) {
+        console.error("❌ [TASKS-SYNC] Task state sync exception:", error);
+      }
+    }
+
     return { success: true };
   } catch (error: any) {
     console.error("❌ [Sync] Sync exception:", error);
