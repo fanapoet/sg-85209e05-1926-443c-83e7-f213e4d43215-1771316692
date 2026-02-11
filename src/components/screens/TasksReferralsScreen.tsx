@@ -44,7 +44,9 @@ export function TasksReferralsScreen() {
     performTaskClaim,
     lastWeeklyResetDate,
     lastDailyResetDate,
-    resetWeeklyTasks
+    resetWeeklyTasks,
+    telegramId,
+    userId: authUserId
   } = useGameState();
   const { toast } = useToast();
   
@@ -311,7 +313,7 @@ export function TasksReferralsScreen() {
         
         // Database update for daily reset
         const updateDailyReset = async () => {
-          if (!telegramId || !userId) {
+          if (!telegramId || !authUserId) {
             console.warn("⚠️ [Tasks-Daily] Cannot update database - missing auth");
             return;
           }
@@ -328,7 +330,7 @@ export function TasksReferralsScreen() {
             // Update only lastDailyResetDate
             await upsertTaskState({
               telegramId,
-              userId,
+              userId: authUserId,
               lastDailyResetDate: today,
               lastWeeklyResetDate: currentState?.lastWeeklyResetDate || today
             });
@@ -344,7 +346,7 @@ export function TasksReferralsScreen() {
         console.log("ℹ️ [Tasks-Daily] Same day - no reset needed");
       }
     }
-  }, [lastDailyResetDate, loading, telegramId, userId]);
+  }, [lastDailyResetDate, loading, telegramId, authUserId]);
 
   // Weekly Reset Check
   useEffect(() => {
@@ -410,10 +412,10 @@ export function TasksReferralsScreen() {
   };
 
   const handleClaimPendingEarnings = async () => {
-    if (!userId || !referralStats) return;
+    if (!authUserId || !referralStats) return;
 
     try {
-      const result = await claimPendingEarnings(userId);
+      const result = await claimPendingEarnings(authUserId);
       if (result.success && result.amount > 0) {
         addBZ(result.amount);
         toast({
@@ -421,7 +423,7 @@ export function TasksReferralsScreen() {
           description: `You received ${result.amount.toLocaleString()} BZ from referrals!`,
         });
         
-        const newStats = await getReferralStats(userId);
+        const newStats = await getReferralStats(authUserId);
         setReferralStats(newStats);
       } else {
         toast({
@@ -441,10 +443,10 @@ export function TasksReferralsScreen() {
   };
 
   const handleClaimMilestone = async (milestoneCount: number, xpReward: number) => {
-    if (!userId || claimedMilestones.includes(milestoneCount)) return;
+    if (!authUserId || claimedMilestones.includes(milestoneCount)) return;
 
     try {
-      const result = await checkAndClaimMilestone(userId, referralCount);
+      const result = await checkAndClaimMilestone(authUserId, referralCount);
       if (result.milestone && result.xpReward) {
         addXP(result.xpReward);
         setClaimedMilestones([...claimedMilestones, result.milestone]);
