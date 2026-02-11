@@ -193,6 +193,8 @@ export async function syncPlayerState(gameState: Partial<{
   dailyStreak: number;
   currentRewardWeek: number;
   lastDailyClaimDate: string | null;
+  lastDailyResetDate: string;
+  lastWeeklyResetDate: string;
 }>): Promise<{ success: boolean; error?: string }> {
   console.log("🔵 [syncPlayerState] ========== FUNCTION ENTERED ==========");
   console.log("🔵 [syncPlayerState] Received gameState:", gameState);
@@ -595,6 +597,8 @@ export function startAutoSync(
     dailyStreak?: number;
     currentRewardWeek?: number;
     lastDailyClaimDate?: string | null;
+    lastDailyResetDate?: string;
+    lastWeeklyResetDate?: string;
     dailyClaims?: Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>;
     ownedNFTs?: Array<{ nftId: string; purchasePrice: number; timestamp: number }>;
   },
@@ -647,7 +651,10 @@ export function startAutoSync(
       // ADD REWARD STATE
       dailyStreak: state.dailyStreak,
       currentRewardWeek: state.currentRewardWeek,
-      lastDailyClaimDate: state.lastDailyClaimDate
+      lastDailyClaimDate: state.lastDailyClaimDate,
+      // ADD TASK STATE
+      lastDailyResetDate: state.lastDailyResetDate,
+      lastWeeklyResetDate: state.lastWeeklyResetDate
     };
     
     console.log("🔄 [AUTO-SYNC] Calling syncPlayerState...");
