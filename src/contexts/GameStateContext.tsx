@@ -355,7 +355,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         
         console.log("🔍 [GameState-Init] ========== CHECKING FOR RESETS ==========");
         console.log("🔍 [GameState-Init] Today's date:", today);
-        console.log("🔍 [GameState-Init] taskState from DB:", taskState);
         
         // Check QuickCharge reset
         if (serverData?.quickcharge_last_reset) {
