@@ -227,7 +227,7 @@ export async function syncDailyClaimsToDB(
       .from("user_daily_claims") as any)
       .upsert(upsertData, {
         onConflict: "telegram_id,day",
-        ignoreDuplicates: false
+        ignoreDuplicates: true
       });
 
     if (error) {
