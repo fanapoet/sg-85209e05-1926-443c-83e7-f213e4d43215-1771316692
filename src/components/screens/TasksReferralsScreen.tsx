@@ -289,9 +289,29 @@ export function TasksReferralsScreen() {
     // or on mount, reload the tasks from localStorage to ensure UI is up to date.
     if (!loading) {
       console.log("🔄 [Tasks-UI] Reloading tasks due to reset date update or mount");
-      const loadedTasks = JSON.parse(localStorage.getItem("tasks") || "[]");
-      setDailyTasks(loadedTasks.filter((t: any) => t.type === "daily"));
-      setWeeklyTasks(loadedTasks.filter((t: any) => t.type === "weekly"));
+      try {
+        const savedDaily = localStorage.getItem("dailyTasks");
+        if (savedDaily) {
+          setDailyTasks(JSON.parse(savedDaily));
+        } else {
+          setDailyTasks(defaultDailyTasks);
+        }
+      } catch (e) {
+        console.error("❌ Failed to load daily tasks", e);
+        setDailyTasks(defaultDailyTasks);
+      }
+
+      try {
+        const savedWeekly = localStorage.getItem("weeklyTasks");
+        if (savedWeekly) {
+          setWeeklyTasks(JSON.parse(savedWeekly));
+        } else {
+          setWeeklyTasks(defaultWeeklyTasks);
+        }
+      } catch (e) {
+        console.error("❌ Failed to load weekly tasks", e);
+        setWeeklyTasks(defaultWeeklyTasks);
+      }
     }
   }, [lastDailyResetDate, loading]);
 
