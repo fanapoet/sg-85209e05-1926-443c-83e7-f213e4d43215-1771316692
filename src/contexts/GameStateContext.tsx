@@ -977,8 +977,14 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const today = new Date().toISOString().split('T')[0];
     setLastDailyResetDate(today);
     
+    // Reset daily tracking variables (CRITICAL FIX)
+    setTodayTaps(0);
+    setHasClaimedIdleToday(false);
+    
     // Update localStorage
     safeSetItem("bunergy_daily_reset_date", today);
+    safeSetItem("bunergy_todayTaps", 0);
+    safeSetItem("bunergy_hasClaimedIdleToday", false);
     
     // Reset tasks in tasksService
     checkAndResetTasks();
