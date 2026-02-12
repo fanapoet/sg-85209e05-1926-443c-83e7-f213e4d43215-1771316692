@@ -348,6 +348,41 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           });
           console.log("✅ [TASK-STATE] Reset tracking record initialized");
         }
+        
+        // CHECK AND PERFORM RESETS AFTER ALL DATA LOADED
+        const today = new Date().toISOString().split("T")[0];
+        let needsSync = false;
+        
+        // Check QuickCharge reset
+        if (serverData?.quickcharge_last_reset) {
+          const lastResetDate = new Date(serverData.quickcharge_last_reset).toISOString().split("T")[0];
+          if (lastResetDate !== today) {
+            setQuickChargeUsesRemaining(5);
+            setQuickChargeCooldownUntil(null);
+            safeSetItem("bunergy_qc_uses", 5);
+            safeSetItem("bunergy_qc_cooldown", null);
+            needsSync = true;
+          }
+        }
+        
+        // Check task resets
+        if (userId && telegramId) {
+          const { getTaskState } = await import("@/services/taskStateService");
+          const taskState = await getTaskState(authResult.profile.telegram_id);
+          
+          if (taskState?.lastDailyResetDate && taskState.lastDailyResetDate !== today) {
+            const { checkAndResetTasks } = await import("@/services/tasksService");
+            checkAndResetTasks();
+            needsSync = true;
+          }
+        }
+        
+        // Sync resets to DB if needed
+        if (needsSync) {
+          setTimeout(() => {
+            syncPlayerState(getFullStateForSync());
+          }, 500);
+        }
       }
     };
 
