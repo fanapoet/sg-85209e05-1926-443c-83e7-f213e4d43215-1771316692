@@ -370,10 +370,30 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           const { getTaskState } = await import("@/services/taskStateService");
           const taskState = await getTaskState(authResult.profile.telegram_id);
           
-          if (taskState?.lastDailyResetDate && taskState.lastDailyResetDate !== today) {
-            const { checkAndResetTasks } = await import("@/services/tasksService");
-            checkAndResetTasks();
-            needsSync = true;
+          if (taskState?.lastDailyResetDate) {
+            const lastResetDate = taskState.lastDailyResetDate;
+            if (lastResetDate !== today) {
+              const { checkAndResetTasks } = await import("@/services/tasksService");
+              checkAndResetTasks();
+              resetDailyTasks(); // This updates context state and DB
+              needsSync = true;
+            }
+          }
+          
+          // Check weekly task reset
+          if (taskState?.lastWeeklyResetDate) {
+            const weeklyResetDate = taskState.lastWeeklyResetDate;
+            const today = new Date().toISOString().split("T")[0];
+            if (weeklyResetDate !== today) {
+              const lastReset = new Date(weeklyResetDate);
+              const now = new Date();
+              const diffDays = Math.floor((now.getTime() - lastReset.getTime()) / (1000 * 60 * 60 * 24));
+              if (diffDays >= 7) {
+                console.log("🔄 [Weekly Tasks] 7+ days detected! Resetting weekly tasks...");
+                resetWeeklyTasks();
+                needsSync = true;
+              }
+            }
           }
         }
         
@@ -432,6 +452,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       boosterRecovery: boosters.recoveryRate,
       quickChargeUsesRemaining: quickChargeUsesRemaining,
       quickChargeCooldownUntil: quickChargeCooldownUntil,
+      quickChargeLastReset: quickChargeLastResetDate,
       totalTaps: totalTaps,
       todayTaps: todayTaps,
       idleBzPerHour: bzPerHour,
@@ -444,7 +465,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       lastDailyResetDate: lastDailyResetDate,
       lastWeeklyResetDate: lastWeeklyResetDate
     };
-  }, [bz, bb, xp, tier, energy, maxEnergy, boosters, quickChargeUsesRemaining, quickChargeCooldownUntil, totalTaps, todayTaps, bzPerHour, dailyStreak, currentRewardWeek, lastDailyClaimDate, claimedDailyRewards, ownedNFTs, lastDailyResetDate, lastWeeklyResetDate]);
+  }, [bz, bb, xp, tier, energy, maxEnergy, boosters, quickChargeUsesRemaining, quickChargeCooldownUntil, totalTaps, todayTaps, bzPerHour, dailyStreak, currentRewardWeek, lastDailyClaimDate, claimedDailyRewards, ownedNFTs, lastDailyResetDate, lastWeeklyResetDate, quickChargeLastResetDate]);
 
   // Manual Sync Function
   const manualSync = async () => {
@@ -931,57 +952,47 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const resetWeeklyTasks = async () => {
-    if (!telegramId || !userId) return;
-    
-    // 1. Update local state immediately
-    const today = new Date().toISOString().split("T")[0];
+  const resetWeeklyTasks = useCallback(async () => {
+    const today = new Date().toISOString().split('T')[0];
     setLastWeeklyResetDate(today);
     
-    // 2. Get current state to preserve lastDailyResetDate
-    try {
-      const { getTaskState } = await import("@/services/taskStateService");
-      const currentState = await getTaskState(telegramId);
-      
-      // 3. Update ONLY lastWeeklyResetDate, preserve lastDailyResetDate
+    // Update localStorage
+    safeSetItem("bunergy_weekly_reset_date", today);
+    
+    // Reset tasks in tasksService
+    checkAndResetTasks();
+    
+    // Sync to database
+    if (userId && telegramId) {
       await upsertTaskState({
         telegramId,
         userId,
-        lastDailyResetDate: currentState?.lastDailyResetDate || today,
+        lastDailyResetDate: lastDailyResetDate,
         lastWeeklyResetDate: today
       });
-      
-      console.log("✅ [Weekly Tasks Reset] Database updated with new weekly reset date:", today);
-    } catch (error) {
-      console.error("❌ [Weekly Tasks Reset] Failed to update database:", error);
     }
-  };
+  }, [userId, telegramId, lastDailyResetDate]);
 
-  const resetDailyTasks = async () => {
-    if (!telegramId || !userId) return;
-    
-    // 1. Update local state immediately
-    const today = new Date().toISOString().split("T")[0];
+  const resetDailyTasks = useCallback(async () => {
+    const today = new Date().toISOString().split('T')[0];
     setLastDailyResetDate(today);
     
-    // 2. Get current state to preserve lastWeeklyResetDate
-    try {
-      const { getTaskState } = await import("@/services/taskStateService");
-      const currentState = await getTaskState(telegramId);
-      
-      // 3. Update ONLY lastDailyResetDate, preserve lastWeeklyResetDate
+    // Update localStorage
+    safeSetItem("bunergy_daily_reset_date", today);
+    
+    // Reset tasks in tasksService
+    checkAndResetTasks();
+    
+    // Sync to database
+    if (userId && telegramId) {
       await upsertTaskState({
         telegramId,
         userId,
         lastDailyResetDate: today,
-        lastWeeklyResetDate: currentState?.lastWeeklyResetDate || today
+        lastWeeklyResetDate: lastWeeklyResetDate
       });
-      
-      console.log("✅ [Daily Tasks Reset] Database updated with new daily reset date:", today);
-    } catch (error) {
-      console.error("❌ [Daily Tasks Reset] Failed to update database:", error);
     }
-  };
+  }, [userId, telegramId, lastWeeklyResetDate]);
 
   const purchaseNFT = (nftId: string, priceInBB: number) => {
     // 1. Deduct BB

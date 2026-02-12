@@ -590,6 +590,7 @@ export function startAutoSync(
     boosterRecovery: number;
     quickChargeUsesRemaining: number;
     quickChargeCooldownUntil: number | null;
+    quickChargeLastReset: number;
     totalTaps: number;
     todayTaps: number;
     idleBzPerHour: number;
@@ -644,6 +645,7 @@ export function startAutoSync(
       boosterRecovery: state.boosterRecovery,
       quickChargeUsesRemaining: state.quickChargeUsesRemaining,
       quickChargeCooldownUntil: cooldownTimestamp,
+      quickChargeLastReset: state.quickChargeLastReset,
       totalTaps: state.totalTaps,
       todayTaps: state.todayTaps,
       idleBzPerHour: state.idleBzPerHour,

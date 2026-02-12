@@ -285,34 +285,15 @@ export function TasksReferralsScreen() {
 
   // Check for daily reset
   useEffect(() => {
-    console.log("🔍 [Tasks-Daily] Daily reset check triggered");
-    console.log("🔍 [Tasks-Daily] loading:", loading);
-    console.log("🔍 [Tasks-Daily] lastDailyResetDate:", lastDailyResetDate);
-    
-    if (!loading && lastDailyResetDate) {
-      const today = new Date().toISOString().split("T")[0];
-      const lastReset = new Date(lastDailyResetDate).toISOString().split("T")[0];
-      
-      console.log("📅 [Tasks-Daily] Comparing dates:", { today, lastReset });
-      
-      if (today !== lastReset) {
-        console.log("🔄 [Tasks-Daily] New day detected! Resetting daily tasks...");
-        
-        // Reset daily task states
-        setDailyTasks(prev => prev.map(task => ({
-          ...task,
-          completed: false,
-          claimed: false,
-          current: task.id === "daily_check_in" ? 1 : 0
-        })));
-        
-        // Update database via context method
-        resetDailyTasks();
-      } else {
-        console.log("ℹ️ [Tasks-Daily] Same day - no reset needed");
-      }
+    // Whenever the reset date changes in context (meaning a reset happened),
+    // or on mount, reload the tasks from localStorage to ensure UI is up to date.
+    if (!loading) {
+      console.log("🔄 [Tasks-UI] Reloading tasks due to reset date update or mount");
+      const loadedTasks = JSON.parse(localStorage.getItem("tasks") || "[]");
+      setDailyTasks(loadedTasks.filter((t: any) => t.type === "daily"));
+      setWeeklyTasks(loadedTasks.filter((t: any) => t.type === "weekly"));
     }
-  }, [lastDailyResetDate, loading, resetDailyTasks]);
+  }, [lastDailyResetDate, loading]);
 
   // Weekly Reset Check
   useEffect(() => {
