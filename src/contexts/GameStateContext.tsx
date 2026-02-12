@@ -353,10 +353,16 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         const today = new Date().toISOString().split("T")[0];
         let needsSync = false;
         
+        console.log("🔍 [GameState-Init] ========== CHECKING FOR RESETS ==========");
+        console.log("🔍 [GameState-Init] Today's date:", today);
+        console.log("🔍 [GameState-Init] taskState from DB:", taskState);
+        
         // Check QuickCharge reset
         if (serverData?.quickcharge_last_reset) {
           const lastResetDate = new Date(serverData.quickcharge_last_reset).toISOString().split("T")[0];
+          console.log("⚡ [GameState-Init] QuickCharge last reset:", lastResetDate);
           if (lastResetDate !== today) {
+            console.log("⚡ [GameState-Init] QuickCharge needs reset!");
             setQuickChargeUsesRemaining(5);
             setQuickChargeCooldownUntil(null);
             safeSetItem("bunergy_qc_uses", 5);
@@ -370,32 +376,48 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           const { getTaskState } = await import("@/services/taskStateService");
           const taskState = await getTaskState(authResult.profile.telegram_id);
           
+          console.log("📋 [GameState-Init] Task state from DB:", taskState);
+          
           if (taskState?.lastDailyResetDate) {
             const lastResetDate = taskState.lastDailyResetDate;
+            console.log("📋 [GameState-Init] Last daily reset date:", lastResetDate);
+            console.log("📋 [GameState-Init] Comparing:", lastResetDate, "vs", today);
+            
             if (lastResetDate !== today) {
+              console.log("🔄 [GameState-Init] DAILY RESET NEEDED! Calling resetDailyTasks()...");
               const { checkAndResetTasks } = await import("@/services/tasksService");
               checkAndResetTasks();
               resetDailyTasks(); // This updates context state and DB
+              console.log("✅ [GameState-Init] Daily reset completed!");
               needsSync = true;
+            } else {
+              console.log("✅ [GameState-Init] Daily tasks already reset today, no action needed");
             }
+          } else {
+            console.log("⚠️ [GameState-Init] No lastDailyResetDate in DB, initializing...");
+            resetDailyTasks();
+            needsSync = true;
           }
           
           // Check weekly task reset
           if (taskState?.lastWeeklyResetDate) {
             const weeklyResetDate = taskState.lastWeeklyResetDate;
-            const today = new Date().toISOString().split("T")[0];
-            if (weeklyResetDate !== today) {
-              const lastReset = new Date(weeklyResetDate);
-              const now = new Date();
-              const diffDays = Math.floor((now.getTime() - lastReset.getTime()) / (1000 * 60 * 60 * 24));
-              if (diffDays >= 7) {
-                console.log("🔄 [Weekly Tasks] 7+ days detected! Resetting weekly tasks...");
-                resetWeeklyTasks();
-                needsSync = true;
-              }
+            console.log("📋 [GameState-Init] Last weekly reset:", weeklyResetDate);
+            const lastReset = new Date(weeklyResetDate);
+            const now = new Date();
+            const diffDays = Math.floor((now.getTime() - lastReset.getTime()) / (1000 * 60 * 60 * 24));
+            console.log("📋 [GameState-Init] Days since weekly reset:", diffDays);
+            
+            if (diffDays >= 7) {
+              console.log("🔄 [GameState-Init] Weekly reset needed!");
+              resetWeeklyTasks();
+              needsSync = true;
             }
           }
         }
+        
+        console.log("🔍 [GameState-Init] ========== RESET CHECK COMPLETE ==========");
+        console.log("🔍 [GameState-Init] Needs sync:", needsSync);
         
         // Sync resets to DB if needed
         if (needsSync) {

@@ -283,78 +283,38 @@ export function TasksReferralsScreen() {
     }));
   }, [todayTaps, hasClaimedIdleToday, totalUpgrades, totalConversions, referralCount, loading]);
 
-  // Check for daily reset - EXACT COPY of rewards pattern
+  // Reload tasks when reset date changes (context handles the actual reset)
   useEffect(() => {
-    console.log("🔍 [Tasks-Daily] Daily reset check triggered");
-    console.log("🔍 [Tasks-Daily] loading:", loading);
-    console.log("🔍 [Tasks-Daily] lastDailyResetDate:", lastDailyResetDate);
-    
-    if (!loading && lastDailyResetDate) {
-      const now = new Date();
-      const lastReset = new Date(lastDailyResetDate);
+    if (!loading) {
+      console.log("🔄 [Tasks] Reset date changed, reloading tasks from localStorage");
       
-      // Calculate difference in days
-      const diffTime = Math.abs(now.getTime() - lastReset.getTime());
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      
-      console.log("📅 [Tasks-Daily] Current time:", now.toISOString());
-      console.log("📅 [Tasks-Daily] Last reset:", lastReset.toISOString());
-      console.log("📅 [Tasks-Daily] Days passed:", diffDays);
-
-      if (diffDays >= 1) {
-        console.log("🔄 [Tasks-Daily] 1+ day detected! Resetting daily tasks...");
-        
-        // 1. Reset LOCAL daily tasks state
-        setDailyTasks([
-          {
-            id: "daily_check_in",
-            title: "Daily Check-in",
-            description: "Log in to the game today",
-            reward: { type: "XP", amount: 1000 },
-            type: "daily",
-            target: 1,
-            current: 0,
-            completed: false,
-            claimed: false
-          },
-          {
-            id: "daily_tap_100",
-            title: "Tap 100 Times",
-            description: "Tap the bunny 100 times in a day",
-            type: "daily",
-            target: 100,
-            reward: { type: "BZ", amount: 5000 },
-            current: 0,
-            completed: false,
-            claimed: false,
-            icon: <Target className="w-5 h-5" />
-          },
-          {
-            id: "daily_idle",
-            title: "Claim Idle Income",
-            description: "Collect income from your build",
-            reward: { type: "XP", amount: 1000 },
-            type: "daily",
-            target: 1,
-            current: 0,
-            completed: false,
-            claimed: false
-          }
-        ]);
-        
-        // 2. Call context method to update the date (context handles localStorage + DB sync)
-        console.log("🔄 [Tasks-Daily] Calling resetDailyTasks...");
-        resetDailyTasks();
-      } else {
-        console.log("✅ [Tasks-Daily] Still within same day, no reset needed");
+      // Reload daily tasks
+      try {
+        const savedDaily = localStorage.getItem("dailyTasks");
+        if (savedDaily) {
+          setDailyTasks(JSON.parse(savedDaily));
+        } else {
+          setDailyTasks(defaultDailyTasks);
+        }
+      } catch (e) {
+        console.error("❌ Failed to reload daily tasks", e);
+        setDailyTasks(defaultDailyTasks);
       }
-    } else if (!loading && !lastDailyResetDate) {
-      console.log("⚠️ [Tasks-Daily] Missing lastDailyResetDate - initializing");
-      resetDailyTasks();
-    } else {
-      console.log("⏳ [Tasks-Daily] Still loading or waiting for data");
+      
+      // Reload weekly tasks
+      try {
+        const savedWeekly = localStorage.getItem("weeklyTasks");
+        if (savedWeekly) {
+          setWeeklyTasks(JSON.parse(savedWeekly));
+        } else {
+          setWeeklyTasks(defaultWeeklyTasks);
+        }
+      } catch (e) {
+        console.error("❌ Failed to reload weekly tasks", e);
+        setWeeklyTasks(defaultWeeklyTasks);
+      }
     }
-  }, [lastDailyResetDate, loading, resetDailyTasks]);
+  }, [lastDailyResetDate, loading]);
 
   // Weekly Reset Check
   useEffect(() => {
