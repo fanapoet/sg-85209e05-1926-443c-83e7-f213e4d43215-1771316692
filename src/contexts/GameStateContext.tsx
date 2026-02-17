@@ -154,6 +154,8 @@ const safeSetItem = (key: string, value: any) => {
 export function GameStateProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
   const mountedRef = useRef(false);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // User Identity
   const [telegramId, setTelegramId] = useState<number | null>(null);
@@ -215,6 +217,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [isOnline, setIsOnline] = useState(true);
   const [syncErrorCount, setSyncErrorCount] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [initAttempts, setInitAttempts] = useState(0);
+  const [maxInitAttempts, setMaxInitAttempts] = useState(3);
 
   // Derived State
   const getTier = (xpValue: number): Tier => {
@@ -265,16 +269,23 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const init = async () => {
       console.log("🚀 [GameState] Initializing...");
       
-      // Capture Telegram User Data directly from WebApp if available
-      if (typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user) {
-        const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
-        console.log("👤 [GameState] Captured Telegram User:", tgUser);
-        setTelegramUser(tgUser as TelegramUser);
-      }
+      try {
+        // Capture Telegram User Data directly from WebApp if available
+        if (typeof window !== "undefined" && window.Telegram?.WebApp?.initDataUnsafe?.user) {
+          const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
+          console.log("👤 [GameState] Captured Telegram User:", tgUser);
+          setTelegramUser(tgUser as TelegramUser);
+        }
 
-      const authResult = await initializeUser();
-      
-      if (authResult.success && authResult.profile) {
+        const authResult = await initializeUser();
+        
+        if (!authResult.success || !authResult.profile) {
+          console.error("❌ [GameState] User initialization failed:", authResult.error);
+          setInitError(authResult.error || "Failed to initialize user");
+          setIsInitialized(true);
+          return;
+        }
+        
         console.log("✅ [GameState] User initialized:", authResult.profile.telegram_id);
         setTelegramId(authResult.profile.telegram_id);
         setUserId(authResult.profile.id);
@@ -312,7 +323,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           if (rewardData.lastDailyClaimDate) {
             setLastDailyClaimDate(rewardData.lastDailyClaimDate);
           }
-          // CRITICAL: Load currentWeeklyPeriodStart from database
           if (rewardData.currentWeeklyPeriodStart) {
             setCurrentWeeklyPeriodStart(rewardData.currentWeeklyPeriodStart);
             console.log("✅ [REWARDS-SYNC] Loaded currentWeeklyPeriodStart:", rewardData.currentWeeklyPeriodStart);
@@ -327,7 +337,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           const today = new Date().toISOString().split("T")[0];
           console.log("📤 [TASK-STATE] Ensuring reset tracking record exists");
           
-          // Get current state first (EXACT REWARDS PATTERN)
           const { getTaskState } = await import("@/services/taskStateService");
           const currentState = await getTaskState(authResult.profile.telegram_id);
           
@@ -339,7 +348,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
             setLastDailyResetDate(currentState.lastDailyResetDate);
           }
 
-          // Always pass both dates (use today if no existing values)
           await upsertTaskState({
             telegramId: authResult.profile.telegram_id,
             userId: authResult.profile.id,
@@ -386,7 +394,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
               console.log("🔄 [GameState-Init] DAILY RESET NEEDED! Calling resetDailyTasks()...");
               const { checkAndResetTasks } = await import("@/services/tasksService");
               checkAndResetTasks();
-              resetDailyTasks(); // This updates context state and DB
+              resetDailyTasks();
               console.log("✅ [GameState-Init] Daily reset completed!");
               needsSync = true;
             } else {
@@ -424,6 +432,15 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
             syncPlayerState(getFullStateForSync());
           }, 500);
         }
+        
+        // Mark initialization as complete
+        console.log("✅ [GameState] Initialization complete!");
+        setIsInitialized(true);
+        
+      } catch (error) {
+        console.error("❌ [GameState] Initialization error:", error);
+        setInitError(error instanceof Error ? error.message : "Unknown initialization error");
+        setIsInitialized(true);
       }
     };
 

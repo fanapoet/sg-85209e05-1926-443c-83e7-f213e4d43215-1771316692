@@ -14,6 +14,7 @@ import { TasksReferralsScreen } from "@/components/screens/TasksReferralsScreen"
 import { TelegramDebugPanel } from "@/components/TelegramDebugPanel";
 import { Button } from "@/components/ui/button";
 import { ProfileModal } from "@/components/ProfileModal";
+import { useGameState } from "@/contexts/GameStateContext";
 
 type TabKey = "tap" | "boost" | "build" | "convert" | "xp" | "rewards" | "tasks";
 
@@ -23,20 +24,38 @@ export default function Home() {
   const [showWelcome, setShowWelcome] = useState<boolean>(true);
   const [isAuthenticating, setIsAuthenticating] = useState(true);
   const [showDebug, setShowDebug] = useState(false);
+  const [initializationComplete, setInitializationComplete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Get game state to check if it's ready
+  let gameState;
+  try {
+    gameState = useGameState();
+  } catch (err) {
+    console.error("❌ [Home] Failed to get game state:", err);
+    setError("Failed to initialize game state");
+  }
 
   useEffect(() => {
+    console.log("🏠 [Home] Component mounted");
+    
     // Check if running in Telegram
     const checkTelegram = async () => {
-      const isTg = !!(window.Telegram?.WebApp?.initData);
-      console.log("🔍 Telegram detection:", { isTg, initData: window.Telegram?.WebApp?.initData });
-      setIsInTelegram(isTg);
+      try {
+        const isTg = !!(window.Telegram?.WebApp?.initData);
+        console.log("🔍 [Home] Telegram detection:", { isTg, initData: window.Telegram?.WebApp?.initData });
+        setIsInTelegram(isTg);
 
-      if (isTg) {
-        // Authentication handled in _app.tsx (ready + expand)
-        console.log("✅ Running inside Telegram WebApp");
-        setIsAuthenticating(false);
-      } else {
-        console.log("⚠️ NOT running inside Telegram - showing blocker");
+        if (isTg) {
+          console.log("✅ [Home] Running inside Telegram WebApp");
+          setIsAuthenticating(false);
+        } else {
+          console.log("⚠️ [Home] NOT running inside Telegram - showing blocker");
+          setIsAuthenticating(false);
+        }
+      } catch (err) {
+        console.error("❌ [Home] Error during Telegram check:", err);
+        setError("Failed to check Telegram status");
         setIsAuthenticating(false);
       }
     };
@@ -49,7 +68,6 @@ export default function Home() {
     if (typeof window !== "undefined" && window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp;
       
-      // Back button handler - return to tap screen
       const handleBackButton = () => {
         if (activeTab !== "tap") {
           setActiveTab("tap");
@@ -58,7 +76,6 @@ export default function Home() {
       
       tg.BackButton.onClick(handleBackButton);
       
-      // Show back button on non-root tabs, hide on root
       if (activeTab === "tap" && !showWelcome) {
         tg.BackButton.hide();
       } else if (!showWelcome) {
@@ -72,8 +89,33 @@ export default function Home() {
   }, [activeTab, showWelcome]);
 
   const handleWelcomeComplete = () => {
-    setShowWelcome(false);
+    console.log("👋 [Home] Welcome screen completed");
+    
+    // Wait a bit for game state to be ready
+    setTimeout(() => {
+      console.log("👋 [Home] Setting showWelcome to false");
+      setShowWelcome(false);
+      setInitializationComplete(true);
+    }, 500);
   };
+
+  // Show error screen if something went wrong
+  if (error) {
+    return (
+      <>
+        <SEO title="Error - Bunergy" description="An error occurred" />
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <div className="text-center space-y-4 max-w-md">
+            <h1 className="text-2xl font-bold text-red-500">⚠️ Error</h1>
+            <p className="text-muted-foreground">{error}</p>
+            <Button onClick={() => window.location.reload()}>
+              Reload App
+            </Button>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   // Show loading while checking Telegram
   if (isInTelegram === null || isAuthenticating) {
@@ -108,7 +150,7 @@ export default function Home() {
     );
   }
 
-  // ALWAYS show loading screen on app start
+  // Show welcome screen on app start
   if (showWelcome) {
     return (
       <>
@@ -121,25 +163,54 @@ export default function Home() {
     );
   }
 
+  // Wait for initialization to complete before showing main interface
+  if (!initializationComplete) {
+    return (
+      <>
+        <SEO title="Loading - Bunergy" description="Loading game..." />
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="text-sm text-muted-foreground">Initializing game...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   // Main game interface
   const renderScreen = () => {
-    switch (activeTab) {
-      case "tap":
-        return <TapScreen />;
-      case "boost":
-        return <BoostScreen />;
-      case "build":
-        return <BuildScreen />;
-      case "convert":
-        return <ConvertScreen />;
-      case "xp":
-        return <XPTiersScreen />;
-      case "rewards":
-        return <RewardsNFTsScreen />;
-      case "tasks":
-        return <TasksReferralsScreen />;
-      default:
-        return <TapScreen />;
+    try {
+      console.log("🎮 [Home] Rendering screen:", activeTab);
+      
+      switch (activeTab) {
+        case "tap":
+          return <TapScreen />;
+        case "boost":
+          return <BoostScreen />;
+        case "build":
+          return <BuildScreen />;
+        case "convert":
+          return <ConvertScreen />;
+        case "xp":
+          return <XPTiersScreen />;
+        case "rewards":
+          return <RewardsNFTsScreen />;
+        case "tasks":
+          return <TasksReferralsScreen />;
+        default:
+          return <TapScreen />;
+      }
+    } catch (err) {
+      console.error("❌ [Home] Error rendering screen:", err);
+      return (
+        <div className="p-4 text-center">
+          <p className="text-red-500">Error loading screen</p>
+          <Button onClick={() => setActiveTab("tap")} className="mt-4">
+            Return to Home
+          </Button>
+        </div>
+      );
     }
   };
 
@@ -154,10 +225,8 @@ export default function Home() {
         <main className="pt-2">
           {renderScreen()}
         </main>
-        {/* Bottom Navigation */}
         <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
         
-        {/* Show Debug Button (Fixed Position) */}
         <Button
           onClick={() => setShowDebug(true)}
           className="fixed bottom-20 left-4 z-40 bg-purple-600 hover:bg-purple-700"
@@ -166,10 +235,8 @@ export default function Home() {
           Show Debug
         </Button>
 
-        {/* Debug Panel */}
         {showDebug && <TelegramDebugPanel onClose={() => setShowDebug(false)} />}
         
-        {/* Profile Modal */}
         <ProfileModal />
       </div>
     </>
