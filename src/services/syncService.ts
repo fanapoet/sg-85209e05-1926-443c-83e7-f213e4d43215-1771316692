@@ -431,10 +431,10 @@ export async function loadBuildParts(): Promise<Array<{
       return null;
     }
 
-    // Load build parts
+    // Load build parts - FIX: use correct column name 'build_end_time'
     const { data, error } = await supabase
       .from("user_build_parts")
-      .select("part_id, current_level, is_building, build_ends_at")
+      .select("part_id, level, is_building, build_end_time")
       .eq("user_id", profile.id);
 
     if (error) {
@@ -452,9 +452,9 @@ export async function loadBuildParts(): Promise<Array<{
 
     return data.map(part => ({
       partId: part.part_id,
-      level: part.current_level,
+      level: part.level,
       isBuilding: part.is_building,
-      buildEndsAt: part.build_ends_at ? new Date(part.build_ends_at).getTime() : null
+      buildEndsAt: part.build_end_time ? new Date(part.build_end_time).getTime() : null
     }));
 
   } catch (error: any) {
