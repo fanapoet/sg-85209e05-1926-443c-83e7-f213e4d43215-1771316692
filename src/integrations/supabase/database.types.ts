@@ -594,41 +594,32 @@ export type Database = {
       }
       user_build_parts: {
         Row: {
-          build_ends_at: string | null
-          build_started_at: string | null
+          build_end_time: string | null
           created_at: string | null
-          current_level: number
           id: string
           is_building: boolean | null
-          last_upgraded_at: string | null
+          level: number
           part_id: string
-          total_yield_contributed: number | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
-          build_ends_at?: string | null
-          build_started_at?: string | null
+          build_end_time?: string | null
           created_at?: string | null
-          current_level?: number
           id?: string
           is_building?: boolean | null
-          last_upgraded_at?: string | null
+          level?: number
           part_id: string
-          total_yield_contributed?: number | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
-          build_ends_at?: string | null
-          build_started_at?: string | null
+          build_end_time?: string | null
           created_at?: string | null
-          current_level?: number
           id?: string
           is_building?: boolean | null
-          last_upgraded_at?: string | null
+          level?: number
           part_id?: string
-          total_yield_contributed?: number | null
           updated_at?: string | null
           user_id?: string
         }
