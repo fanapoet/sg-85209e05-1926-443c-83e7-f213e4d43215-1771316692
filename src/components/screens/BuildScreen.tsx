@@ -265,23 +265,29 @@ export function BuildScreen() {
           
           setPartStates(current => {
             const merged = { ...current };
+            const now = Date.now();
             
             serverParts.forEach(sp => {
               const local = merged[sp.partId] || { level: 0, isBuilding: false, buildEndsAt: 0 };
               
-              // Use Math.max for level (never downgrade)
+              // SERVER DATA PRIORITY RULES:
+              // 1. Always use the higher level (never downgrade)
               const mergedLevel = Math.max(local.level, sp.level);
               
-              // For building status, prefer active builds
-              const isServerBuilding = sp.isBuilding && sp.buildEndsAt && sp.buildEndsAt > Date.now();
+              // 2. For building status, check if server build is still active
+              const serverBuildActive = sp.isBuilding && sp.buildEndsAt && sp.buildEndsAt > now;
+              const localBuildActive = local.isBuilding && local.buildEndsAt > now;
+              
+              // Use server build if it's active, otherwise keep local
+              const useServerBuild = serverBuildActive && (!localBuildActive || sp.buildEndsAt! > local.buildEndsAt);
               
               merged[sp.partId] = {
                 level: mergedLevel,
-                isBuilding: isServerBuilding || local.isBuilding,
-                buildEndsAt: isServerBuilding ? (sp.buildEndsAt || 0) : local.buildEndsAt
+                isBuilding: useServerBuild ? true : localBuildActive,
+                buildEndsAt: useServerBuild ? sp.buildEndsAt! : local.buildEndsAt
               };
               
-              console.log(`🔄 [BuildScreen] ${sp.partId}: Local=${local.level}, Server=${sp.level}, Merged=${mergedLevel}`);
+              console.log(`🔄 [BuildScreen] ${sp.partId}: Local=${local.level}, Server=${sp.level}, Merged=${mergedLevel}, Building=${merged[sp.partId].isBuilding}`);
             });
             
             // Save merged result
