@@ -28,13 +28,8 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
 
   // Get game state to check if it's ready
-  let gameState;
-  try {
-    gameState = useGameState();
-  } catch (err) {
-    console.error("❌ [Home] Failed to get game state:", err);
-    setError("Failed to initialize game state");
-  }
+  // FIXED: Moved out of try/catch to satisfy React Rules of Hooks
+  const gameState = useGameState();
 
   useEffect(() => {
     console.log("🏠 [Home] Component mounted");
