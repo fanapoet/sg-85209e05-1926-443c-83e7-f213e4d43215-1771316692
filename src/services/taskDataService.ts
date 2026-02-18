@@ -51,10 +51,11 @@ export async function loadTaskProgressFromDB(
   try {
     console.log(`📥 [Task Data] Loading progress for telegram_id: ${telegramId}`);
 
+    // Cast to any to avoid "excessively deep" type instantiation error
     const { data, error } = await supabase
       .from("user_task_progress")
       .select("*")
-      .eq("telegram_id", parseInt(telegramId));
+      .eq("telegram_id", parseInt(telegramId)) as any;
 
     if (error) {
       console.error("❌ [Task Data] Load error:", JSON.stringify(error));
