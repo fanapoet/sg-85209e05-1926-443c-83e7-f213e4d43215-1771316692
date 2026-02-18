@@ -52,7 +52,7 @@ export async function loadTaskProgressFromDB(
     console.log(`📥 [Task Data] Loading progress for telegram_id: ${telegramId}`);
 
     // Split query to avoid "excessively deep" type instantiation error
-    // @ts-expect-error
+    // @ts-expect-error - Supabase type inference depth limit reached
     const { data, error } = await supabase
       .from("user_task_progress")
       .select("*")
