@@ -1,4 +1,4 @@
- 
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 export type Json =
   | string
   | number
@@ -594,32 +594,41 @@ export type Database = {
       }
       user_build_parts: {
         Row: {
-          build_end_time: string | null
+          build_ends_at: string | null
+          build_started_at: string | null
           created_at: string | null
+          current_level: number
           id: string
           is_building: boolean | null
-          level: number
+          last_upgraded_at: string | null
           part_id: string
+          total_yield_contributed: number | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
-          build_end_time?: string | null
+          build_ends_at?: string | null
+          build_started_at?: string | null
           created_at?: string | null
+          current_level?: number
           id?: string
           is_building?: boolean | null
-          level?: number
+          last_upgraded_at?: string | null
           part_id: string
+          total_yield_contributed?: number | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
-          build_end_time?: string | null
+          build_ends_at?: string | null
+          build_started_at?: string | null
           created_at?: string | null
+          current_level?: number
           id?: string
           is_building?: boolean | null
-          level?: number
+          last_upgraded_at?: string | null
           part_id?: string
+          total_yield_contributed?: number | null
           updated_at?: string | null
           user_id?: string
         }
