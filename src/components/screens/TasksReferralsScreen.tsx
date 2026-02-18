@@ -15,6 +15,13 @@ import {
   type ReferralStats
 } from "@/services/referralService";
 import { getCurrentTelegramUser } from "@/services/authService";
+import {
+  initializeTask,
+  getTaskProgress,
+  updateTaskProgress,
+  claimTaskReward,
+  type TaskProgressData
+} from "@/services/tasksService";
 import type React from "react";
 
 interface Task {
@@ -24,9 +31,9 @@ interface Task {
   reward: { type: "BZ" | "BB" | "XP"; amount: number };
   type: "daily" | "weekly" | "progressive";
   target: number;
-  current?: number;
-  completed?: boolean;
-  claimed?: boolean;
+  current: number;
+  completed: boolean;
+  claimed: boolean;
   icon?: React.ReactNode;
 }
 
@@ -42,13 +49,8 @@ export function TasksReferralsScreen() {
     totalConversions, 
     totalTaps,
     performTaskClaim,
-    currentWeeklyPeriodStart,
-    lastWeeklyResetDate,
     lastDailyResetDate,
-    resetWeeklyTasks,
-    resetDailyTasks,
     telegramId,
-    userId: authUserId
   } = useGameState();
   const { toast } = useToast();
   
@@ -56,6 +58,7 @@ export function TasksReferralsScreen() {
   const [dailyTasks, setDailyTasks] = useState<Task[]>([]);
   const [weeklyTasks, setWeeklyTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
   
   // Referral state
   const [referralCode, setReferralCode] = useState<string>("");
@@ -65,134 +68,107 @@ export function TasksReferralsScreen() {
   const [referralErrorMessage, setReferralErrorMessage] = useState<string>("");
   const [userId, setUserId] = useState<number | null>(null);
 
-  // Default Task Definitions
-  const defaultDailyTasks: Task[] = [
-    {
-      id: "daily_check_in",
-      title: "Daily Check-in",
-      description: "Log in to the game today",
-      reward: { type: "XP", amount: 1000 },
-      type: "daily",
-      target: 1,
-      current: 0,
-      completed: false,
-      claimed: false
-    },
-    {
-      id: "daily_tap_100",
-      title: "Tap 100 Times",
-      description: "Tap the bunny 100 times in a day",
-      type: "daily",
-      target: 100,
-      reward: { type: "BZ", amount: 5000 },
-      current: 0,
-      completed: false,
-      claimed: false,
-      icon: <Target className="w-5 h-5" />
-    },
-    {
-      id: "daily_idle",
-      title: "Claim Idle Income",
-      description: "Collect income from your build",
-      reward: { type: "XP", amount: 1000 },
-      type: "daily",
-      target: 1,
-      current: 0,
-      completed: false,
-      claimed: false
-    }
-  ];
+  // Task Definitions with IDs
+  const taskDefinitions = {
+    daily: [
+      {
+        id: "daily_check_in",
+        title: "Daily Check-in",
+        description: "Log in to the game today",
+        reward: { type: "XP" as const, amount: 1000 },
+        type: "daily" as const,
+        target: 1,
+        icon: <Star className="w-5 h-5" />
+      },
+      {
+        id: "daily_tap_100",
+        title: "Tap 100 Times",
+        description: "Tap the bunny 100 times in a day",
+        type: "daily" as const,
+        target: 100,
+        reward: { type: "BZ" as const, amount: 5000 },
+        icon: <Target className="w-5 h-5" />
+      },
+      {
+        id: "daily_idle",
+        title: "Claim Idle Income",
+        description: "Collect income from your build",
+        reward: { type: "XP" as const, amount: 1000 },
+        type: "daily" as const,
+        target: 1,
+        icon: <Gift className="w-5 h-5" />
+      }
+    ],
+    weekly: [
+      {
+        id: "weekly_upgrade",
+        title: "Upgrade 10 Parts",
+        description: "Perform 10 upgrades in Build screen",
+        reward: { type: "XP" as const, amount: 2000 },
+        type: "weekly" as const,
+        target: 10,
+        icon: <TrendingUp className="w-5 h-5" />
+      },
+      {
+        id: "weekly_convert",
+        title: "Convert 500K BZ",
+        description: "Convert BZ to BB tokens",
+        reward: { type: "XP" as const, amount: 2000 },
+        type: "weekly" as const,
+        target: 500000,
+        icon: <Trophy className="w-5 h-5" />
+      },
+      {
+        id: "weekly_invite",
+        title: "Invite 3 Friends",
+        description: "Get 3 new referrals",
+        reward: { type: "XP" as const, amount: 2000 },
+        type: "weekly" as const,
+        target: 3,
+        icon: <Users className="w-5 h-5" />
+      }
+    ],
+    progressive: [
+      {
+        id: "milestone_taps",
+        title: "Master Tapper",
+        description: "Reach 10,000 lifetime taps",
+        reward: { type: "BB" as const, amount: 1.0 },
+        type: "progressive" as const,
+        target: 10000,
+        icon: <Award className="w-5 h-5" />
+      },
+      {
+        id: "milestone_invite",
+        title: "Network Master",
+        description: "Reach 25 total referrals",
+        reward: { type: "BB" as const, amount: 5.0 },
+        type: "progressive" as const,
+        target: 25,
+        icon: <Users className="w-5 h-5" />
+      }
+    ]
+  };
 
-  const defaultWeeklyTasks: Task[] = [
-    {
-      id: "weekly_upgrade",
-      title: "Upgrade 10 Parts",
-      description: "Perform 10 upgrades in Build screen",
-      reward: { type: "XP", amount: 2000 },
-      type: "weekly",
-      target: 10,
-      current: 0,
-      completed: false,
-      claimed: false
-    },
-    {
-      id: "weekly_convert",
-      title: "Convert 500K BZ",
-      description: "Convert BZ to BB tokens",
-      reward: { type: "XP", amount: 2000 },
-      type: "weekly",
-      target: 500000,
-      current: 0,
-      completed: false,
-      claimed: false
-    },
-    {
-      id: "weekly_invite",
-      title: "Invite 3 Friends",
-      description: "Get 3 new referrals",
-      reward: { type: "XP", amount: 2000 },
-      type: "weekly",
-      target: 3,
-      current: 0,
-      completed: false,
-      claimed: false
-    }
-  ];
-
-  const progressiveTasks: Task[] = [
-    {
-      id: "milestone_taps",
-      title: "Master Tapper",
-      description: "Reach 10,000 lifetime taps",
-      reward: { type: "BB", amount: 1.0 },
-      type: "progressive",
-      target: 10000,
-      current: totalTaps
-    },
-    {
-      id: "milestone_invite",
-      title: "Network Master",
-      description: "Reach 25 total referrals",
-      reward: { type: "BB", amount: 5.0 },
-      type: "progressive",
-      target: 25,
-      current: referralCount
-    }
-  ];
-
-  // Initialization Effect (Loads from LS and sets loading=false)
+  // Initialize tasks on first load
   useEffect(() => {
-    console.log("🎬 [Tasks-Init] Initializing Tasks screen...");
+    if (initialized) return;
     
-    // Load daily tasks
-    try {
-      const savedDaily = localStorage.getItem("dailyTasks");
-      if (savedDaily) {
-        console.log("📂 [Tasks-Init] Loading daily tasks from localStorage");
-        setDailyTasks(JSON.parse(savedDaily));
-      } else {
-        setDailyTasks(defaultDailyTasks);
-      }
-    } catch (e) {
-      console.error("❌ Failed to load daily tasks", e);
-      setDailyTasks(defaultDailyTasks);
-    }
+    console.log("🎬 [Tasks-Init] Initializing tasks...");
+    
+    // Initialize all tasks in tasksService
+    [...taskDefinitions.daily, ...taskDefinitions.weekly, ...taskDefinitions.progressive].forEach(def => {
+      initializeTask(def.id, def.type);
+    });
+    
+    setInitialized(true);
+    setLoading(false);
+    
+    console.log("✅ [Tasks-Init] All tasks initialized");
+  }, [initialized]);
 
-    // Load weekly tasks
-    try {
-      const savedWeekly = localStorage.getItem("weeklyTasks");
-      if (savedWeekly) {
-        console.log("📂 [Tasks-Init] Loading weekly tasks from localStorage");
-        setWeeklyTasks(JSON.parse(savedWeekly));
-      } else {
-        setWeeklyTasks(defaultWeeklyTasks);
-      }
-    } catch (e) {
-      console.error("❌ Failed to load weekly tasks", e);
-      setWeeklyTasks(defaultWeeklyTasks);
-    }
-
-    // Load Referral Data
+  // Load referral data
+  useEffect(() => {
     const loadReferralData = async () => {
       try {
         const tgUser = getCurrentTelegramUser();
@@ -220,142 +196,120 @@ export function TasksReferralsScreen() {
       }
     };
     loadReferralData();
-
-    // Mark initialization complete
-    setLoading(false);
-    console.log("✅ [Tasks-Init] Initialization complete, loading set to false");
   }, []);
 
-  // Persistence Effects
-  useEffect(() => {
-    if (!loading && dailyTasks.length > 0) {
-      localStorage.setItem("dailyTasks", JSON.stringify(dailyTasks));
+  // Function to get current value for a task based on context
+  const getCurrentValueForTask = (taskId: string): number => {
+    switch (taskId) {
+      case "daily_check_in":
+        return 1; // Always completed on load
+      case "daily_tap_100":
+        console.log(`🎯 [Tasks-Value] daily_tap_100: todayTaps=${todayTaps}`);
+        return todayTaps;
+      case "daily_idle":
+        console.log(`🎯 [Tasks-Value] daily_idle: hasClaimedIdleToday=${hasClaimedIdleToday}`);
+        return hasClaimedIdleToday ? 1 : 0;
+      case "weekly_upgrade":
+        console.log(`🎯 [Tasks-Value] weekly_upgrade: totalUpgrades=${totalUpgrades}`);
+        return totalUpgrades;
+      case "weekly_convert":
+        console.log(`🎯 [Tasks-Value] weekly_convert: totalConversions=${totalConversions}`);
+        return totalConversions;
+      case "weekly_invite":
+        console.log(`🎯 [Tasks-Value] weekly_invite: referralCount=${referralCount}`);
+        return referralCount;
+      case "milestone_taps":
+        return totalTaps;
+      case "milestone_invite":
+        return referralCount;
+      default:
+        return 0;
     }
-  }, [dailyTasks, loading]);
+  };
 
-  useEffect(() => {
-    if (!loading && weeklyTasks.length > 0) {
-      localStorage.setItem("weeklyTasks", JSON.stringify(weeklyTasks));
-    }
-  }, [weeklyTasks, loading]);
-
-  // Update task progress based on context values
-  useEffect(() => {
-    if (loading) return;
-    
-    console.log("🔄 [Tasks-Progress] Updating task progress...");
-    console.log("🔄 [Tasks-Progress] Context values:", { todayTaps, totalUpgrades, totalConversions, referralCount });
-    console.log("🔄 [Tasks-Progress] 🎯 todayTaps value:", todayTaps, "type:", typeof todayTaps);
-    
-    // Update Daily Tasks
-    setDailyTasks(prev => prev.map(task => {
-      if (task.claimed) return task;
+  // Build task list from definitions + progress data
+  const buildTaskList = (definitions: typeof taskDefinitions.daily): Task[] => {
+    return definitions.map(def => {
+      const progress = getTaskProgress(def.id);
+      const currentValue = getCurrentValueForTask(def.id);
       
-      let newCurrent = task.current || 0;
-      if (task.id === "daily_check_in") newCurrent = 1;
-      if (task.id === "daily_tap_100") {
-        newCurrent = todayTaps;
-        console.log("🔄 [Tasks-Progress] 🎯 daily_tap_100 UPDATE:", { 
-          oldCurrent: task.current, 
-          newCurrent, 
-          todayTaps, 
-          target: task.target,
-          willBeCompleted: newCurrent >= task.target
+      // Update progress in service if value changed
+      if (progress && progress.currentProgress !== currentValue) {
+        const isCompleted = currentValue >= def.target;
+        console.log(`🔄 [Tasks-Update] ${def.id}: ${progress.currentProgress} → ${currentValue} (completed: ${isCompleted})`);
+        updateTaskProgress(def.id, {
+          currentProgress: currentValue,
+          completed: isCompleted
         });
       }
-      if (task.id === "daily_idle") newCurrent = hasClaimedIdleToday ? 1 : 0;
       
-      const isCompleted = newCurrent >= task.target;
-      return { ...task, current: newCurrent, completed: isCompleted };
-    }));
-    
-    // Update Weekly Tasks
-    setWeeklyTasks(prev => prev.map(task => {
-      if (task.claimed) return task;
-      
-      let newCurrent = task.current || 0;
-      if (task.id === "weekly_upgrade") newCurrent = totalUpgrades;
-      if (task.id === "weekly_convert") newCurrent = totalConversions;
-      if (task.id === "weekly_invite") newCurrent = referralCount;
-      
-      const isCompleted = newCurrent >= task.target;
-      return { ...task, current: newCurrent, completed: isCompleted };
-    }));
-  }, [todayTaps, hasClaimedIdleToday, totalUpgrades, totalConversions, referralCount, loading]);
+      return {
+        id: def.id,
+        title: def.title,
+        description: def.description,
+        reward: def.reward,
+        type: def.type,
+        target: def.target,
+        current: currentValue,
+        completed: progress?.completed || currentValue >= def.target,
+        claimed: progress?.claimed || false,
+        icon: def.icon
+      };
+    });
+  };
 
-  // Reload tasks when reset date changes (context handles the actual reset)
+  // Update task lists whenever context values change
   useEffect(() => {
-    if (!loading) {
-      console.log("🔄 [Tasks] Reset date changed, reloading tasks from localStorage");
-      
-      // Reload daily tasks
-      try {
-        const savedDaily = localStorage.getItem("dailyTasks");
-        if (savedDaily) {
-          setDailyTasks(JSON.parse(savedDaily));
-        } else {
-          setDailyTasks(defaultDailyTasks);
-        }
-      } catch (e) {
-        console.error("❌ Failed to reload daily tasks", e);
-        setDailyTasks(defaultDailyTasks);
-      }
-      
-      // Reload weekly tasks
-      try {
-        const savedWeekly = localStorage.getItem("weeklyTasks");
-        if (savedWeekly) {
-          setWeeklyTasks(JSON.parse(savedWeekly));
-        } else {
-          setWeeklyTasks(defaultWeeklyTasks);
-        }
-      } catch (e) {
-        console.error("❌ Failed to reload weekly tasks", e);
-        setWeeklyTasks(defaultWeeklyTasks);
-      }
-    }
-  }, [lastDailyResetDate, loading]);
-
-  // Weekly Reset Check
-  useEffect(() => {
-    console.log("🔍 [Tasks-Weekly] Weekly reset check triggered");
-    console.log("🔍 [Tasks-Weekly] loading:", loading);
-    console.log("🔍 [Tasks-Weekly] lastWeeklyResetDate:", lastWeeklyResetDate);
+    if (!initialized) return;
     
-    if (!loading && lastWeeklyResetDate) {
-      const now = new Date();
-      const resetDate = new Date(lastWeeklyResetDate);
-      const diffTime = Math.abs(now.getTime() - resetDate.getTime());
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      
-      console.log("📅 [Tasks-Weekly] Current time:", now.toISOString());
-      console.log("📅 [Tasks-Weekly] Reset date:", resetDate.toISOString());
-      console.log("📅 [Tasks-Weekly] Days passed:", diffDays);
+    console.log("🔄 [Tasks-Rebuild] Rebuilding task lists...");
+    console.log("🔄 [Tasks-Rebuild] Context values:", {
+      todayTaps,
+      hasClaimedIdleToday,
+      totalUpgrades,
+      totalConversions,
+      referralCount,
+      totalTaps
+    });
+    
+    setDailyTasks(buildTaskList(taskDefinitions.daily));
+    setWeeklyTasks(buildTaskList(taskDefinitions.weekly));
+  }, [initialized, todayTaps, hasClaimedIdleToday, totalUpgrades, totalConversions, referralCount, totalTaps]);
 
-      if (diffDays >= 7) {
-        console.log("🔄 [Tasks-Weekly] 7+ days passed! Resetting weekly tasks...");
-        
-        // Reset weekly task states
-        setWeeklyTasks(prev => prev.map(task => ({
-          ...task,
-          completed: false,
-          claimed: false,
-          current: 0
-        })));
-        
-        // Update database
-        resetWeeklyTasks();
-      }
-    } else if (!loading && !lastWeeklyResetDate) {
-      console.log("⚠️ [Tasks-Weekly] Missing lastWeeklyResetDate - initializing");
-      resetWeeklyTasks();
-    }
-  }, [lastWeeklyResetDate, loading, resetWeeklyTasks]);
+  // Reload tasks when daily reset occurs
+  useEffect(() => {
+    if (!initialized || !lastDailyResetDate) return;
+    
+    console.log("🔄 [Tasks-Reset] Daily reset detected, reloading tasks...");
+    
+    // Force rebuild of task lists
+    setDailyTasks(buildTaskList(taskDefinitions.daily));
+    setWeeklyTasks(buildTaskList(taskDefinitions.weekly));
+  }, [lastDailyResetDate, initialized]);
 
-  const handleClaim = async (task: Task, taskListType: "daily" | "weekly") => {
-    if (task.claimed) return;
+  const handleClaim = async (task: Task) => {
+    if (task.claimed || !task.completed) return;
+
+    console.log(`🎁 [Tasks-Claim] Claiming reward for ${task.id}`);
 
     try {
+      // Claim in tasksService
+      const success = await claimTaskReward(task.id);
+      
+      if (!success) {
+        throw new Error("Failed to claim reward");
+      }
+
+      // Add rewards to context
+      if (task.reward.type === "BZ") {
+        addBZ(task.reward.amount);
+      } else if (task.reward.type === "BB") {
+        addBB(task.reward.amount);
+      } else if (task.reward.type === "XP") {
+        addXP(task.reward.amount);
+      }
+
+      // Also use performTaskClaim to sync with DB
       await performTaskClaim(task.id, task.type, task.reward.type, task.reward.amount);
       
       toast({
@@ -363,14 +317,13 @@ export function TasksReferralsScreen() {
         description: `You earned ${task.reward.amount} ${task.reward.type}`,
       });
       
-      // Update local state
-      if (taskListType === "daily") {
-        setDailyTasks(prev => prev.map(t => t.id === task.id ? { ...t, claimed: true } : t));
-      } else {
-        setWeeklyTasks(prev => prev.map(t => t.id === task.id ? { ...t, claimed: true } : t));
-      }
+      // Rebuild task lists to reflect claimed state
+      setDailyTasks(buildTaskList(taskDefinitions.daily));
+      setWeeklyTasks(buildTaskList(taskDefinitions.weekly));
+      
+      console.log(`✅ [Tasks-Claim] Claimed ${task.id} successfully`);
     } catch (err) {
-      console.error("Error claiming reward:", err);
+      console.error("❌ [Tasks-Claim] Error:", err);
       toast({
         title: "Error",
         description: "Failed to claim reward. Please try again.",
@@ -450,50 +403,22 @@ export function TasksReferralsScreen() {
     }
   };
 
-  const renderTaskCard = (task: Task, listType: "daily" | "weekly" | "progressive") => {
-    const isCompleted = task.completed || (task.current !== undefined && task.current >= task.target);
-    const isClaimed = task.claimed;
-    const currentProgress = task.current || 0;
-    
-    const progressValue = Math.min(currentProgress, task.target);
+  const renderTaskCard = (task: Task) => {
+    const progressValue = Math.min(task.current, task.target);
     const progressPercent = (progressValue / task.target) * 100;
-
-    // For progressive tasks, check context/derived state
-    let canClaim = false;
-    let buttonText = "In Progress";
-    let buttonAction = () => {};
-    const isClaimedMilestone = false;
-
-    if (listType === "progressive") {
-        // Find corresponding milestone logic
-        if (task.id === "milestone_taps") {
-             // Not implemented fully in generic way for progressive, simplified for now
-             // Progressive tasks are display-only here or need special handling
-             // Let's rely on standard milestones section for referrals
-        }
-    } else {
-        canClaim = !!isCompleted && !isClaimed;
-        buttonText = isCompleted ? "Claim Reward" : "In Progress";
-        buttonAction = () => handleClaim(task, listType as "daily" | "weekly");
-    }
-
-    if (listType === "progressive") {
-        // Skip rendering generic card for progressive tasks if they duplicate the Milestones section logic
-        // But the user requested progressive tasks tab?
-        // Let's render them as simple progress cards
-    }
 
     return (
       <Card key={task.id} className="p-4 mb-3">
         <div className="flex justify-between items-start mb-2">
           <div className="flex-1">
             <h3 className="font-semibold flex items-center gap-2">
+              {task.icon}
               {task.title}
-              {isClaimed && <CheckCircle2 className="h-4 w-4 text-green-500" />}
+              {task.claimed && <CheckCircle2 className="h-4 w-4 text-green-500" />}
             </h3>
             <p className="text-sm text-muted-foreground">{task.description}</p>
           </div>
-          <Badge variant={isClaimed ? "secondary" : "outline"} className="ml-2">
+          <Badge variant={task.claimed ? "secondary" : "outline"} className="ml-2">
             +{task.reward.amount} {task.reward.type}
           </Badge>
         </div>
@@ -506,26 +431,24 @@ export function TasksReferralsScreen() {
           <Progress value={progressPercent} className="h-2" />
         </div>
 
-        {listType !== "progressive" && (
-            <div className="mt-3 flex justify-end">
-            {isClaimed ? (
-                <Button variant="ghost" size="sm" disabled className="w-full sm:w-auto text-green-600">
-                <CheckCircle2 className="mr-2 h-4 w-4" />
-                Claimed
-                </Button>
-            ) : (
-                <Button 
-                size="sm" 
-                className="w-full sm:w-auto"
-                disabled={!isCompleted}
-                onClick={buttonAction}
-                variant={isCompleted ? "default" : "secondary"}
-                >
-                {buttonText}
-                </Button>
-            )}
-            </div>
-        )}
+        <div className="mt-3 flex justify-end">
+          {task.claimed ? (
+            <Button variant="ghost" size="sm" disabled className="w-full sm:w-auto text-green-600">
+              <CheckCircle2 className="mr-2 h-4 w-4" />
+              Claimed
+            </Button>
+          ) : (
+            <Button 
+              size="sm" 
+              className="w-full sm:w-auto"
+              disabled={!task.completed}
+              onClick={() => handleClaim(task)}
+              variant={task.completed ? "default" : "secondary"}
+            >
+              {task.completed ? "Claim Reward" : "In Progress"}
+            </Button>
+          )}
+        </div>
       </Card>
     );
   };
@@ -541,8 +464,8 @@ export function TasksReferralsScreen() {
     return (
       <div className="pb-24 p-4 max-w-2xl mx-auto flex justify-center items-center min-h-[300px]">
         <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-2" />
-            <p className="text-muted-foreground">Loading tasks...</p>
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-2" />
+          <p className="text-muted-foreground">Loading tasks...</p>
         </div>
       </div>
     );
@@ -567,7 +490,7 @@ export function TasksReferralsScreen() {
               <Star className="h-5 w-5 text-yellow-500" />
               <h3 className="font-semibold text-lg">Daily Tasks</h3>
             </div>
-            {dailyTasks.map(task => renderTaskCard(task, "daily"))}
+            {dailyTasks.map(task => renderTaskCard(task))}
           </div>
 
           <div className="space-y-4">
@@ -575,15 +498,15 @@ export function TasksReferralsScreen() {
               <Trophy className="h-5 w-5 text-purple-500" />
               <h3 className="font-semibold text-lg">Weekly Tasks</h3>
             </div>
-            {weeklyTasks.map(task => renderTaskCard(task, "weekly"))}
+            {weeklyTasks.map(task => renderTaskCard(task))}
           </div>
 
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-purple-500" />
+              <Award className="h-5 w-5 text-orange-500" />
               <h3 className="font-semibold text-lg">Challenges & Milestones</h3>
             </div>
-            {progressiveTasks.map(task => renderTaskCard(task, "progressive"))}
+            {buildTaskList(taskDefinitions.progressive).map(task => renderTaskCard(task))}
           </div>
         </TabsContent>
 
