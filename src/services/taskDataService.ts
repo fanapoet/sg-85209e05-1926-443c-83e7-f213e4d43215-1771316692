@@ -19,6 +19,30 @@ export interface TaskProgress {
 }
 
 /**
+ * Normalize date string to YYYY-MM-DD format
+ */
+function normalizeDate(dateStr: string | undefined): string {
+  if (!dateStr) {
+    return new Date().toISOString().split("T")[0];
+  }
+  
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+  
+  try {
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().split("T")[0];
+    }
+  } catch (e) {
+    console.warn("⚠️ [Task Data] Invalid date format:", dateStr);
+  }
+  
+  return new Date().toISOString().split("T")[0];
+}
+
+/**
  * Load task progress from database (EXACT REWARDS PATTERN)
  */
 export async function loadTaskProgressFromDB(
@@ -27,9 +51,8 @@ export async function loadTaskProgressFromDB(
   try {
     console.log(`📥 [Task Data] Loading progress for telegram_id: ${telegramId}`);
 
-    // Cast table ref to any to bypass "excessively deep" type instantiation error
-    const { data, error } = await (supabase
-      .from("user_task_progress") as any)
+    const { data, error } = await supabase
+      .from("user_task_progress")
       .select("*")
       .eq("telegram_id", parseInt(telegramId));
 
@@ -43,15 +66,14 @@ export async function loadTaskProgressFromDB(
       return [];
     }
 
-    // Map DB columns to interface with explicit casting for safety
-    const progress: TaskProgress[] = (data as any[]).map((row) => ({
+    const progress: TaskProgress[] = data.map((row: any) => ({
       taskId: row.task_id,
       currentProgress: row.current_progress,
-      completed: row.completed, // Now matches DB column name
-      claimed: row.claimed,     // Now matches DB column name
+      completed: row.completed,
+      claimed: row.claimed,
       completedAt: row.completed_at,
       claimedAt: row.claimed_at,
-      resetAt: row.reset_at,
+      resetAt: normalizeDate(row.reset_at),
       taskType: row.task_type,
       expiresAt: row.expires_at,
     }));
@@ -79,7 +101,6 @@ export async function syncTaskProgressToDB(
 
     console.log(`🔄 [Task Data] Syncing ${progressRecords.length} records for telegram_id: ${telegramId}`);
 
-    // Get user_id from profiles (EXACT REWARDS PATTERN)
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id")
@@ -91,7 +112,6 @@ export async function syncTaskProgressToDB(
       return { success: false, error: profileError };
     }
 
-    // Prepare records for upsert
     const dbRecords = progressRecords.map((task) => ({
       user_id: profile.id,
       telegram_id: parseInt(telegramId),
@@ -101,17 +121,15 @@ export async function syncTaskProgressToDB(
       claimed: task.claimed ?? false,
       completed_at: task.completedAt || null,
       claimed_at: task.claimedAt || null,
-      reset_at: task.resetAt,
+      reset_at: normalizeDate(task.resetAt),
       task_type: task.taskType,
       expires_at: task.expiresAt || null,
       updated_at: new Date().toISOString(),
     }));
 
-    // Upsert with composite unique key (user_id, task_id, reset_at)
-    // Cast to any to bypass type checks on dynamic/renamed columns
     const { error: upsertError } = await supabase
       .from("user_task_progress")
-      .upsert(dbRecords as any, {
+      .upsert(dbRecords, {
         onConflict: "user_id,task_id,reset_at",
         ignoreDuplicates: false,
       });
@@ -138,13 +156,11 @@ export function mergeTaskProgress(
 ): TaskProgress[] {
   const merged = new Map<string, TaskProgress>();
 
-  // Add all server records first (server is source of truth)
   server.forEach((task) => {
     const key = `${task.taskId}-${task.resetAt}`;
     merged.set(key, task);
   });
 
-  // Add local records that don't exist on server
   local.forEach((task) => {
     const key = `${task.taskId}-${task.resetAt}`;
     if (!merged.has(key)) {

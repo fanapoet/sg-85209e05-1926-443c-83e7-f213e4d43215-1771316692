@@ -1,6 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export interface TaskStateData {
+/**
+ * Task State Service
+ * Manages user_task_state table (reset date tracking)
+ * Handles daily/weekly reset date persistence
+ */
+
+export interface TaskState {
   telegramId: number;
   userId: string;
   lastDailyResetDate: string;
@@ -8,103 +14,76 @@ export interface TaskStateData {
 }
 
 /**
- * Upsert task state - EXACT REWARDS PATTERN
- * Always pass both dates, never NULL
+ * Get task state from database
  */
-export async function upsertTaskState(data: TaskStateData) {
+export async function getTaskState(telegramId: number): Promise<TaskState | null> {
   try {
-    console.log("💾 [Task State] Upserting:", data);
+    console.log(`📥 [Task State] Loading state for telegram_id: ${telegramId}`);
 
-    // Get Telegram user ID
-    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
-    
-    if (!tgUser) {
-      console.error("❌ [Task State] No Telegram user data");
-      return { success: false, error: "No Telegram user data" };
-    }
-    
-    console.log("🔵 [Task State] Telegram user ID:", tgUser.id);
-    
-    // Find user profile by telegram_id
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("telegram_id", tgUser.id)
-      .maybeSingle();
-    
-    if (profileError) {
-      console.error("❌ [Task State] Profile lookup error:", profileError);
-      return { success: false, error: profileError.message };
-    }
-    
-    if (!profile) {
-      console.error("❌ [Task State] Profile not found for telegram_id:", tgUser.id);
-      return { success: false, error: "Profile not found" };
-    }
-    
-    console.log("🔵 [Task State] Found profile UUID:", profile.id);
-
-    // Upsert - EXACT REWARDS PATTERN
-    const { data: result, error } = await supabase
-      .from("user_task_state")
-      .upsert({
-        telegram_id: data.telegramId,
-        user_id: profile.id,
-        last_daily_reset_date: data.lastDailyResetDate,
-        last_weekly_reset_date: data.lastWeeklyResetDate,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: "telegram_id",
-        ignoreDuplicates: false
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error("❌ [Task State] Upsert error:", error);
-      return { success: false, error: error.message };
-    }
-
-    console.log("✅ [Task State] Upserted successfully:", result);
-    return { success: true, data: result };
-  } catch (error) {
-    console.error("❌ [Task State] Upsert exception:", error);
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : "Unknown error" 
-    };
-  }
-}
-
-/**
- * Get task state from DB
- */
-export async function getTaskState(telegramId: number) {
-  try {
     const { data, error } = await supabase
       .from("user_task_state")
-      .select("*")
+      .select("user_id, telegram_id, last_daily_reset, last_weekly_reset")
       .eq("telegram_id", telegramId)
       .maybeSingle();
 
     if (error) {
-      console.error("❌ [Task State] Get error:", error);
+      console.error("❌ [Task State] Load error:", JSON.stringify(error));
       return null;
     }
 
     if (!data) {
+      console.log("ℹ️ [Task State] No state found in DB");
       return null;
     }
 
-    return {
+    const state: TaskState = {
       telegramId: data.telegram_id,
       userId: data.user_id,
-      lastDailyResetDate: data.last_daily_reset_date,
-      lastWeeklyResetDate: data.last_weekly_reset_date,
-      updatedAt: data.updated_at
+      lastDailyResetDate: data.last_daily_reset,
+      lastWeeklyResetDate: data.last_weekly_reset,
     };
+
+    console.log(`✅ [Task State] Loaded state:`, state);
+    return state;
   } catch (error) {
-    console.error("❌ [Task State] Get exception:", error);
+    console.error("❌ [Task State] Unexpected error:", error);
     return null;
+  }
+}
+
+/**
+ * Upsert task state to database
+ */
+export async function upsertTaskState(state: TaskState): Promise<{ success: boolean; error?: any }> {
+  try {
+    console.log(`🔄 [Task State] Upserting state for telegram_id: ${state.telegramId}`);
+    console.log(`🔄 [Task State] Data:`, state);
+
+    const { error } = await supabase
+      .from("user_task_state")
+      .upsert(
+        {
+          user_id: state.userId,
+          telegram_id: state.telegramId,
+          last_daily_reset: state.lastDailyResetDate,
+          last_weekly_reset: state.lastWeeklyResetDate,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "telegram_id",
+          ignoreDuplicates: false,
+        }
+      );
+
+    if (error) {
+      console.error("❌ [Task State] Upsert error:", JSON.stringify(error));
+      return { success: false, error };
+    }
+
+    console.log(`✅ [Task State] State upserted successfully`);
+    return { success: true };
+  } catch (error) {
+    console.error("❌ [Task State] Unexpected upsert error:", error);
+    return { success: false, error };
   }
 }
