@@ -431,10 +431,10 @@ export async function loadBuildParts(): Promise<Array<{
       return null;
     }
 
-    // Load build parts - FIX: use correct column name 'build_end_time'
+    // Load build parts - Use correct column names: current_level, build_ends_at
     const { data, error } = await supabase
       .from("user_build_parts")
-      .select("part_id, level, is_building, build_end_time")
+      .select("part_id, current_level, is_building, build_ends_at")
       .eq("user_id", profile.id);
 
     if (error) {
@@ -452,9 +452,9 @@ export async function loadBuildParts(): Promise<Array<{
 
     return data.map(part => ({
       partId: part.part_id,
-      level: part.level,
-      isBuilding: part.is_building,
-      buildEndsAt: part.build_end_time ? new Date(part.build_end_time).getTime() : null
+      level: part.current_level,
+      isBuilding: part.is_building || false,
+      buildEndsAt: part.build_ends_at ? new Date(part.build_ends_at).getTime() : null
     }));
 
   } catch (error: any) {
@@ -484,13 +484,13 @@ export async function syncBuildParts(
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     console.log(`🔐 [Sync] Auth session check:`, sessionError ? `ERROR: ${sessionError.message}` : `✅ Session active, user: ${sessionData?.session?.user?.id}`);
 
-    // Prepare data for upsert
+    // Prepare data for upsert - Use correct column names: current_level, build_ends_at
     const upsertData = parts.map(part => ({
       user_id: userId,
       part_id: part.partId,
-      level: part.level,
+      current_level: part.level,
       is_building: part.isBuilding,
-      build_end_time: part.buildEndsAt ? new Date(part.buildEndsAt).toISOString() : null,
+      build_ends_at: part.buildEndsAt ? new Date(part.buildEndsAt).toISOString() : null,
     }));
 
     console.log("🔧 [Sync] Sample upsert record:", upsertData[0]);
