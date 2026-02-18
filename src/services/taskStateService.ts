@@ -22,7 +22,7 @@ export async function getTaskState(telegramId: number): Promise<TaskState | null
 
     const { data, error } = await supabase
       .from("user_task_state")
-      .select("user_id, telegram_id, last_daily_reset, last_weekly_reset")
+      .select("user_id, telegram_id, last_daily_reset_date, last_weekly_reset_date")
       .eq("telegram_id", telegramId)
       .maybeSingle();
 
@@ -39,8 +39,8 @@ export async function getTaskState(telegramId: number): Promise<TaskState | null
     const state: TaskState = {
       telegramId: data.telegram_id,
       userId: data.user_id,
-      lastDailyResetDate: data.last_daily_reset,
-      lastWeeklyResetDate: data.last_weekly_reset,
+      lastDailyResetDate: data.last_daily_reset_date,
+      lastWeeklyResetDate: data.last_weekly_reset_date,
     };
 
     console.log(`✅ [Task State] Loaded state:`, state);
@@ -65,8 +65,8 @@ export async function upsertTaskState(state: TaskState): Promise<{ success: bool
         {
           user_id: state.userId,
           telegram_id: state.telegramId,
-          last_daily_reset: state.lastDailyResetDate,
-          last_weekly_reset: state.lastWeeklyResetDate,
+          last_daily_reset_date: state.lastDailyResetDate,
+          last_weekly_reset_date: state.lastWeeklyResetDate,
           updated_at: new Date().toISOString(),
         },
         {
