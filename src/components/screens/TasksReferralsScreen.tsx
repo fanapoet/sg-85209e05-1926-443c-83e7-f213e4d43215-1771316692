@@ -228,7 +228,15 @@ export function TasksReferralsScreen() {
   };
 
   // Build task list from definitions + progress data
-  const buildTaskList = (definitions: typeof taskDefinitions.daily): Task[] => {
+  const buildTaskList = (definitions: {
+    id: string;
+    title: string;
+    description: string;
+    reward: { type: "BZ" | "BB" | "XP"; amount: number };
+    type: "daily" | "weekly" | "progressive";
+    target: number;
+    icon: React.ReactNode;
+  }[]): Task[] => {
     return definitions.map(def => {
       const progress = getTaskProgress(def.id);
       const currentValue = getCurrentValueForTask(def.id);
