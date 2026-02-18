@@ -237,9 +237,21 @@ export function checkAndResetTasks(): void {
   tasks.forEach((task, taskId) => {
     if (task.taskType === "progressive") return; // Skip progressive tasks
 
-    const shouldReset =
-      (task.taskType === "daily" && task.resetAt !== today) ||
-      (task.taskType === "weekly" && task.expiresAt && new Date(task.expiresAt) < now);
+    let shouldReset = false;
+
+    // Daily tasks: reset if resetAt date is not today
+    if (task.taskType === "daily") {
+      shouldReset = task.resetAt !== today;
+    }
+
+    // Weekly tasks: reset if 7 days have passed since resetAt
+    if (task.taskType === "weekly" && task.resetAt) {
+      const resetDate = new Date(task.resetAt);
+      const daysSinceReset = Math.floor((now.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
+      shouldReset = daysSinceReset >= 7;
+      
+      console.log(`📋 [Tasks-Reset] Weekly task ${taskId}: resetAt=${task.resetAt}, daysSinceReset=${daysSinceReset}, shouldReset=${shouldReset}`);
+    }
 
     if (shouldReset) {
       console.log(`🔄 [Tasks-Reset] Resetting ${taskId} (${task.taskType})`);

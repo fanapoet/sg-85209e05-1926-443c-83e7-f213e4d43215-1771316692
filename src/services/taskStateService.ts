@@ -27,7 +27,7 @@ export async function getTaskState(telegramId: number): Promise<TaskState | null
       .maybeSingle();
 
     if (error) {
-      console.error("❌ [Task State] Load error:", JSON.stringify(error));
+      console.error("❌ [Task State] Load error:", error.message || error);
       return null;
     }
 
@@ -45,8 +45,8 @@ export async function getTaskState(telegramId: number): Promise<TaskState | null
 
     console.log(`✅ [Task State] Loaded state:`, state);
     return state;
-  } catch (error) {
-    console.error("❌ [Task State] Unexpected error:", error);
+  } catch (error: any) {
+    console.error("❌ [Task State] Unexpected error:", error.message || error);
     return null;
   }
 }
@@ -76,14 +76,16 @@ export async function upsertTaskState(state: TaskState): Promise<{ success: bool
       );
 
     if (error) {
-      console.error("❌ [Task State] Upsert error:", JSON.stringify(error));
-      return { success: false, error };
+      console.error("❌ [Task State] Upsert error:", error.message || error);
+      console.error("❌ [Task State] Error code:", error.code);
+      console.error("❌ [Task State] Error details:", error.details);
+      return { success: false, error: error.message || error };
     }
 
     console.log(`✅ [Task State] State upserted successfully`);
     return { success: true };
-  } catch (error) {
-    console.error("❌ [Task State] Unexpected upsert error:", error);
-    return { success: false, error };
+  } catch (error: any) {
+    console.error("❌ [Task State] Unexpected upsert error:", error.message || error);
+    return { success: false, error: error.message || error };
   }
 }
