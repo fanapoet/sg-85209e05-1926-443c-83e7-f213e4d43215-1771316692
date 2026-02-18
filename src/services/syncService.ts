@@ -484,20 +484,31 @@ export async function syncBuildParts(
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     console.log(`🔐 [Sync] Auth session check:`, sessionError ? `ERROR: ${sessionError.message}` : `✅ Session active, user: ${sessionData?.session?.user?.id}`);
 
-    // Prepare data for upsert - Use correct column names: current_level, build_ends_at
-    const upsertData = parts.map(part => ({
-      user_id: userId,
-      part_id: part.partId,
-      current_level: part.level,
-      is_building: part.isBuilding,
-      build_ends_at: part.buildEndsAt ? new Date(part.buildEndsAt).toISOString() : null,
-    }));
+    // Prepare data for upsert - Use EXACT database column names with explicit type casting
+    const upsertData = parts.map(part => {
+      const record: any = {
+        user_id: userId,
+        part_id: part.partId,
+        current_level: part.level,
+        is_building: part.isBuilding,
+        updated_at: new Date().toISOString()
+      };
+
+      // Explicitly handle build_ends_at timestamp conversion
+      if (part.buildEndsAt !== null && part.buildEndsAt !== undefined) {
+        record.build_ends_at = new Date(part.buildEndsAt).toISOString();
+      } else {
+        record.build_ends_at = null;
+      }
+
+      return record;
+    });
 
     console.log("🔧 [Sync] Sample upsert record:", upsertData[0]);
     console.log("🔧 [Sync] Prepared", upsertData.length, "records for upsert");
 
-    // Use upsert to insert or update
-    const { data, error } = await supabase
+    // Use explicit column list to avoid type inference issues
+    const { error } = await supabase
       .from("user_build_parts")
       .upsert(upsertData, {
         onConflict: "user_id,part_id",
@@ -513,7 +524,6 @@ export async function syncBuildParts(
     }
 
     console.log(`✅ [Sync] ${parts.length} build parts synced successfully!`);
-    if (data) console.log(`✅ [Sync] Response data:`, data);
     
     return { success: true };
 
