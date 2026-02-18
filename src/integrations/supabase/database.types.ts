@@ -597,7 +597,7 @@ export type Database = {
           build_ends_at: string | null
           build_started_at: string | null
           created_at: string | null
-          current_level: number
+          level: number
           id: string
           is_building: boolean | null
           last_upgraded_at: string | null
@@ -610,7 +610,7 @@ export type Database = {
           build_ends_at?: string | null
           build_started_at?: string | null
           created_at?: string | null
-          current_level?: number
+          level?: number
           id?: string
           is_building?: boolean | null
           last_upgraded_at?: string | null
@@ -623,7 +623,7 @@ export type Database = {
           build_ends_at?: string | null
           build_started_at?: string | null
           created_at?: string | null
-          current_level?: number
+          level?: number
           id?: string
           is_building?: boolean | null
           last_upgraded_at?: string | null
