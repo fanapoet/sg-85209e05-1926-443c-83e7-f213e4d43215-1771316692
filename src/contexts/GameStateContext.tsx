@@ -353,23 +353,30 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           
           if (currentState?.lastWeeklyReset) {
             setLastWeeklyReset(currentState.lastWeeklyReset);
+            console.log("✅ [TASK-STATE] Loaded lastWeeklyReset from DB:", currentState.lastWeeklyReset);
           } else {
             setLastWeeklyReset(today);
           }
           
           if (currentState?.lastDailyReset) {
             setLastDailyReset(currentState.lastDailyReset);
+            console.log("✅ [TASK-STATE] Loaded lastDailyReset from DB:", currentState.lastDailyReset);
           } else {
             setLastDailyReset(today);
           }
 
-          await upsertTaskState({
-            telegramId: authResult.profile.telegram_id,
-            userId: authResult.profile.id,
-            lastDailyReset: currentState?.lastDailyReset || today,
-            lastWeeklyReset: currentState?.lastWeeklyReset || today
-          });
-          console.log("✅ [TASK-STATE] Reset tracking record initialized");
+          // Only create record if user doesn't have one (new user)
+          if (!currentState) {
+            await upsertTaskState({
+              telegramId: authResult.profile.telegram_id,
+              userId: authResult.profile.id,
+              lastDailyReset: today,
+              lastWeeklyReset: today
+            });
+            console.log("✅ [TASK-STATE] Created new reset tracking record for new user");
+          } else {
+            console.log("✅ [TASK-STATE] Using existing reset tracking record from DB");
+          }
         }
         
         // Mark initialization as complete
