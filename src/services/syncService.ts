@@ -193,8 +193,8 @@ export async function syncPlayerState(gameState: Partial<{
   dailyStreak: number;
   currentRewardWeek: number;
   lastDailyClaimDate: string | null;
-  lastDailyResetDate: string;
-  lastWeeklyResetDate: string;
+  lastDailyReset: string;
+  lastWeeklyReset: string;
 }>): Promise<{ success: boolean; error?: string }> {
   console.log("🔵 [syncPlayerState] ========== FUNCTION ENTERED ==========");
   console.log("🔵 [syncPlayerState] Received gameState:", gameState);
@@ -348,11 +348,11 @@ export async function syncPlayerState(gameState: Partial<{
       console.log("⏭️ [REWARDS-SYNC-CHECK] No reward data in gameState");
     }
 
-    // Sync task state if provided (EXACT REWARDS PATTERN)
-    if (gameState.lastDailyResetDate !== undefined || gameState.lastWeeklyResetDate !== undefined) {
+    // Sync task state if provided (EXACT REWARDS PATTERN) - FIXED COLUMN NAMES
+    if (gameState.lastDailyReset !== undefined || gameState.lastWeeklyReset !== undefined) {
       console.log("📋 [TASKS-SYNC] Syncing task state:", {
-        lastDailyResetDate: gameState.lastDailyResetDate,
-        lastWeeklyResetDate: gameState.lastWeeklyResetDate
+        lastDailyReset: gameState.lastDailyReset,
+        lastWeeklyReset: gameState.lastWeeklyReset
       });
       
       try {
@@ -361,8 +361,8 @@ export async function syncPlayerState(gameState: Partial<{
         const taskSyncResult = await upsertTaskState({
           telegramId: tgUser.id,
           userId: profile.id,
-          lastDailyResetDate: gameState.lastDailyResetDate || new Date().toISOString().split('T')[0],
-          lastWeeklyResetDate: gameState.lastWeeklyResetDate || new Date().toISOString().split('T')[0]
+          lastDailyReset: gameState.lastDailyReset || new Date().toISOString().split('T')[0],
+          lastWeeklyReset: gameState.lastWeeklyReset || new Date().toISOString().split('T')[0]
         });
         
         if (taskSyncResult.success) {
@@ -608,8 +608,8 @@ export function startAutoSync(
     dailyStreak?: number;
     currentRewardWeek?: number;
     lastDailyClaimDate?: string | null;
-    lastDailyResetDate?: string;
-    lastWeeklyResetDate?: string;
+    lastDailyReset?: string;
+    lastWeeklyReset?: string;
     dailyClaims?: Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>;
     ownedNFTs?: Array<{ nftId: string; purchasePrice: number; timestamp: number }>;
   },
@@ -664,9 +664,9 @@ export function startAutoSync(
       dailyStreak: state.dailyStreak,
       currentRewardWeek: state.currentRewardWeek,
       lastDailyClaimDate: state.lastDailyClaimDate,
-      // ADD TASK STATE
-      lastDailyResetDate: state.lastDailyResetDate,
-      lastWeeklyResetDate: state.lastWeeklyResetDate
+      // ADD TASK STATE - FIXED COLUMN NAMES
+      lastDailyReset: state.lastDailyReset,
+      lastWeeklyReset: state.lastWeeklyReset
     };
     
     console.log("🔄 [AUTO-SYNC] Calling syncPlayerState...");
