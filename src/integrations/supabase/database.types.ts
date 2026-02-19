@@ -597,7 +597,7 @@ export type Database = {
           build_ends_at: string | null
           build_started_at: string | null
           created_at: string | null
-          level: number
+          current_level: number
           id: string
           is_building: boolean | null
           last_upgraded_at: string | null
@@ -610,7 +610,7 @@ export type Database = {
           build_ends_at?: string | null
           build_started_at?: string | null
           created_at?: string | null
-          level?: number
+          current_level?: number
           id?: string
           is_building?: boolean | null
           last_upgraded_at?: string | null
@@ -623,7 +623,7 @@ export type Database = {
           build_ends_at?: string | null
           build_started_at?: string | null
           created_at?: string | null
-          level?: number
+          current_level?: number
           id?: string
           is_building?: boolean | null
           last_upgraded_at?: string | null
@@ -786,8 +786,8 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          last_daily_reset_date: string
-          last_weekly_reset_date: string
+          last_daily_reset: string
+          last_weekly_reset: string
           telegram_id: number
           updated_at: string
           user_id: string
@@ -795,8 +795,8 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          last_daily_reset_date?: string
-          last_weekly_reset_date?: string
+          last_daily_reset?: string
+          last_weekly_reset?: string
           telegram_id: number
           updated_at?: string
           user_id: string
@@ -804,8 +804,8 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
-          last_daily_reset_date?: string
-          last_weekly_reset_date?: string
+          last_daily_reset?: string
+          last_weekly_reset?: string
           telegram_id?: number
           updated_at?: string
           user_id?: string

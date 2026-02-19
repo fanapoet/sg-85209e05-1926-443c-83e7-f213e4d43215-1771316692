@@ -18,35 +18,29 @@ export interface TaskState {
  */
 export async function getTaskState(telegramId: number): Promise<TaskState | null> {
   try {
-    console.log(`📥 [Task State] Loading state for telegram_id: ${telegramId}`);
-
     const { data, error } = await supabase
       .from("user_task_state")
       .select("user_id, telegram_id, last_daily_reset, last_weekly_reset")
       .eq("telegram_id", telegramId)
-      .maybeSingle() as any;
+      .maybeSingle();
 
     if (error) {
-      console.error("❌ [Task State] Load error:", error.message || error);
+      console.error("Error fetching task state:", error);
       return null;
     }
 
     if (!data) {
-      console.log("ℹ️ [Task State] No state found in DB");
       return null;
     }
 
-    const state: TaskState = {
+    return {
       telegramId: data.telegram_id,
       userId: data.user_id,
       lastDailyReset: data.last_daily_reset,
       lastWeeklyReset: data.last_weekly_reset,
     };
-
-    console.log(`✅ [Task State] Loaded state:`, state);
-    return state;
-  } catch (error: any) {
-    console.error("❌ [Task State] Unexpected error:", error.message || error);
+  } catch (error) {
+    console.error("Task state fetch exception:", error);
     return null;
   }
 }
