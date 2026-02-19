@@ -147,7 +147,7 @@ export async function syncInitialGameState(
         partId: p.partId,
         level: p.level,
         isBuilding: p.isBuilding,
-        buildEndsAt: p.buildEndTime // Map legacy property
+        buildEndsAt: p.buildEndTime
       }));
       await syncBuildParts(userId, partsToSync);
     }
@@ -199,18 +199,10 @@ export async function syncPlayerState(gameState: Partial<{
   console.log("🔵 [syncPlayerState] ========== FUNCTION ENTERED ==========");
   console.log("🔵 [syncPlayerState] Received gameState:", gameState);
   
-  // ADD EXPLICIT REWARD STATE LOGGING
-  console.log("🎁 [REWARDS-CHECK] Reward state in gameState:", {
-    dailyStreak: gameState.dailyStreak,
-    currentRewardWeek: gameState.currentRewardWeek,
-    lastDailyClaimDate: gameState.lastDailyClaimDate,
-    hasRewardData: gameState.dailyStreak !== undefined || gameState.currentRewardWeek !== undefined || gameState.lastDailyClaimDate !== undefined
-  });
-  
   try {
     console.log("🔵 [syncPlayerState] Getting Telegram user...");
     
-    // Get Telegram user ID (same as initializeUser)
+    // Get Telegram user ID
     const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
     
     if (!tgUser) {
@@ -220,7 +212,7 @@ export async function syncPlayerState(gameState: Partial<{
     
     console.log("🔵 [syncPlayerState] Telegram user ID:", tgUser.id);
     
-    // Find user profile by telegram_id (same as initializeUser)
+    // Find user profile by telegram_id
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id")
@@ -303,13 +295,7 @@ export async function syncPlayerState(gameState: Partial<{
     }
 
     // Sync reward state if provided
-    console.log("🎁 [REWARDS-SYNC-CHECK] Checking if should sync rewards...");
-    console.log("🎁 [REWARDS-SYNC-CHECK] dailyStreak:", gameState.dailyStreak);
-    console.log("🎁 [REWARDS-SYNC-CHECK] currentRewardWeek:", gameState.currentRewardWeek);
-    console.log("🎁 [REWARDS-SYNC-CHECK] lastDailyClaimDate:", gameState.lastDailyClaimDate);
-    
     if (gameState.dailyStreak !== undefined || gameState.currentRewardWeek !== undefined || gameState.lastDailyClaimDate !== undefined) {
-      console.log("✅ [REWARDS-SYNC-CHECK] CONDITION MET - Will sync rewards!");
       console.log("🎁 [REWARDS-SYNC] Syncing reward state:", {
         dailyStreak: gameState.dailyStreak,
         currentRewardWeek: gameState.currentRewardWeek,
@@ -318,14 +304,6 @@ export async function syncPlayerState(gameState: Partial<{
       
       try {
         const { upsertRewardState } = await import("./rewardStateService");
-        
-        console.log("🎁 [REWARDS-SYNC] Calling upsertRewardState with:", {
-          telegramId: tgUser.id,
-          userId: profile.id,
-          dailyStreak: gameState.dailyStreak || 0,
-          currentRewardWeek: gameState.currentRewardWeek || 1,
-          lastDailyClaimDate: gameState.lastDailyClaimDate || null
-        });
         
         const rewardSyncResult = await upsertRewardState({
           telegramId: tgUser.id,
@@ -343,12 +321,9 @@ export async function syncPlayerState(gameState: Partial<{
       } catch (error: any) {
         console.error("❌ [REWARDS-SYNC] Reward state sync exception:", error);
       }
-    } else {
-      console.log("⏭️ [REWARDS-SYNC-CHECK] CONDITION NOT MET - Skipping rewards sync");
-      console.log("⏭️ [REWARDS-SYNC-CHECK] No reward data in gameState");
     }
 
-    // Sync task state if provided (EXACT REWARDS PATTERN) - FIXED COLUMN NAMES
+    // Sync task state if provided
     if (gameState.lastDailyReset !== undefined || gameState.lastWeeklyReset !== undefined) {
       console.log("📋 [TASKS-SYNC] Syncing task state:", {
         lastDailyReset: gameState.lastDailyReset,
@@ -403,6 +378,7 @@ export async function syncTapData(tapState: {
 
 /**
  * Load build parts from database
+ * ✅ FIXED: Uses actual DB column name 'level' (not 'current_level')
  */
 export async function loadBuildParts(): Promise<Array<{
   partId: string;
@@ -419,7 +395,6 @@ export async function loadBuildParts(): Promise<Array<{
       return null;
     }
 
-    // Get profile UUID
     const { data: profile } = await supabase
       .from("profiles")
       .select("id")
@@ -431,10 +406,10 @@ export async function loadBuildParts(): Promise<Array<{
       return null;
     }
 
-    // Load build parts - Use correct column names: current_level, build_ends_at
+    // ✅ CRITICAL FIX: Use actual DB column name 'level' (NOT 'current_level')
     const { data, error } = await supabase
       .from("user_build_parts")
-      .select("part_id, current_level, is_building, build_ends_at")
+      .select("part_id, level, is_building, build_ends_at")
       .eq("user_id", profile.id);
 
     if (error) {
@@ -442,17 +417,17 @@ export async function loadBuildParts(): Promise<Array<{
       return null;
     }
 
-    // Return empty array if no parts found (not an error)
     if (!data || data.length === 0) {
       console.log("🔧 [Sync] No build parts found in database (fresh start)");
-      return []; // Return empty array, not null
+      return [];
     }
 
     console.log(`✅ [Sync] Loaded ${data.length} build parts from database`);
 
+    // ✅ CRITICAL FIX: Map 'level' from DB to 'level' in app (was incorrectly 'current_level')
     return data.map((part: any) => ({
       partId: part.part_id,
-      level: part.current_level, // Map current_level from DB to level in app
+      level: part.level,
       isBuilding: part.is_building || false,
       buildEndsAt: part.build_ends_at ? new Date(part.build_ends_at).getTime() : null
     }));
@@ -465,6 +440,7 @@ export async function loadBuildParts(): Promise<Array<{
 
 /**
  * Sync build parts to database (UPSERT - insert or update)
+ * ✅ FIXED: Uses actual DB column name 'level' (not 'current_level')
  */
 export async function syncBuildParts(
   userId: string,
@@ -480,21 +456,16 @@ export async function syncBuildParts(
     console.log(`🔧 [Sync] User ID for sync: ${userId}`);
     console.log(`🔧 [Sync] Sample part data:`, parts[0]);
 
-    // Check current auth session
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    console.log(`🔐 [Sync] Auth session check:`, sessionError ? `ERROR: ${sessionError.message}` : `✅ Session active, user: ${sessionData?.session?.user?.id}`);
-
-    // Prepare data for upsert - Use EXACT database column names: current_level, build_ends_at
+    // ✅ CRITICAL FIX: Prepare data with actual DB column name 'level' (NOT 'current_level')
     const upsertData = parts.map(part => {
       const record: any = {
         user_id: userId,
         part_id: part.partId,
-        current_level: part.level, // ✅ FIXED: map level prop to current_level column
+        level: part.level, // ✅ FIXED: DB column is 'level', not 'current_level'
         is_building: part.isBuilding,
         updated_at: new Date().toISOString()
       };
 
-      // Explicitly handle build_ends_at timestamp conversion
       if (part.buildEndsAt !== null && part.buildEndsAt !== undefined) {
         record.build_ends_at = new Date(part.buildEndsAt).toISOString();
       } else {
@@ -507,7 +478,6 @@ export async function syncBuildParts(
     console.log("🔧 [Sync] Sample upsert record:", upsertData[0]);
     console.log("🔧 [Sync] Prepared", upsertData.length, "records for upsert");
 
-    // Use explicit column list to avoid type inference issues
     const { error } = await supabase
       .from("user_build_parts")
       .upsert(upsertData, {
@@ -518,8 +488,6 @@ export async function syncBuildParts(
     if (error) {
       console.error("❌ [Sync] Build parts upsert failed:", error);
       console.error("❌ [Sync] Error details:", JSON.stringify(error, null, 2));
-      console.error("❌ [Sync] Error code:", error.code);
-      console.error("❌ [Sync] Error message:", error.message);
       return { success: false, error: error.message };
     }
 
@@ -529,7 +497,6 @@ export async function syncBuildParts(
 
   } catch (error: any) {
     console.error("❌ [Sync] Build parts sync exception:", error);
-    console.error("❌ [Sync] Exception details:", JSON.stringify(error, null, 2));
     return { success: false, error: error.message };
   }
 }
@@ -556,8 +523,6 @@ export async function purchaseNFT(
   try {
     console.log(`🛍️ [NFT-PURCHASE] Processing purchase for ${nftId} (${price_paid_bb} BB)`);
 
-    // 1. Sync directly to DB
-    // Note: We don't deduct balance here as it's handled by the caller/optimistically
     const { error } = await supabase
       .from('user_nfts')
       .insert({
@@ -617,27 +582,17 @@ export function startAutoSync(
 ) {
   console.log("🚀 [Sync] Starting auto-sync system");
 
-  // Stop existing interval if any
   if (autoSyncInterval) {
     clearInterval(autoSyncInterval);
   }
 
-  // Start periodic sync
   autoSyncInterval = setInterval(async () => {
     const state = getGameState();
     
     console.log("⏰ [AUTO-SYNC] ========== PERIODIC SYNC TRIGGERED ==========");
     console.log("⏰ [AUTO-SYNC] Time:", new Date().toLocaleTimeString());
     console.log("⏰ [AUTO-SYNC] Build parts to sync:", state.buildParts?.length || 0);
-    console.log("⏰ [AUTO-SYNC] Daily claims to sync:", state.dailyClaims?.length || 0);
-    console.log("⏰ [AUTO-SYNC] Owned NFTs to sync:", state.ownedNFTs?.length || 0);
-    console.log("⏰ [AUTO-SYNC] Reward state:", {
-      dailyStreak: state.dailyStreak,
-      currentRewardWeek: state.currentRewardWeek,
-      lastDailyClaimDate: state.lastDailyClaimDate
-    });
     
-    // Convert cooldown to safe timestamp
     const cooldownTimestamp = toTimestamp(state.quickChargeCooldownUntil);
     
     const syncState = {
@@ -660,11 +615,9 @@ export function startAutoSync(
       todayTaps: state.todayTaps,
       idleBzPerHour: state.idleBzPerHour,
       buildParts: state.buildParts,
-      // ADD REWARD STATE
       dailyStreak: state.dailyStreak,
       currentRewardWeek: state.currentRewardWeek,
       lastDailyClaimDate: state.lastDailyClaimDate,
-      // ADD TASK STATE - FIXED COLUMN NAMES
       lastDailyReset: state.lastDailyReset,
       lastWeeklyReset: state.lastWeeklyReset
     };
@@ -678,14 +631,12 @@ export function startAutoSync(
       console.error("❌ [AUTO-SYNC] Player state sync failed:", syncResult.error);
     }
 
-    // Get Telegram user for reward syncs
     const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
     if (!tgUser?.id) {
       console.warn("⚠️ [AUTO-SYNC] No Telegram user for reward syncs");
       return;
     }
 
-    // Get user profile for reward syncs
     const { data: profile } = await supabase
       .from("profiles")
       .select("id")
@@ -697,7 +648,6 @@ export function startAutoSync(
       return;
     }
 
-    // Sync daily claims history
     if (state.dailyClaims && state.dailyClaims.length > 0) {
       console.log("🎁 [AUTO-SYNC] Syncing daily claims...");
       const { syncDailyClaimsToDB } = await import("./rewardDataService");
@@ -709,7 +659,6 @@ export function startAutoSync(
       }
     }
 
-    // Sync owned NFTs
     if (state.ownedNFTs && state.ownedNFTs.length > 0) {
       console.log("🖼️ [AUTO-SYNC] Syncing owned NFTs...");
       const { syncNFTsToDB } = await import("./rewardDataService");
@@ -721,21 +670,16 @@ export function startAutoSync(
       }
     }
 
-    // ✅ NEW: Sync task progress (Orchestrated by tasksService)
     try {
       console.log("📋 [AUTO-SYNC] Syncing task progress...");
       const { syncTasksWithServer } = await import("./tasksService");
-      
-      // Call the main sync function which handles everything
       await syncTasksWithServer();
-      
       console.log("✅ [AUTO-SYNC] Task sync orchestrated successfully");
     } catch (error) {
       console.error("❌ [AUTO-SYNC] Task sync exception:", error);
     }
   }, intervalMs);
 
-  // Return cleanup function
   return () => {
     console.log("🛑 [Sync] Stopping auto-sync system");
     if (autoSyncInterval) {
@@ -788,7 +732,6 @@ export async function syncConversionToDB(
   }
 }
 
-// Monitor network status
 if (typeof window !== "undefined") {
   window.addEventListener("online", () => {
     console.log("📡 [Sync] Connection restored");
