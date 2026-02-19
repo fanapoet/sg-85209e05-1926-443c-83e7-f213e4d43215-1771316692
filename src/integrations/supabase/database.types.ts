@@ -786,8 +786,8 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          last_daily_reset: string
-          last_weekly_reset: string
+          last_daily_reset_date: string
+          last_weekly_reset_date: string
           telegram_id: number
           updated_at: string
           user_id: string
@@ -795,8 +795,8 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          last_daily_reset?: string
-          last_weekly_reset?: string
+          last_daily_reset_date?: string
+          last_weekly_reset_date?: string
           telegram_id: number
           updated_at?: string
           user_id: string
@@ -804,8 +804,8 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
-          last_daily_reset?: string
-          last_weekly_reset?: string
+          last_daily_reset_date?: string
+          last_weekly_reset_date?: string
           telegram_id?: number
           updated_at?: string
           user_id?: string
