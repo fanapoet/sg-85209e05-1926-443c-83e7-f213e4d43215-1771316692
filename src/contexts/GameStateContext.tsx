@@ -584,39 +584,41 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         needsSync = true;
       }
 
-      // CHECK 2: DAILY TASK RESET (ISO date comparison)
+      // CHECK 2: DAILY TASK RESET (ISO date comparison) - FIXED
       if (lastDailyReset && lastDailyReset !== today) {
         console.log(`[Reset Checker] 🔄 DAILY TASKS RESET NEEDED!`);
-        console.log(`[Reset Checker] Previous: "${lastDailyReset}" → Current: "${today}"`);
+        console.log(`[Reset Checker] DB date: "${lastDailyReset}" → Current: "${today}"`);
         
-        // Call the daily reset function
         await resetDailyTasks();
         needsSync = true;
       }
 
-      // CHECK 3: WEEKLY TASK RESET (7-day period check)
+      // CHECK 3: WEEKLY TASK RESET (7-day period check) - FIXED
       if (lastWeeklyReset) {
-        const lastWeeklyResetDateObj = new Date(lastWeeklyReset);
-        const daysSinceWeeklyReset = Math.floor((now.getTime() - lastWeeklyResetDateObj.getTime()) / (1000 * 60 * 60 * 24));
+        const lastWeeklyResetDateObj = new Date(lastWeeklyReset + 'T00:00:00Z');
+        const nowUTC = new Date(today + 'T00:00:00Z');
+        const daysSinceWeeklyReset = Math.floor((nowUTC.getTime() - lastWeeklyResetDateObj.getTime()) / (1000 * 60 * 60 * 24));
         
-        console.log(`[Reset Checker] 📅 Days since weekly reset: ${daysSinceWeeklyReset}`);
+        console.log(`[Reset Checker] 📅 Days since weekly task reset: ${daysSinceWeeklyReset}`);
+        console.log(`[Reset Checker] Last weekly reset: ${lastWeeklyReset}`);
         
         if (daysSinceWeeklyReset >= 7) {
-          console.log(`[Reset Checker] 🔄 WEEKLY TASKS RESET NEEDED! (${daysSinceWeeklyReset} days)`);
+          console.log(`[Reset Checker] 🔄 WEEKLY TASKS RESET NEEDED! (${daysSinceWeeklyReset} days passed)`);
           await resetWeeklyTasks();
           needsSync = true;
         }
       }
 
-      // CHECK 4: WEEKLY REWARDS PERIOD RESET (7-day period check)
+      // CHECK 4: WEEKLY REWARDS PERIOD RESET (7-day period check) - FIXED
       if (currentWeeklyPeriodStart) {
         const periodStart = new Date(currentWeeklyPeriodStart);
         const daysSincePeriodStart = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
         
-        console.log(`[Reset Checker] 🎁 Days since weekly period start: ${daysSincePeriodStart}`);
+        console.log(`[Reset Checker] 🎁 Days since weekly rewards period start: ${daysSincePeriodStart}`);
+        console.log(`[Reset Checker] Period start: ${currentWeeklyPeriodStart}`);
         
         if (daysSincePeriodStart >= 7) {
-          console.log(`[Reset Checker] 🔄 WEEKLY REWARDS PERIOD RESET NEEDED! (${daysSincePeriodStart} days)`);
+          console.log(`[Reset Checker] 🔄 WEEKLY REWARDS PERIOD RESET NEEDED! (${daysSincePeriodStart} days passed)`);
           await resetWeeklyPeriod();
           needsSync = true;
         }
@@ -1005,6 +1007,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     
     // Sync to database
     if (userId && telegramId) {
+      console.log("📤 [Weekly Tasks Reset] Syncing to database...");
       await upsertTaskState({
         telegramId,
         userId,
@@ -1038,6 +1041,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     
     // Sync to database
     if (userId && telegramId) {
+      console.log("📤 [Daily Tasks Reset] Syncing to database...");
       await upsertTaskState({
         telegramId,
         userId,
