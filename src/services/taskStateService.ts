@@ -24,7 +24,7 @@ export async function getTaskState(telegramId: number): Promise<TaskState | null
       .from("user_task_state")
       .select("user_id, telegram_id, last_daily_reset, last_weekly_reset")
       .eq("telegram_id", telegramId)
-      .maybeSingle();
+      .maybeSingle() as any;
 
     if (error) {
       console.error("❌ [Task State] Load error:", error.message || error);

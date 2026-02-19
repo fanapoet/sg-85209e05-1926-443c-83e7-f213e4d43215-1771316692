@@ -66,8 +66,8 @@ interface GameState {
   currentRewardWeek: number;
   lastDailyClaimDate: string | null;
   currentWeeklyPeriodStart: string | null;
-  lastWeeklyResetDate: string | null;
-  lastDailyResetDate: string | null;
+  lastWeeklyReset: string | null;
+  lastDailyReset: string | null;
   claimedDailyRewards: Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>;
   ownedNFTs: Array<{ nftId: string; purchasePrice: number; timestamp: number }>;
   
@@ -178,8 +178,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [currentRewardWeek, setCurrentRewardWeek] = useState(() => safeGetItem("currentRewardWeek", 1));
   const [lastDailyClaimDate, setLastDailyClaimDate] = useState<string | null>(() => safeGetItem("lastDailyClaimDate", null));
   const [currentWeeklyPeriodStart, setCurrentWeeklyPeriodStart] = useState<string | null>(() => safeGetItem("currentWeeklyPeriodStart", null));
-  const [lastWeeklyResetDate, setLastWeeklyResetDate] = useState<string | null>(() => safeGetItem("lastWeeklyResetDate", null));
-  const [lastDailyResetDate, setLastDailyResetDate] = useState<string | null>(() => safeGetItem("lastDailyResetDate", null));
+  const [lastWeeklyReset, setLastWeeklyReset] = useState<string | null>(() => safeGetItem("lastWeeklyReset", null));
+  const [lastDailyReset, setLastDailyReset] = useState<string | null>(() => safeGetItem("lastDailyReset", null));
   const [claimedDailyRewards, setClaimedDailyRewards] = useState<Array<{ day: number; week: number; type: string; amount: number; timestamp: number }>>(() => safeGetItem("claimedDailyRewards", []));
   const [ownedNFTs, setOwnedNFTs] = useState<Array<{ nftId: string; purchasePrice: number; timestamp: number }>>(() => safeGetItem("ownedNFTs", []));
 
@@ -242,8 +242,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => { safeSetItem("currentRewardWeek", currentRewardWeek); }, [currentRewardWeek]);
   useEffect(() => { safeSetItem("lastDailyClaimDate", lastDailyClaimDate); }, [lastDailyClaimDate]);
   useEffect(() => { safeSetItem("currentWeeklyPeriodStart", currentWeeklyPeriodStart); }, [currentWeeklyPeriodStart]);
-  useEffect(() => { safeSetItem("lastWeeklyResetDate", lastWeeklyResetDate); }, [lastWeeklyResetDate]);
-  useEffect(() => { safeSetItem("lastDailyResetDate", lastDailyResetDate); }, [lastDailyResetDate]);
+  useEffect(() => { safeSetItem("lastWeeklyReset", lastWeeklyReset); }, [lastWeeklyReset]);
+  useEffect(() => { safeSetItem("lastDailyReset", lastDailyReset); }, [lastDailyReset]);
   useEffect(() => { safeSetItem("claimedDailyRewards", claimedDailyRewards); }, [claimedDailyRewards]);
   useEffect(() => { safeSetItem("ownedNFTs", ownedNFTs); }, [ownedNFTs]);
   useEffect(() => { safeSetItem("boosters", boosters); }, [boosters]);
@@ -351,23 +351,23 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           const { getTaskState } = await import("@/services/taskStateService");
           const currentState = await getTaskState(authResult.profile.telegram_id);
           
-          if (currentState?.lastWeeklyResetDate) {
-            setLastWeeklyResetDate(currentState.lastWeeklyResetDate);
+          if (currentState?.lastWeeklyReset) {
+            setLastWeeklyReset(currentState.lastWeeklyReset);
           } else {
-            setLastWeeklyResetDate(today);
+            setLastWeeklyReset(today);
           }
           
-          if (currentState?.lastDailyResetDate) {
-            setLastDailyResetDate(currentState.lastDailyResetDate);
+          if (currentState?.lastDailyReset) {
+            setLastDailyReset(currentState.lastDailyReset);
           } else {
-            setLastDailyResetDate(today);
+            setLastDailyReset(today);
           }
 
           await upsertTaskState({
             telegramId: authResult.profile.telegram_id,
             userId: authResult.profile.id,
-            lastDailyResetDate: currentState?.lastDailyResetDate || today,
-            lastWeeklyResetDate: currentState?.lastWeeklyResetDate || today
+            lastDailyReset: currentState?.lastDailyReset || today,
+            lastWeeklyReset: currentState?.lastWeeklyReset || today
           });
           console.log("✅ [TASK-STATE] Reset tracking record initialized");
         }
@@ -439,10 +439,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       lastDailyClaimDate: lastDailyClaimDate,
       dailyClaims: claimedDailyRewards,
       ownedNFTs: ownedNFTs,
-      lastDailyResetDate: lastDailyResetDate,
-      lastWeeklyResetDate: lastWeeklyResetDate
+      lastDailyReset: lastDailyReset,
+      lastWeeklyReset: lastWeeklyReset
     };
-  }, [bz, bb, xp, tier, energy, maxEnergy, boosters, quickChargeUsesRemaining, quickChargeCooldownUntil, totalTaps, todayTaps, bzPerHour, dailyStreak, currentRewardWeek, lastDailyClaimDate, claimedDailyRewards, ownedNFTs, lastDailyResetDate, lastWeeklyResetDate, quickChargeLastResetDate]);
+  }, [bz, bb, xp, tier, energy, maxEnergy, boosters, quickChargeUsesRemaining, quickChargeCooldownUntil, totalTaps, todayTaps, bzPerHour, dailyStreak, currentRewardWeek, lastDailyClaimDate, claimedDailyRewards, ownedNFTs, lastDailyReset, lastWeeklyReset, quickChargeLastResetDate]);
 
   // Manual Sync Function
   const manualSync = async () => {
@@ -540,8 +540,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       console.log(`[Reset Checker] 🔍 Checking at ${currentTime}`);
       console.log(`[Reset Checker] Current date: ${currentDate} (ISO: ${today})`);
       console.log(`[Reset Checker] Last daily reset: ${lastResetDate}`);
-      console.log(`[Reset Checker] Last daily reset (ISO): ${lastDailyResetDate}`);
-      console.log(`[Reset Checker] Last weekly reset (ISO): ${lastWeeklyResetDate}`);
+      console.log(`[Reset Checker] Last daily reset (ISO): ${lastDailyReset}`);
+      console.log(`[Reset Checker] Last weekly reset (ISO): ${lastWeeklyReset}`);
       console.log(`[Reset Checker] Weekly period start: ${currentWeeklyPeriodStart}`);
 
       let needsSync = false;
@@ -578,9 +578,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       }
 
       // CHECK 2: DAILY TASK RESET (ISO date comparison)
-      if (lastDailyResetDate && lastDailyResetDate !== today) {
+      if (lastDailyReset && lastDailyReset !== today) {
         console.log(`[Reset Checker] 🔄 DAILY TASKS RESET NEEDED!`);
-        console.log(`[Reset Checker] Previous: "${lastDailyResetDate}" → Current: "${today}"`);
+        console.log(`[Reset Checker] Previous: "${lastDailyReset}" → Current: "${today}"`);
         
         // Call the daily reset function
         await resetDailyTasks();
@@ -588,9 +588,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       }
 
       // CHECK 3: WEEKLY TASK RESET (7-day period check)
-      if (lastWeeklyResetDate) {
-        const lastWeeklyReset = new Date(lastWeeklyResetDate);
-        const daysSinceWeeklyReset = Math.floor((now.getTime() - lastWeeklyReset.getTime()) / (1000 * 60 * 60 * 24));
+      if (lastWeeklyReset) {
+        const lastWeeklyResetDateObj = new Date(lastWeeklyReset);
+        const daysSinceWeeklyReset = Math.floor((now.getTime() - lastWeeklyResetDateObj.getTime()) / (1000 * 60 * 60 * 24));
         
         console.log(`[Reset Checker] 📅 Days since weekly reset: ${daysSinceWeeklyReset}`);
         
@@ -639,7 +639,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       console.log("[Reset Checker] ⚠️ Checker unmounted, clearing interval");
       clearInterval(interval);
     };
-  }, [lastResetDate, lastDailyResetDate, lastWeeklyResetDate, currentWeeklyPeriodStart, toast]);
+  }, [lastResetDate, lastDailyReset, lastWeeklyReset, currentWeeklyPeriodStart, toast]);
 
   // Start automatic periodic sync (every 30 seconds)
   useEffect(() => {
@@ -988,10 +988,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     console.log("🔄 [Weekly Tasks Reset] Resetting weekly tasks");
     console.log("🔄 [Weekly Tasks Reset] New reset date:", today);
     
-    setLastWeeklyResetDate(today);
+    setLastWeeklyReset(today);
     
     // Update localStorage
-    safeSetItem("lastWeeklyResetDate", today);
+    safeSetItem("lastWeeklyReset", today);
     
     // Reset tasks in tasksService
     checkAndResetTasks();
@@ -1001,12 +1001,12 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       await upsertTaskState({
         telegramId,
         userId,
-        lastDailyResetDate: lastDailyResetDate || today,
-        lastWeeklyResetDate: today
+        lastDailyReset: lastDailyReset || today,
+        lastWeeklyReset: today
       });
       console.log("✅ [Weekly Tasks Reset] Synced to database");
     }
-  }, [userId, telegramId, lastDailyResetDate]);
+  }, [userId, telegramId, lastDailyReset]);
 
   const resetDailyTasks = useCallback(async () => {
     const today = new Date().toISOString().split('T')[0];
@@ -1015,14 +1015,14 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     console.log("🔄 [Daily Tasks Reset] New reset date:", today);
     
     // CRITICAL: Update React state IMMEDIATELY
-    setLastDailyResetDate(today);
+    setLastDailyReset(today);
     setTodayTaps(0);
     setHasClaimedIdleToday(false);
     
     console.log("✅ [Daily Tasks Reset] React state updated: todayTaps=0, hasClaimedIdleToday=false");
     
     // Update localStorage
-    safeSetItem("lastDailyResetDate", today);
+    safeSetItem("lastDailyReset", today);
     safeSetItem("bunergy_todayTaps", 0);
     safeSetItem("bunergy_hasClaimedIdleToday", false);
     
@@ -1034,12 +1034,12 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       await upsertTaskState({
         telegramId,
         userId,
-        lastDailyResetDate: today,
-        lastWeeklyResetDate: lastWeeklyResetDate || today
+        lastDailyReset: today,
+        lastWeeklyReset: lastWeeklyReset || today
       });
       console.log("✅ [Daily Tasks Reset] Synced to database");
     }
-  }, [userId, telegramId, lastWeeklyResetDate]);
+  }, [userId, telegramId, lastWeeklyReset]);
 
   const purchaseNFT = (nftId: string, priceInBB: number) => {
     // 1. Deduct BB
@@ -1075,7 +1075,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       telegramId,
       userId,
       bz, bb, energy, maxEnergy, bzPerHour, tier, xp, referralCount,
-      dailyStreak, currentRewardWeek, lastDailyClaimDate, currentWeeklyPeriodStart, lastWeeklyResetDate, lastDailyResetDate,
+      dailyStreak, currentRewardWeek, lastDailyClaimDate, currentWeeklyPeriodStart, lastWeeklyReset, lastDailyReset,
       claimedDailyRewards, ownedNFTs,
       totalTaps, todayTaps, totalTapIncome, totalUpgrades, totalConversions,
       hasClaimedIdleToday, lastClaimTimestamp,
