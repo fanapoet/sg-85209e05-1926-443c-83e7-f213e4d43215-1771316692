@@ -146,7 +146,7 @@ export function RewardsNFTsScreen() {
       if (savedChallenges) {
         setWeeklyChallenges(JSON.parse(savedChallenges));
       } else {
-        // Default Challenges
+        // Default Challenges - Initialize with current game state values
         setWeeklyChallenges([
           {
             key: "builder",
@@ -154,7 +154,7 @@ export function RewardsNFTsScreen() {
             icon: "Hammer",
             description: "Perform 50 upgrades",
             target: 50,
-            progress: 0,
+            progress: totalUpgrades || 0,
             reward: { type: "BZ", amount: 10000 },
             claimed: false
           },
@@ -164,7 +164,7 @@ export function RewardsNFTsScreen() {
             icon: "Users",
             description: "Invite 5 friends",
             target: 5,
-            progress: 0,
+            progress: referralCount || 0,
             reward: { type: "BB", amount: 0.005 },
             claimed: false
           },
@@ -174,7 +174,7 @@ export function RewardsNFTsScreen() {
             icon: "ArrowLeftRight",
             description: "Convert 10 times",
             target: 10,
-            progress: 0,
+            progress: totalConversions || 0,
             reward: { type: "XP", amount: 5000 },
             claimed: false
           }
@@ -191,8 +191,14 @@ export function RewardsNFTsScreen() {
   useEffect(() => {
     if (loading) return;
     
-    setWeeklyChallenges(prev => 
-      prev.map(c => {
+    console.log("🎯 [Weekly-Challenge] Updating progress with game state:", {
+      totalUpgrades,
+      referralCount,
+      totalConversions
+    });
+    
+    setWeeklyChallenges(prev => {
+      const updated = prev.map(c => {
         if (c.claimed) return c;
         let newProgress = c.progress;
         
@@ -200,9 +206,13 @@ export function RewardsNFTsScreen() {
         if (c.key === "recruiter") newProgress = referralCount || 0;
         if (c.key === "converter") newProgress = totalConversions || 0;
         
+        console.log(`🎯 [Weekly-Challenge] ${c.key}: ${c.progress} → ${newProgress}`);
+        
         return { ...c, progress: Math.min(newProgress, c.target) };
-      })
-    );
+      });
+      
+      return updated;
+    });
   }, [totalUpgrades, referralCount, totalConversions, loading]);
 
   // Persist Challenges to LocalStorage
