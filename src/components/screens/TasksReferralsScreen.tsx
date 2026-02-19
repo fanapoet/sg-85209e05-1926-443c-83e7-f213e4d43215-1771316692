@@ -49,7 +49,7 @@ export function TasksReferralsScreen() {
     totalConversions, 
     totalTaps,
     performTaskClaim,
-    lastDailyResetDate,
+    lastDailyReset,
     telegramId,
   } = useGameState();
   const { toast } = useToast();
@@ -286,14 +286,14 @@ export function TasksReferralsScreen() {
 
   // Reload tasks when daily reset occurs
   useEffect(() => {
-    if (!initialized || !lastDailyResetDate) return;
+    if (!initialized || !lastDailyReset) return;
     
     console.log("🔄 [Tasks-Reset] Daily reset detected, reloading tasks...");
     
     // Force rebuild of task lists
     setDailyTasks(buildTaskList(taskDefinitions.daily));
     setWeeklyTasks(buildTaskList(taskDefinitions.weekly));
-  }, [lastDailyResetDate, initialized]);
+  }, [lastDailyReset, initialized]);
 
   const handleClaim = async (task: Task) => {
     if (task.claimed || !task.completed) return;
