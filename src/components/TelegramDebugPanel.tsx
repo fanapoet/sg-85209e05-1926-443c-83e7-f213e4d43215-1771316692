@@ -151,11 +151,21 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
         <h3 className="font-bold mb-2">📅 Tasks Reset Status</h3>
         <div className="text-xs space-y-1 font-mono">
           <div>Last Daily Reset: <span className="text-blue-400">
-            {gameState.lastDailyReset ? new Date(gameState.lastDailyReset).toLocaleTimeString() : "NOT SET"}
+            {gameState.lastDailyReset || "NOT SET"}
           </span></div>
           <div>Last Weekly Reset: <span className="text-blue-400">
-            {gameState.lastWeeklyReset ? new Date(gameState.lastWeeklyReset).toLocaleTimeString() : "NOT SET"}
+            {gameState.lastWeeklyReset || "NOT SET"}
           </span></div>
+          {gameState.lastDailyReset && (
+            <div>Days Since Daily: <span className="text-yellow-400">
+              {Math.floor((Date.now() - new Date(gameState.lastDailyReset + 'T00:00:00Z').getTime()) / (1000 * 60 * 60 * 24))}
+            </span></div>
+          )}
+          {gameState.lastWeeklyReset && (
+            <div>Days Since Weekly: <span className="text-yellow-400">
+              {Math.floor((Date.now() - new Date(gameState.lastWeeklyReset + 'T00:00:00Z').getTime()) / (1000 * 60 * 60 * 24))}
+            </span></div>
+          )}
         </div>
       </div>
 

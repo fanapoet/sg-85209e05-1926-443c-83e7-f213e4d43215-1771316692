@@ -550,8 +550,24 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       console.log(`[Reset Checker] Last daily reset (ISO): ${lastDailyReset}`);
       console.log(`[Reset Checker] Last weekly reset (ISO): ${lastWeeklyReset}`);
       console.log(`[Reset Checker] Weekly period start: ${currentWeeklyPeriodStart}`);
+      console.log(`[Reset Checker] QuickCharge uses: ${quickChargeUsesRemaining}`);
 
       let needsSync = false;
+
+      // INITIALIZE lastDailyReset and lastWeeklyReset if null
+      if (!lastDailyReset) {
+        console.log(`[Reset Checker] ⚠️ lastDailyReset is null, initializing to today: ${today}`);
+        setLastDailyReset(today);
+        safeSetItem("lastDailyReset", today);
+        needsSync = true;
+      }
+
+      if (!lastWeeklyReset) {
+        console.log(`[Reset Checker] ⚠️ lastWeeklyReset is null, initializing to today: ${today}`);
+        setLastWeeklyReset(today);
+        safeSetItem("lastWeeklyReset", today);
+        needsSync = true;
+      }
 
       // CHECK 1: DAILY RESET (local toDateString comparison)
       if (currentDate !== lastResetDate) {
@@ -559,6 +575,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         console.log(`[Reset Checker] Previous: "${lastResetDate}" → Current: "${currentDate}"`);
 
         // Reset ALL daily counters IMMEDIATELY
+        console.log(`[Reset Checker] 🔄 Resetting QuickCharge: 0 → 5 uses`);
         setTodayTaps(0);
         setHasClaimedIdleToday(false);
         setQuickChargeUsesRemaining(5);
@@ -574,11 +591,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         safeSetItem("bunergy_qc_last_reset", currentDate);
         safeSetItem("bunergy_lastResetDate", currentDate);
 
-        console.log(`[Reset Checker] ✅ Daily counters reset complete!`);
+        console.log(`[Reset Checker] ✅ Daily counters reset complete! QuickCharge now has 5 uses`);
         
         toast({
           title: "🌅 New Day!",
-          description: "Daily tasks and limits have been reset.",
+          description: "Daily tasks and limits have been reset. QuickCharge restored!",
         });
         
         needsSync = true;
@@ -648,7 +665,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       console.log("[Reset Checker] ⚠️ Checker unmounted, clearing interval");
       clearInterval(interval);
     };
-  }, [lastResetDate, lastDailyReset, lastWeeklyReset, currentWeeklyPeriodStart, toast]);
+  }, [lastResetDate, lastDailyReset, lastWeeklyReset, currentWeeklyPeriodStart, quickChargeUsesRemaining, toast]);
 
   // Start automatic periodic sync (every 30 seconds)
   useEffect(() => {
