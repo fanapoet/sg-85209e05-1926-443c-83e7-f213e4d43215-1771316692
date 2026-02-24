@@ -153,19 +153,60 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
           <div>Last Daily Reset: <span className="text-blue-400">
             {gameState.lastDailyReset || "NOT SET"}
           </span></div>
-          <div>Last Weekly Reset: <span className="text-blue-400">
-            {gameState.lastWeeklyReset || "NOT SET"}
-          </span></div>
           {gameState.lastDailyReset && (
             <div>Days Since Daily: <span className="text-yellow-400">
               {Math.floor((Date.now() - new Date(gameState.lastDailyReset + 'T00:00:00Z').getTime()) / (1000 * 60 * 60 * 24))}
             </span></div>
           )}
+          <div>Last Weekly Reset: <span className="text-blue-400">
+            {gameState.lastWeeklyReset || "NOT SET"}
+          </span></div>
           {gameState.lastWeeklyReset && (
             <div>Days Since Weekly: <span className="text-yellow-400">
               {Math.floor((Date.now() - new Date(gameState.lastWeeklyReset + 'T00:00:00Z').getTime()) / (1000 * 60 * 60 * 24))}
             </span></div>
           )}
+        </div>
+      </div>
+
+      {/* QuickCharge Debug Status */}
+      <div className="bg-purple-900 p-4 rounded-lg mb-4">
+        <h3 className="font-bold mb-2">⚡ QuickCharge Debug Status</h3>
+        <div className="text-xs space-y-1 font-mono">
+          <div>Uses Remaining (State): <span className="text-green-400">
+            {gameState.quickChargeUsesRemaining}
+          </span></div>
+          <div>Cooldown Until (State): <span className="text-orange-400">
+            {gameState.quickChargeCooldownUntil ? new Date(gameState.quickChargeCooldownUntil).toLocaleString() : "NULL"}
+          </span></div>
+          <div className="mt-2 pt-2 border-t border-purple-700">
+            <div className="text-purple-300 mb-1">📦 LocalStorage Values:</div>
+            <div>QC Uses: <span className="text-cyan-400">
+              {typeof window !== 'undefined' ? localStorage.getItem("bunergy_qc_uses") || "NOT SET" : "N/A"}
+            </span></div>
+            <div>QC Cooldown: <span className="text-cyan-400">
+              {typeof window !== 'undefined' ? localStorage.getItem("bunergy_qc_cooldown") || "NOT SET" : "N/A"}
+            </span></div>
+            <div>QC Last Reset: <span className="text-cyan-400">
+              {typeof window !== 'undefined' ? localStorage.getItem("bunergy_qc_last_reset") || "NOT SET" : "N/A"}
+            </span></div>
+            <div>Last Reset Date: <span className="text-cyan-400">
+              {typeof window !== 'undefined' ? localStorage.getItem("bunergy_lastResetDate") || "NOT SET" : "N/A"}
+            </span></div>
+          </div>
+          <div className="mt-2 pt-2 border-t border-purple-700">
+            <div className="text-purple-300 mb-1">🔍 Reset Logic Check:</div>
+            <div>Today's Date: <span className="text-yellow-400">
+              {new Date().toDateString()}
+            </span></div>
+            <div>Should Reset: <span className={
+              (typeof window !== 'undefined' && localStorage.getItem("bunergy_lastResetDate") !== new Date().toDateString()) 
+                ? "text-green-400" : "text-red-400"
+            }>
+              {typeof window !== 'undefined' && localStorage.getItem("bunergy_lastResetDate") !== new Date().toDateString() 
+                ? "YES (different date)" : "NO (same date)"}
+            </span></div>
+          </div>
         </div>
       </div>
 
