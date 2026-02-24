@@ -146,6 +146,19 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
+      {/* Tasks Reset Status */}
+      <div className="bg-purple-900 p-4 rounded-lg mb-4">
+        <h3 className="font-bold mb-2">📅 Tasks Reset Status</h3>
+        <div className="text-xs space-y-1 font-mono">
+          <div>Last Daily Reset: <span className="text-blue-400">
+            {gameState.lastDailyReset ? new Date(gameState.lastDailyReset).toLocaleTimeString() : "NOT SET"}
+          </span></div>
+          <div>Last Weekly Reset: <span className="text-blue-400">
+            {gameState.lastWeeklyReset ? new Date(gameState.lastWeeklyReset).toLocaleTimeString() : "NOT SET"}
+          </span></div>
+        </div>
+      </div>
+
       {/* Game State */}
       <div className="bg-purple-900 p-4 rounded-lg mb-4">
         <h3 className="font-bold mb-2">🎮 Current Game State</h3>

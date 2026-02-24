@@ -294,6 +294,88 @@ export function checkAndResetTasks(): void {
 }
 
 /**
+ * Force reset all daily tasks (called when daily reset date changes)
+ */
+export function resetDailyTasks(): void {
+  console.log("🌅 [Tasks-Reset-Daily] Force resetting all daily tasks...");
+  
+  const tasks = getLocalTaskProgress();
+  const today = new Date().toISOString().split("T")[0];
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  
+  let resetCount = 0;
+
+  tasks.forEach((task, taskId) => {
+    if (task.taskType === "daily") {
+      console.log(`🔄 [Tasks-Reset-Daily] Resetting ${taskId}`);
+      
+      task.currentProgress = 0;
+      task.completed = false;
+      task.claimed = false;
+      task.completedAt = undefined;
+      task.claimedAt = undefined;
+      task.resetAt = today;
+      task.expiresAt = tomorrow.toISOString();
+      task.lastUpdated = Date.now();
+
+      tasks.set(taskId, task);
+      resetCount++;
+    }
+  });
+
+  if (resetCount > 0) {
+    saveLocalTaskProgress(tasks);
+    console.log(`✅ [Tasks-Reset-Daily] Reset ${resetCount} daily tasks`);
+    scheduleSyncToServer();
+  } else {
+    console.log("ℹ️ [Tasks-Reset-Daily] No daily tasks to reset");
+  }
+}
+
+/**
+ * Force reset all weekly tasks (called when weekly reset date changes)
+ */
+export function resetWeeklyTasks(): void {
+  console.log("📅 [Tasks-Reset-Weekly] Force resetting all weekly tasks...");
+  
+  const tasks = getLocalTaskProgress();
+  const today = new Date().toISOString().split("T")[0];
+  const nextWeek = new Date();
+  nextWeek.setDate(nextWeek.getDate() + 7);
+  nextWeek.setHours(0, 0, 0, 0);
+  
+  let resetCount = 0;
+
+  tasks.forEach((task, taskId) => {
+    if (task.taskType === "weekly") {
+      console.log(`🔄 [Tasks-Reset-Weekly] Resetting ${taskId}`);
+      
+      task.currentProgress = 0;
+      task.completed = false;
+      task.claimed = false;
+      task.completedAt = undefined;
+      task.claimedAt = undefined;
+      task.resetAt = today;
+      task.expiresAt = nextWeek.toISOString();
+      task.lastUpdated = Date.now();
+
+      tasks.set(taskId, task);
+      resetCount++;
+    }
+  });
+
+  if (resetCount > 0) {
+    saveLocalTaskProgress(tasks);
+    console.log(`✅ [Tasks-Reset-Weekly] Reset ${resetCount} weekly tasks`);
+    scheduleSyncToServer();
+  } else {
+    console.log("ℹ️ [Tasks-Reset-Weekly] No weekly tasks to reset");
+  }
+}
+
+/**
  * Schedule background sync (debounced)
  */
 function scheduleSyncToServer(): void {

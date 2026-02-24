@@ -879,7 +879,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const performDailyClaim = async (day: number, week: number, type: "BZ" | "BB" | "XP", amount: number) => {
     const today = new Date().toDateString();
     
-    // 1. Update State & LocalStorage (Instant UX)
+    // 1. Update State & Local Storage (Instant UX)
     setDailyStreak(day);
     setCurrentRewardWeek(week);
     setLastDailyClaimDate(today);
