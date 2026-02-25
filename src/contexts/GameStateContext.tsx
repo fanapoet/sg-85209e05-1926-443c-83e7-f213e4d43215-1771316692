@@ -135,6 +135,16 @@ const safeGetItem = (key: string, defaultValue: any) => {
   try {
     if (typeof window === "undefined") return defaultValue;
     const item = localStorage.getItem(key);
+    // Handle double-quoted strings if present
+    if (item && item.startsWith('"') && item.endsWith('"') && !item.includes('{') && !item.includes('[')) {
+      try {
+        const parsed = JSON.parse(item);
+        // If parsing resulted in a string that is still quoted or same value, return parsed
+        return parsed;
+      } catch {
+        return item;
+      }
+    }
     return item ? JSON.parse(item) : defaultValue;
   } catch {
     return defaultValue;
@@ -144,10 +154,25 @@ const safeGetItem = (key: string, defaultValue: any) => {
 const safeSetItem = (key: string, value: any) => {
   try {
     if (typeof window !== "undefined") {
-      localStorage.setItem(key, JSON.stringify(value));
+      // If it's already a string, don't stringify again unless it's a JSON string
+      const valueToStore = typeof value === 'string' ? value : JSON.stringify(value);
+      localStorage.setItem(key, valueToStore);
     }
   } catch (error) {
     console.error("Failed to save to localStorage:", error);
+  }
+};
+
+// Helper to safely parse dates from localStorage that might be raw strings or JSON strings
+const safeParse = (value: string | null): string | null => {
+  if (!value) return null;
+  try {
+    // Try parsing as JSON first
+    const parsed = JSON.parse(value);
+    return typeof parsed === 'string' ? parsed : value;
+  } catch {
+    // If parse fails, it's likely a raw string
+    return value;
   }
 };
 
@@ -540,29 +565,35 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     
     const checkResets = async () => {
       const now = new Date();
-      const currentDate = now.toDateString();
-      const currentTime = now.toLocaleTimeString();
+      const currentDateString = now.toDateString();
       const today = now.toISOString().split("T")[0];
       
-      console.log(`[Reset Checker] 🔍 Checking at ${currentTime}`);
-      console.log(`[Reset Checker] Current date: ${currentDate} (ISO: ${today})`);
-      console.log(`[Reset Checker] Last daily reset: ${lastResetDate}`);
-      console.log(`[Reset Checker] Last daily reset (ISO): ${lastDailyReset}`);
-      console.log(`[Reset Checker] Last weekly reset (ISO): ${lastWeeklyReset}`);
-      console.log(`[Reset Checker] Weekly period start: ${currentWeeklyPeriodStart}`);
-      console.log(`[Reset Checker] QuickCharge uses: ${quickChargeUsesRemaining}`);
+      // Read CURRENT values from localStorage (source of truth)
+      const storedLastResetDate = localStorage.getItem("bunergy_lastResetDate");
+      const storedDailyReset = localStorage.getItem("lastDailyReset");
+      const storedWeeklyReset = localStorage.getItem("lastWeeklyReset");
+      const storedWeeklyPeriodStart = localStorage.getItem("currentWeeklyPeriodStart");
+      
+      const lastResetDateStr = safeParse(storedLastResetDate);
+      const lastDailyResetStr = safeParse(storedDailyReset);
+      const lastWeeklyResetStr = safeParse(storedWeeklyReset);
+      const weeklyPeriodStartStr = safeParse(storedWeeklyPeriodStart);
+      
+      console.log(`[Reset Checker] 🔍 Checking at ${now.toLocaleTimeString()}`);
+      console.log(`[Reset Checker] Today: ${currentDateString} (ISO: ${today})`);
+      console.log(`[Reset Checker] Stored Last Reset: ${lastResetDateStr} (Raw: ${storedLastResetDate})`);
 
       let needsSync = false;
 
       // INITIALIZE lastDailyReset and lastWeeklyReset if null
-      if (!lastDailyReset) {
+      if (!lastDailyResetStr) {
         console.log(`[Reset Checker] ⚠️ lastDailyReset is null, initializing to today: ${today}`);
         setLastDailyReset(today);
         safeSetItem("lastDailyReset", today);
         needsSync = true;
       }
 
-      if (!lastWeeklyReset) {
+      if (!lastWeeklyResetStr) {
         console.log(`[Reset Checker] ⚠️ lastWeeklyReset is null, initializing to today: ${today}`);
         setLastWeeklyReset(today);
         safeSetItem("lastWeeklyReset", today);
@@ -570,9 +601,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       }
 
       // CHECK 1: DAILY RESET (local toDateString comparison)
-      if (currentDate !== lastResetDate) {
+      if (currentDateString !== lastResetDateStr) {
         console.log(`[Reset Checker] 🔄 NEW DAY DETECTED!`);
-        console.log(`[Reset Checker] Previous: "${lastResetDate}" → Current: "${currentDate}"`);
+        console.log(`[Reset Checker] Previous: "${lastResetDateStr}" → Current: "${currentDateString}"`);
 
         // Reset ALL daily counters IMMEDIATELY
         console.log(`[Reset Checker] 🔄 Resetting QuickCharge: 0 → 5 uses`);
@@ -580,16 +611,16 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         setHasClaimedIdleToday(false);
         setQuickChargeUsesRemaining(5);
         setQuickChargeCooldownUntil(null);
-        setQuickChargeLastResetDate(currentDate);
-        setLastResetDate(currentDate);
+        setQuickChargeLastResetDate(currentDateString);
+        setLastResetDate(currentDateString);
 
         // IMMEDIATELY write to localStorage
         safeSetItem("bunergy_todayTaps", 0);
         safeSetItem("bunergy_hasClaimedIdleToday", false);
         safeSetItem("bunergy_qc_uses", 5);
         safeSetItem("bunergy_qc_cooldown", null);
-        safeSetItem("bunergy_qc_last_reset", currentDate);
-        safeSetItem("bunergy_lastResetDate", currentDate);
+        safeSetItem("bunergy_qc_last_reset", currentDateString);
+        safeSetItem("bunergy_lastResetDate", currentDateString);
 
         console.log(`[Reset Checker] ✅ Daily counters reset complete! QuickCharge now has 5 uses`);
         
@@ -602,22 +633,22 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       }
 
       // CHECK 2: DAILY TASK RESET (ISO date comparison) - FIXED
-      if (lastDailyReset && lastDailyReset !== today) {
+      if (lastDailyResetStr && lastDailyResetStr !== today) {
         console.log(`[Reset Checker] 🔄 DAILY TASKS RESET NEEDED!`);
-        console.log(`[Reset Checker] DB date: "${lastDailyReset}" → Current: "${today}"`);
+        console.log(`[Reset Checker] DB date: "${lastDailyResetStr}" → Current: "${today}"`);
         
         await resetDailyTasks();
         needsSync = true;
       }
 
       // CHECK 3: WEEKLY TASK RESET (7-day period check) - FIXED
-      if (lastWeeklyReset) {
-        const lastWeeklyResetDateObj = new Date(lastWeeklyReset + 'T00:00:00Z');
+      if (lastWeeklyResetStr) {
+        const lastWeeklyResetDateObj = new Date(lastWeeklyResetStr + 'T00:00:00Z');
         const nowUTC = new Date(today + 'T00:00:00Z');
         const daysSinceWeeklyReset = Math.floor((nowUTC.getTime() - lastWeeklyResetDateObj.getTime()) / (1000 * 60 * 60 * 24));
         
         console.log(`[Reset Checker] 📅 Days since weekly task reset: ${daysSinceWeeklyReset}`);
-        console.log(`[Reset Checker] Last weekly reset: ${lastWeeklyReset}`);
+        console.log(`[Reset Checker] Last weekly reset: ${lastWeeklyResetStr}`);
         
         if (daysSinceWeeklyReset >= 7) {
           console.log(`[Reset Checker] 🔄 WEEKLY TASKS RESET NEEDED! (${daysSinceWeeklyReset} days passed)`);
@@ -627,12 +658,12 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       }
 
       // CHECK 4: WEEKLY REWARDS PERIOD RESET (7-day period check) - FIXED
-      if (currentWeeklyPeriodStart) {
-        const periodStart = new Date(currentWeeklyPeriodStart);
+      if (weeklyPeriodStartStr) {
+        const periodStart = new Date(weeklyPeriodStartStr);
         const daysSincePeriodStart = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
         
         console.log(`[Reset Checker] 🎁 Days since weekly rewards period start: ${daysSincePeriodStart}`);
-        console.log(`[Reset Checker] Period start: ${currentWeeklyPeriodStart}`);
+        console.log(`[Reset Checker] Period start: ${weeklyPeriodStartStr}`);
         
         if (daysSincePeriodStart >= 7) {
           console.log(`[Reset Checker] 🔄 WEEKLY REWARDS PERIOD RESET NEEDED! (${daysSincePeriodStart} days passed)`);
