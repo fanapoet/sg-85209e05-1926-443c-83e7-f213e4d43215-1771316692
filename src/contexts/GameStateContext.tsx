@@ -634,7 +634,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
               ...getFullStateForSync(),
               quickChargeUsesRemaining: 5,
               quickChargeCooldownUntil: null,
-              quickChargeLastReset: Date.now(), // Fixed: Pass timestamp number
+              quickChargeLastReset: currentDateString,
               currentEnergy: energy,
               todayTaps: 0
             });
@@ -1126,6 +1126,143 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     // 3. Sync will happen on next manual/auto sync
     console.log("🔄 [NFT-PURCHASE] NFT purchase will sync on next sync");
   };
+
+  // COMBINED DAILY + WEEKLY RESET CHECKER - FIXED VERSION
+  useEffect(() => {
+    // Prevent resets running before server data loads (avoids overwrite race condition)
+    if (!isInitialized) {
+      console.log("[Reset Checker] ⏳ Waiting for initialization...");
+      return;
+    }
+
+    console.log("[Reset Checker] ✅ Reset checker active");
+    
+    const checkResets = async () => {
+      const now = new Date();
+      const currentDateString = now.toDateString();
+      const today = now.toISOString().split("T")[0];
+      
+      // Read CURRENT values from localStorage (source of truth)
+      const storedLastResetDate = localStorage.getItem("bunergy_lastResetDate");
+      const storedDailyReset = localStorage.getItem("lastDailyReset");
+      const storedWeeklyReset = localStorage.getItem("lastWeeklyReset");
+      const storedWeeklyPeriodStart = localStorage.getItem("currentWeeklyPeriodStart");
+      
+      const lastResetDateStr = safeParse(storedLastResetDate);
+      const lastDailyResetStr = safeParse(storedDailyReset);
+      const lastWeeklyResetStr = safeParse(storedWeeklyReset);
+      const weeklyPeriodStartStr = safeParse(storedWeeklyPeriodStart);
+      
+      console.log(`[Reset Checker] 🔍 Checking at ${now.toLocaleTimeString()}`);
+      
+      let needsSync = false;
+
+      // INITIALIZE lastDailyReset and lastWeeklyReset if null
+      if (!lastDailyResetStr) {
+        setLastDailyReset(today);
+        safeSetItem("lastDailyReset", today);
+        needsSync = true;
+      }
+
+      if (!lastWeeklyResetStr) {
+        setLastWeeklyReset(today);
+        safeSetItem("lastWeeklyReset", today);
+        needsSync = true;
+      }
+
+      // CHECK 1: DAILY RESET (local toDateString comparison)
+      if (currentDateString !== lastResetDateStr && !hasResetTodayRef.current) {
+        console.log(`[Reset Checker] 🔄 NEW DAY DETECTED!`);
+        
+        // Mark reset in progress
+        hasResetTodayRef.current = true;
+
+        // ATOMIC WRITE TO LOCALSTORAGE
+        localStorage.setItem("bunergy_todayTaps", "0");
+        localStorage.setItem("bunergy_hasClaimedIdleToday", "false");
+        localStorage.setItem("bunergy_qc_uses", "5");
+        localStorage.setItem("bunergy_qc_cooldown", "null");
+        localStorage.setItem("bunergy_qc_last_reset", currentDateString);
+        localStorage.setItem("bunergy_lastResetDate", currentDateString);
+
+        // Update React state
+        setTodayTaps(0);
+        setHasClaimedIdleToday(false);
+        setQuickChargeUsesRemaining(5);
+        setQuickChargeCooldownUntil(null);
+        setQuickChargeLastResetDate(currentDateString);
+        setLastResetDate(currentDateString);
+
+        console.log(`[Reset Checker] ✅ Daily reset complete! QuickCharge restored.`);
+        
+        // IMMEDIATE DATABASE SYNC
+        setTimeout(async () => {
+          try {
+            await syncPlayerState({
+              ...getFullStateForSync(),
+              quickChargeUsesRemaining: 5,
+              quickChargeCooldownUntil: null,
+              quickChargeLastReset: currentDateString,
+              currentEnergy: energy,
+              todayTaps: 0
+            });
+            console.log(`[Reset Checker] ✅ Reset synced to database`);
+          } catch (error) {
+            console.error(`[Reset Checker] ❌ Failed to sync reset:`, error);
+          }
+        }, 100);
+        
+        toast({
+          title: "🌅 New Day!",
+          description: "Daily tasks and limits have been reset. QuickCharge restored!",
+        });
+        
+        needsSync = true;
+      }
+
+      // CHECK 2: DAILY TASK RESET
+      if (lastDailyResetStr && lastDailyResetStr !== today) {
+        await resetDailyTasks();
+        needsSync = true;
+      }
+
+      // CHECK 3: WEEKLY TASK RESET
+      if (lastWeeklyResetStr) {
+        const lastWeeklyResetDateObj = new Date(lastWeeklyResetStr + 'T00:00:00Z');
+        const nowUTC = new Date(today + 'T00:00:00Z');
+        const daysSinceWeeklyReset = Math.floor((nowUTC.getTime() - lastWeeklyResetDateObj.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysSinceWeeklyReset >= 7) {
+          await resetWeeklyTasks();
+          needsSync = true;
+        }
+      }
+
+      // CHECK 4: WEEKLY REWARDS PERIOD
+      if (weeklyPeriodStartStr) {
+        const periodStart = new Date(weeklyPeriodStartStr);
+        const daysSincePeriodStart = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysSincePeriodStart >= 7) {
+          await resetWeeklyPeriod();
+          needsSync = true;
+        }
+      }
+
+      if (needsSync) {
+        setTimeout(() => syncPlayerState(getFullStateForSync()), 500);
+      }
+    };
+
+    // Run check immediately and then every minute
+    checkResets();
+    const interval = setInterval(checkResets, 60000);
+
+    return () => {
+      clearInterval(interval);
+      hasResetTodayRef.current = false;
+    };
+  }, [isInitialized, lastResetDate, lastDailyReset, lastWeeklyReset, currentWeeklyPeriodStart, quickChargeUsesRemaining, toast, resetDailyTasks, resetWeeklyTasks, getFullStateForSync, energy]);
 
   return (
     <GameStateContext.Provider value={{
