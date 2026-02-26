@@ -562,8 +562,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   // State Ref for Auto-Sync (Prevents timer reset on state change)
   const stateRef = useRef(getFullStateForSync);
   useEffect(() => { stateRef.current = getFullStateForSync; }, [getFullStateForSync]);
+  
+  // Track daily reset status to prevent duplicates in same session
+  const hasResetTodayRef = useRef(false);
 
-  // COMBINED DAILY + WEEKLY RESET CHECKER
+  // COMBINED DAILY + WEEKLY RESET CHECKER - FIXED VERSION
   useEffect(() => {
     console.log("[Reset Checker] ✅ Reset checker mounted and active");
     
