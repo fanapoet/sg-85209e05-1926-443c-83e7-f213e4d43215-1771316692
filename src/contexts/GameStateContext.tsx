@@ -378,16 +378,20 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           
           if (currentState?.lastWeeklyReset) {
             setLastWeeklyReset(currentState.lastWeeklyReset);
+            safeSetItem("lastWeeklyReset", currentState.lastWeeklyReset);
             console.log("✅ [TASK-STATE] Loaded lastWeeklyReset from DB:", currentState.lastWeeklyReset);
           } else {
             setLastWeeklyReset(today);
+            safeSetItem("lastWeeklyReset", today);
           }
           
           if (currentState?.lastDailyReset) {
             setLastDailyReset(currentState.lastDailyReset);
+            safeSetItem("lastDailyReset", currentState.lastDailyReset);
             console.log("✅ [TASK-STATE] Loaded lastDailyReset from DB:", currentState.lastDailyReset);
           } else {
             setLastDailyReset(today);
+            safeSetItem("lastDailyReset", today);
           }
 
           // Only create record if user doesn't have one (new user)
@@ -601,26 +605,30 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       }
 
       // CHECK 1: DAILY RESET (local toDateString comparison)
-      if (currentDateString !== lastResetDateStr) {
+      if (currentDateString !== lastResetDateStr && !hasResetTodayRef.current) {
         console.log(`[Reset Checker] 🔄 NEW DAY DETECTED!`);
         console.log(`[Reset Checker] Previous: "${lastResetDateStr}" → Current: "${currentDateString}"`);
 
-        // Reset ALL daily counters IMMEDIATELY
-        console.log(`[Reset Checker] 🔄 Resetting QuickCharge: 0 → 5 uses`);
+        // Mark reset in progress to prevent duplicate resets in this session
+        hasResetTodayRef.current = true;
+
+        // ATOMIC WRITE TO LOCALSTORAGE - Write first, then update state
+        localStorage.setItem("bunergy_todayTaps", "0");
+        localStorage.setItem("bunergy_hasClaimedIdleToday", "false");
+        localStorage.setItem("bunergy_qc_uses", "5");
+        localStorage.setItem("bunergy_qc_cooldown", "null");
+        localStorage.setItem("bunergy_qc_last_reset", currentDateString);
+        localStorage.setItem("bunergy_lastResetDate", currentDateString);
+        console.log(`[Reset Checker] ✅ LocalStorage UPDATED - QuickCharge reset to 5 uses`);
+
+        // Now update React state to match
         setTodayTaps(0);
         setHasClaimedIdleToday(false);
         setQuickChargeUsesRemaining(5);
         setQuickChargeCooldownUntil(null);
         setQuickChargeLastResetDate(currentDateString);
         setLastResetDate(currentDateString);
-
-        // IMMEDIATELY write to localStorage
-        safeSetItem("bunergy_todayTaps", 0);
-        safeSetItem("bunergy_hasClaimedIdleToday", false);
-        safeSetItem("bunergy_qc_uses", 5);
-        safeSetItem("bunergy_qc_cooldown", null);
-        safeSetItem("bunergy_qc_last_reset", currentDateString);
-        safeSetItem("bunergy_lastResetDate", currentDateString);
+        console.log(`[Reset Checker] ✅ React state UPDATED - QuickCharge: 0 → 5 uses`);
 
         console.log(`[Reset Checker] ✅ Daily counters reset complete! QuickCharge now has 5 uses`);
         
