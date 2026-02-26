@@ -635,6 +635,28 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
         console.log(`[Reset Checker] ✅ Daily counters reset complete! QuickCharge now has 5 uses`);
         
+        // IMMEDIATE DATABASE SYNC - Critical to prevent server overwrite
+        console.log(`[Reset Checker] 📤 SYNCING RESET TO DATABASE IMMEDIATELY...`);
+        setTimeout(async () => {
+          try {
+            const result = await syncPlayerState({
+              ...getFullStateForSync(),
+              quickChargeUsesRemaining: 5,
+              quickChargeCooldownUntil: null,
+              quickChargeLastReset: currentDateString,
+              currentEnergy: energy,
+              todayTaps: 0
+            });
+            if (result.success) {
+              console.log(`[Reset Checker] ✅ Reset synced to database successfully`);
+            } else {
+              console.error(`[Reset Checker] ❌ Failed to sync reset to database:`, result.error);
+            }
+          } catch (error) {
+            console.error(`[Reset Checker] ❌ Exception syncing reset to database:`, error);
+          }
+        }, 100);
+        
         toast({
           title: "🌅 New Day!",
           description: "Daily tasks and limits have been reset. QuickCharge restored!",
