@@ -337,6 +337,15 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           
           setQuickChargeUsesRemaining(Number(serverData.quickcharge_uses_remaining));
           setQuickChargeCooldownUntil(serverData.quickcharge_cooldown_until ? new Date(serverData.quickcharge_cooldown_until).getTime() : null);
+          
+          // CRITICAL: Sync reset dates from server to prevent "Stuck at 0" bug
+          if (serverData.quickcharge_last_reset) {
+             const serverResetDate = new Date(serverData.quickcharge_last_reset).toDateString();
+             setQuickChargeLastResetDate(serverResetDate);
+             // Also update main reset date if it looks like server is behind, to trigger re-check
+             setLastResetDate(serverResetDate); 
+             console.log("🔄 [GameState] Synced reset date from server:", serverResetDate);
+          }
         }
 
         // Load reward state
@@ -366,7 +375,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         }
 
         // Load Task State & Initialize reset tracking record
-        if (userId && telegramId) {
+        // FIX: Use authResult directly instead of state variables (which are null in closure)
+        if (authResult.profile.id && authResult.profile.telegram_id) {
           await loadTasksFromDB();
           console.log("✅ [GameState] Tasks loaded and merged");
           
@@ -1065,7 +1075,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
               ...getFullStateForSync(),
               quickChargeUsesRemaining: 5,
               quickChargeCooldownUntil: null,
-              quickChargeLastReset: currentDateString,
+              quickChargeLastReset: Date.now(), // FIX: Send timestamp number, not string
               currentEnergy: energy,
               todayTaps: 0
             });
