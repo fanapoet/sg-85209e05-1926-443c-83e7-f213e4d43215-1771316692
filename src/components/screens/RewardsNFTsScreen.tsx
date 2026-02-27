@@ -672,7 +672,7 @@ export function RewardsNFTsScreen() {
       </Card>
 
       <Card className="p-4">
-        <div className="space-y-4">
+        <div className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-primary" />
@@ -682,106 +682,106 @@ export function RewardsNFTsScreen() {
               {ownedNFTs.length}/{nfts.length} Owned
             </Badge>
           </div>
+        </div>
 
-          <div className="space-y-3">
-            {nfts.map((nft) => {
-              const Icon = getIconComponent(nft.icon);
-              const progressText = getProgressText(nft);
-              const progressPercent = getProgressPercent(nft);
-              const showProgressBar = shouldShowProgressBar(nft);
+        <div className="space-y-3">
+          {nfts.map((nft) => {
+            const Icon = getIconComponent(nft.icon);
+            const progressText = getProgressText(nft);
+            const progressPercent = getProgressPercent(nft);
+            const showProgressBar = shouldShowProgressBar(nft);
 
-              return (
-                <Card
-                  key={nft.key}
-                  className={`p-6 ${
-                    nft.owned
-                      ? "border-green-500 bg-green-50 dark:bg-green-950"
-                      : !nft.requirementMet
-                      ? "opacity-60"
-                      : ""
-                  }`}
-                >
-                  <div className="flex items-start gap-4 mb-4">
-                    <div className={`p-3 rounded-lg flex-shrink-0 ${nft.owned ? "bg-green-500/20" : "bg-primary/10"}`}>
-                      <Icon className={`h-6 w-6 ${nft.owned ? "text-green-600" : "text-primary"}`} />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <h4 className="font-semibold text-lg">{nft.name}</h4>
-                        {nft.owned && (
-                          <Badge variant="default" className="bg-green-600 flex-shrink-0">
-                            <Check className="h-3 w-3 mr-1" />
-                            Owned
-                          </Badge>
-                        )}
-                      </div>
-
-                      <p className="text-sm text-muted-foreground mb-3">
-                        {nft.description}
-                      </p>
-                    </div>
+            return (
+              <Card
+                key={nft.key}
+                className={`p-6 ${
+                  nft.owned
+                    ? "border-green-500 bg-green-50 dark:bg-green-950"
+                    : !nft.requirementMet
+                    ? "opacity-60"
+                    : ""
+                }`}
+              >
+                <div className="flex items-start gap-4 mb-4">
+                  <div className={`p-3 rounded-lg flex-shrink-0 ${nft.owned ? "bg-green-500/20" : "bg-primary/10"}`}>
+                    <Icon className={`h-6 w-6 ${nft.owned ? "text-green-600" : "text-primary"}`} />
                   </div>
 
-                  {!nft.owned && progressText && (
-                    <div className="mb-4 space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Progress</span>
-                        <span className={nft.requirementMet ? "text-green-600 font-semibold" : "font-medium"}>
-                          {progressText}
-                        </span>
-                      </div>
-                      {showProgressBar && (
-                        <Progress value={progressPercent} className="h-2" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <h4 className="font-semibold text-lg">{nft.name}</h4>
+                      {nft.owned && (
+                        <Badge variant="default" className="bg-green-600 flex-shrink-0">
+                          <Check className="h-3 w-3 mr-1" />
+                          Owned
+                        </Badge>
                       )}
                     </div>
-                  )}
 
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 text-sm">
-                      {nft.requirementMet ? (
-                        <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
-                      ) : (
-                        <Lock className="h-4 w-4 text-orange-600 flex-shrink-0" />
-                      )}
-                      <span className={nft.requirementMet ? "text-green-600 font-medium" : "text-orange-600"}>
-                        {nft.requirement}
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {nft.description}
+                    </p>
+                  </div>
+                </div>
+
+                {!nft.owned && progressText && (
+                  <div className="mb-4 space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Progress</span>
+                      <span className={nft.requirementMet ? "text-green-600 font-semibold" : "font-medium"}>
+                        {progressText}
                       </span>
                     </div>
-                    <Badge variant="outline" className="flex-shrink-0">
-                      {nft.price === 0 ? "Free" : `${nft.price.toFixed(3)} BB`}
-                    </Badge>
-                  </div>
-
-                  <Button
-                    onClick={() => handlePurchaseNFT(nft)}
-                    disabled={nft.owned || !nft.requirementMet}
-                    className="w-full"
-                    size="sm"
-                    variant={nft.requirementMet && !nft.owned ? "default" : "secondary"}
-                  >
-                    {nft.owned ? (
-                      "Already Owned"
-                    ) : !nft.requirementMet ? (
-                      <>
-                        <Lock className="mr-2 h-4 w-4" />
-                        Locked
-                      </>
-                    ) : nft.price === 0 ? (
-                      <>
-                        <Gift className="mr-2 h-4 w-4" />
-                        Claim Free NFT
-                      </>
-                    ) : (
-                      <>
-                        Purchase for {nft.price.toFixed(3)} BB
-                      </>
+                    {showProgressBar && (
+                      <Progress value={progressPercent} className="h-2" />
                     )}
-                  </Button>
-                </Card>
-              );
-            })}
-          </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2 text-sm">
+                    {nft.requirementMet ? (
+                      <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
+                    ) : (
+                      <Lock className="h-4 w-4 text-orange-600 flex-shrink-0" />
+                    )}
+                    <span className={nft.requirementMet ? "text-green-600 font-medium" : "text-orange-600"}>
+                      {nft.requirement}
+                    </span>
+                  </div>
+                  <Badge variant="outline" className="flex-shrink-0">
+                    {nft.price === 0 ? "Free" : `${nft.price.toFixed(3)} BB`}
+                  </Badge>
+                </div>
+
+                <Button
+                  onClick={() => handlePurchaseNFT(nft)}
+                  disabled={nft.owned || !nft.requirementMet}
+                  className="w-full"
+                  size="sm"
+                  variant={nft.requirementMet && !nft.owned ? "default" : "secondary"}
+                >
+                  {nft.owned ? (
+                    "Already Owned"
+                  ) : !nft.requirementMet ? (
+                    <>
+                      <Lock className="mr-2 h-4 w-4" />
+                      Locked
+                    </>
+                  ) : nft.price === 0 ? (
+                    <>
+                      <Gift className="mr-2 h-4 w-4" />
+                      Claim Free NFT
+                    </>
+                  ) : (
+                    <>
+                      Purchase for {nft.price.toFixed(3)} BB
+                    </>
+                  )}
+                </Button>
+              </Card>
+            );
+          })}
         </div>
       </Card>
     </div>
