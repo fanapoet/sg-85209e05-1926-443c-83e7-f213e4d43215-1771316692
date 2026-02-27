@@ -683,7 +683,7 @@ export function RewardsNFTsScreen() {
             </Badge>
           </div>
 
-          <div className="grid grid-cols-1 gap-6">
+          <div className="space-y-3">
             {nfts.map((nft) => {
               const Icon = getIconComponent(nft.icon);
               const progressText = getProgressText(nft);
