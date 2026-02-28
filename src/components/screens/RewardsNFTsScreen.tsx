@@ -219,7 +219,7 @@ export function RewardsNFTsScreen() {
     }
     
     setLoading(false);
-  }, [currentWeeklyPeriodStart, totalUpgrades, referralCount, totalConversions]);
+  }, [currentWeeklyPeriodStart]);
 
   // Update Challenge Progress based on Context Stats
   useEffect(() => {
