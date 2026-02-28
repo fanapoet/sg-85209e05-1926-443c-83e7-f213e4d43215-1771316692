@@ -140,13 +140,47 @@ export function RewardsNFTsScreen() {
       console.error("Failed to load NFTs", e);
     }
 
-    // Load/Init Challenges
+    // Load/Init Challenges with validation
     try {
+      // ✅ CRITICAL FIX: Validate localStorage against current weekly period
       const savedChallenges = localStorage.getItem("weeklyChallenges");
-      if (savedChallenges) {
+      const savedBaselines = localStorage.getItem("weeklyBaselines");
+      
+      // Check if we need to initialize fresh challenges
+      let shouldInitializeFresh = false;
+      
+      if (currentWeeklyPeriodStart && savedBaselines) {
+        try {
+          const baselines = JSON.parse(savedBaselines);
+          const baselineTimestamp = baselines.timestamp || 0;
+          const periodStart = new Date(currentWeeklyPeriodStart).getTime();
+          
+          // If baselines are from before the current period start, they're stale
+          if (baselineTimestamp < periodStart) {
+            console.log("🧹 [Challenges] Baselines are stale, initializing fresh");
+            shouldInitializeFresh = true;
+            localStorage.removeItem("weeklyChallenges");
+            localStorage.removeItem("weeklyBaselines");
+          }
+        } catch (e) {
+          console.error("Error validating baselines:", e);
+          shouldInitializeFresh = true;
+        }
+      }
+      
+      if (savedChallenges && !shouldInitializeFresh) {
         setWeeklyChallenges(JSON.parse(savedChallenges));
       } else {
-        // Default Challenges - Initialize with current game state values
+        // Initialize fresh challenges with current baselines
+        const initialBaselines = {
+          upgrades: totalUpgrades || 0,
+          referrals: referralCount || 0,
+          conversions: totalConversions || 0,
+          timestamp: Date.now()
+        };
+        localStorage.setItem("weeklyBaselines", JSON.stringify(initialBaselines));
+        
+        // Default Challenges - Initialize with 0 progress
         setWeeklyChallenges([
           {
             key: "builder",
@@ -154,7 +188,7 @@ export function RewardsNFTsScreen() {
             icon: "Hammer",
             description: "Perform 50 upgrades",
             target: 50,
-            progress: totalUpgrades || 0,
+            progress: 0,
             reward: { type: "BZ", amount: 10000 },
             claimed: false
           },
@@ -164,7 +198,7 @@ export function RewardsNFTsScreen() {
             icon: "Users",
             description: "Invite 5 friends",
             target: 5,
-            progress: referralCount || 0,
+            progress: 0,
             reward: { type: "BB", amount: 0.005 },
             claimed: false
           },
@@ -174,7 +208,7 @@ export function RewardsNFTsScreen() {
             icon: "ArrowLeftRight",
             description: "Convert 10 times",
             target: 10,
-            progress: totalConversions || 0,
+            progress: 0,
             reward: { type: "XP", amount: 5000 },
             claimed: false
           }
@@ -185,7 +219,7 @@ export function RewardsNFTsScreen() {
     }
     
     setLoading(false);
-  }, []);
+  }, [currentWeeklyPeriodStart, totalUpgrades, referralCount, totalConversions]);
 
   // Update Challenge Progress based on Context Stats
   useEffect(() => {
