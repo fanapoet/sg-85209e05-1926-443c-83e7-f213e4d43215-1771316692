@@ -345,7 +345,7 @@ export function RewardsNFTsScreen() {
     } else {
       console.log("⏳ [Weekly Reset Check] Still loading or waiting for data");
     }
-  }, [currentWeeklyPeriodStart, loading, resetWeeklyPeriod]);
+  }, [currentWeeklyPeriodStart, loading, resetWeeklyPeriod, totalUpgrades, referralCount, totalConversions]);
 
   const isStage2Complete = (): boolean => {
     try {
