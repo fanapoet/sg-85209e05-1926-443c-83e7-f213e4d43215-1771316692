@@ -191,19 +191,29 @@ export function RewardsNFTsScreen() {
   useEffect(() => {
     if (loading) return;
     
+    // Get weekly baselines (values at start of current week)
+    const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
+    const baseUpgrades = weeklyBaselines.upgrades || 0;
+    const baseReferrals = weeklyBaselines.referrals || 0;
+    const baseConversions = weeklyBaselines.conversions || 0;
+    
     console.log("🎯 [Weekly-Challenge] Updating progress with game state:", {
       totalUpgrades,
       referralCount,
-      totalConversions
+      totalConversions,
+      baseUpgrades,
+      baseReferrals,
+      baseConversions
     });
     
     setWeeklyChallenges(prev => {
       const updated = prev.map(c => {
         let newProgress = c.progress;
         
-        if (c.key === "builder") newProgress = totalUpgrades || 0;
-        if (c.key === "recruiter") newProgress = referralCount || 0;
-        if (c.key === "converter") newProgress = totalConversions || 0;
+        // Calculate progress as DELTA from weekly baseline
+        if (c.key === "builder") newProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
+        if (c.key === "recruiter") newProgress = Math.max(0, (referralCount || 0) - baseReferrals);
+        if (c.key === "converter") newProgress = Math.max(0, (totalConversions || 0) - baseConversions);
         
         console.log(`🎯 [Weekly-Challenge] ${c.key}: ${c.progress} → ${newProgress}`);
         
@@ -242,7 +252,20 @@ export function RewardsNFTsScreen() {
       if (diffDays >= 7) {
         console.log("🔄 [Weekly Reset] 7+ days detected! Resetting challenges...");
         
-        // 1. Reset Local Challenges
+        // 0. Store current values as weekly baselines for delta calculation
+        const weeklyBaselines = {
+          upgrades: totalUpgrades || 0,
+          referrals: referralCount || 0,
+          conversions: totalConversions || 0,
+          timestamp: Date.now()
+        };
+        localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
+        console.log("📊 [Weekly Reset] Stored baselines:", weeklyBaselines);
+        
+        // 1. Clear old localStorage to prevent stale data
+        localStorage.removeItem("weeklyChallenges");
+        
+        // 2. Reset Local Challenges to 0 progress
         setWeeklyChallenges([
           {
             key: "builder",
@@ -276,7 +299,7 @@ export function RewardsNFTsScreen() {
           }
         ]);
         
-        // 2. Update Database & Context with NEW period start date
+        // 3. Update Database & Context with NEW period start date
         console.log("🔄 [Weekly Reset] Calling resetWeeklyPeriod...");
         resetWeeklyPeriod();
       } else {
