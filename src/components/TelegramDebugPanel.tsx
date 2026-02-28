@@ -109,6 +109,13 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const forceResetChallenges = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      window.location.reload();
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/90 z-50 overflow-auto text-white p-4">
       <div className="flex justify-between items-center mb-4">
@@ -239,6 +246,12 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
           className="w-full bg-orange-600 hover:bg-orange-700"
         >
           🧪 Test Weekly Reset Detection
+        </Button>
+        <Button 
+          onClick={forceResetChallenges} 
+          className="w-full bg-red-600 hover:bg-red-700"
+        >
+          🧪 Force Reset Challenges
         </Button>
       </div>
 
