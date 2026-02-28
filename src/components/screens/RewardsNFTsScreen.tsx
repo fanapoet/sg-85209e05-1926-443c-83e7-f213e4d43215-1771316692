@@ -199,7 +199,6 @@ export function RewardsNFTsScreen() {
     
     setWeeklyChallenges(prev => {
       const updated = prev.map(c => {
-        if (c.claimed) return c;
         let newProgress = c.progress;
         
         if (c.key === "builder") newProgress = totalUpgrades || 0;
