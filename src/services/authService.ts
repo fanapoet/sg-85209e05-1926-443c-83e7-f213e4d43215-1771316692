@@ -178,19 +178,23 @@ export function getCurrentTelegramUser() {
   return null;
 }
 
-export async function initializeUser(telegramUser: any) {
-  if (!telegramUser?.id) return { success: false, error: "No Telegram user" };
+export async function initializeUser(telegramUser?: any) {
+  // Try to get user from window if not provided
+  const user = telegramUser || getCurrentTelegramUser();
+  
+  if (!user?.id) return { success: false, error: "No Telegram user" };
 
   try {
     // Check if profile exists
     const { data: profile } = await supabase
       .from("profiles")
       .select("*")
-      .eq("telegram_id", telegramUser.id)
+      .eq("telegram_id", user.id)
       .maybeSingle();
 
     if (profile) {
-      return { success: true, user: profile };
+      // Return 'profile' property to match GameStateContext usage
+      return { success: true, profile: profile };
     }
 
     // If not, create one (basic initialization)
