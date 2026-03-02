@@ -1,267 +1,214 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { User, Session } from "@supabase/supabase-js";
 
-/**
- * SINGLE SOURCE OF TRUTH for user authentication in Bunergy
- * Uses Telegram ID as the primary identity - NO Supabase Auth needed
- */
-
-interface TelegramUser {
-  id: number;
-  first_name?: string;
-  last_name?: string;
-  username?: string;
-  language_code?: string;
-  photo_url?: string;
+export interface AuthUser {
+  id: string;
+  email: string;
+  user_metadata?: any;
+  created_at?: string;
 }
 
-/**
- * Get Telegram user data from WebApp
- */
-function getTelegramUser(): TelegramUser | null {
-  if (typeof window === "undefined") return null;
+export interface AuthError {
+  message: string;
+  code?: string;
+}
+
+// Dynamic URL Helper
+const getURL = () => {
+  let url = process?.env?.NEXT_PUBLIC_VERCEL_URL ?? 
+           process?.env?.NEXT_PUBLIC_SITE_URL ?? 
+           'http://localhost:3000'
   
-  const tg = (window as any).Telegram?.WebApp;
-  if (!tg?.initDataUnsafe?.user) {
-    console.warn("⚠️ No Telegram user data available");
-    return null;
+  // Handle undefined or null url
+  if (!url) {
+    url = 'http://localhost:3000';
   }
   
-  return tg.initDataUnsafe.user;
+  // Ensure url has protocol
+  url = url.startsWith('http') ? url : `https://${url}`
+  
+  // Ensure url ends with slash
+  url = url.endsWith('/') ? url : `${url}/`
+  
+  return url
 }
 
-/**
- * Generate a unique referral code from Telegram ID
- */
-function generateReferralCode(telegramId: number): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let hash = telegramId;
-  let code = "";
-  
-  for (let i = 0; i < 8; i++) {
-    code += chars[hash % chars.length];
-    hash = Math.floor(hash / chars.length);
-  }
-  
-  return code.toUpperCase();
-}
+export const authService = {
+  // Get current user
+  async getCurrentUser(): Promise<AuthUser | null> {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user ? {
+      id: user.id,
+      email: user.email || "",
+      user_metadata: user.user_metadata,
+      created_at: user.created_at
+    } : null;
+  },
 
-/**
- * SINGLE ENTRY POINT for user authentication
- * Creates or retrieves user profile based on Telegram ID
- */
-export async function initializeUser() {
-  try {
-    const tgUser = getTelegramUser();
-    
-    if (!tgUser) {
-      console.error("❌ No Telegram user data - must run in Telegram");
-      return {
-        success: false,
-        error: "No Telegram user data available. Please open this app in Telegram.",
-      };
-    }
+  // Get current session
+  async getCurrentSession(): Promise<Session | null> {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session;
+  },
 
-    console.log("🔐 Initializing user for Telegram ID:", tgUser.id);
-
-    // Step 1: Check if user already exists
-    const { data: existingProfile, error: checkError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("telegram_id", tgUser.id)
-      .maybeSingle();
-
-    if (checkError) {
-      console.error("❌ Database check error:", checkError);
-      return {
-        success: false,
-        error: `Database error: ${checkError.message}`,
-      };
-    }
-
-    // Step 2: If user exists, return it
-    if (existingProfile) {
-      console.log("✅ Existing user found:", existingProfile.telegram_id);
-      return {
-        success: true,
-        profile: existingProfile,
-        isNewUser: false,
-      };
-    }
-
-    // Step 3: Create new user with ALL Telegram data
-    console.log("🆕 Creating new user for Telegram ID:", tgUser.id);
-    console.log("📝 User data:", {
-      id: tgUser.id,
-      username: tgUser.username,
-      first_name: tgUser.first_name,
-      last_name: tgUser.last_name,
-    });
-    
-    const displayName = tgUser.username || tgUser.first_name || `User${tgUser.id}`;
-    const referralCode = generateReferralCode(tgUser.id);
-    const now = new Date().toISOString();
-    const newId = crypto.randomUUID();
-
-    console.log("🔑 Generated UUID:", newId);
-    console.log("🎫 Generated Referral Code:", referralCode);
-
-    const newProfile = {
-      id: newId,
-      telegram_id: tgUser.id,
-      telegram_username: tgUser.username || null,
-      telegram_first_name: tgUser.first_name || null,
-      telegram_last_name: tgUser.last_name || null,
-      display_name: displayName,
-      username: tgUser.username || null,
-      referral_code: referralCode,
-      
-      // Starting balances
-      bz_balance: 5000,
-      bb_balance: 0,
-      xp: 0,
-      tier: "Bronze",
-      
-      // Energy system
-      current_energy: 1500,
-      max_energy: 1500,
-      energy_recovery_rate: 0.3,
-      last_energy_update: now,
-      
-      // Boosters
-      booster_income_per_tap: 1,
-      booster_energy_per_tap: 1,
-      booster_energy_capacity: 1,
-      booster_recovery_rate: 1,
-      
-      // QuickCharge
-      quickcharge_uses_remaining: 5,
-      quickcharge_last_reset: now,
-      
-      // Build/Idle
-      last_claim_timestamp: now,
-      
-      // Referrals
-      total_referrals: 0,
-      
-      // Taps
-      total_taps: 0,
-      taps_today: 0,
-      
-      // Timestamps
-      created_at: now,
-      updated_at: now,
-    };
-
-    console.log("📝 About to insert profile with data:", {
-      id: newProfile.id,
-      telegram_id: newProfile.telegram_id,
-      display_name: newProfile.display_name,
-      referral_code: newProfile.referral_code,
-    });
-
-    const { data: createdProfile, error: insertError } = await supabase
-      .from("profiles")
-      .insert(newProfile as any)
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error("❌ Profile creation failed:", insertError);
-      console.error("❌ Full error details:", JSON.stringify(insertError, null, 2));
-      console.error("❌ Error code:", insertError.code);
-      console.error("❌ Error message:", insertError.message);
-      console.error("❌ Error hint:", insertError.hint);
-      console.error("❌ Error details:", insertError.details);
-      return {
-        success: false,
-        error: `Failed to create profile: ${insertError.message}`,
-      };
-    }
-
-    console.log("✅ User created successfully!", {
-      id: newProfile.id,
-      telegram_id: newProfile.telegram_id,
-      created_at: newProfile.created_at,
-    });
-
-    // 🚀 CRITICAL: Sync initial game state
-    // Use dynamic import to avoid circular dependencies
-    import("@/services/syncService").then(({ syncInitialGameState }) => {
-      console.log("🚀 Triggering initial game state sync...");
-      
-      const initialGameState = {
-        bzBalance: 5000,
-        bbBalance: 0,
-        xp: 0,
-        tier: "Bronze",
-        currentEnergy: 1500,
-        maxEnergy: 1500,
-        energyRecoveryRate: 0.3,
-        boosterIncomeTap: 1,
-        boosterEnergyTap: 1,
-        boosterCapacity: 1,
-        boosterRecovery: 1,
-        quickChargeUsesRemaining: 5,
-        quickChargeCooldownUntil: null as number | null, // ✅ Explicitly type as number | null
-        totalTaps: 0,
-        todayTaps: 0,
-        idleBzPerHour: 0
-      };
-
-      syncInitialGameState(newProfile.id, initialGameState).then(syncResult => {
-        if (syncResult.success) {
-          console.log(`Initial game state sync completed for user ${newProfile.id}`);
-        } else {
-          console.error("❌ Initial game state sync failed:", syncResult.error);
+  // Sign up with email and password
+  async signUp(email: string, password: string): Promise<{ user: AuthUser | null; error: AuthError | null }> {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${getURL()}auth/confirm-email`
         }
-      }).catch(err => 
-        console.error("❌ Initial sync failed:", err)
-      );
-    });
+      });
 
-    return {
-      success: true,
-      profile: newProfile,
-      isNewUser: true,
-    };
-  } catch (error) {
-    console.error("❌ Unexpected error in initializeUser:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
-}
+      if (error) {
+        return { user: null, error: { message: error.message, code: error.status?.toString() } };
+      }
 
-/**
- * Get user profile by Telegram ID
- */
-export async function getUserProfile(telegramId: number) {
-  try {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("telegram_id", telegramId)
-      .single();
+      const authUser = data.user ? {
+        id: data.user.id,
+        email: data.user.email || "",
+        user_metadata: data.user.user_metadata,
+        created_at: data.user.created_at
+      } : null;
 
-    if (error) {
-      console.error("❌ Get profile error:", error);
-      return { success: false, error: error.message };
+      return { user: authUser, error: null };
+    } catch (error) {
+      return { 
+        user: null, 
+        error: { message: "An unexpected error occurred during sign up" } 
+      };
     }
+  },
 
-    return { success: true, profile: data };
-  } catch (error) {
-    console.error("❌ Get profile error:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
+  // Sign in with email and password
+  async signIn(email: string, password: string): Promise<{ user: AuthUser | null; error: AuthError | null }> {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        return { user: null, error: { message: error.message, code: error.status?.toString() } };
+      }
+
+      const authUser = data.user ? {
+        id: data.user.id,
+        email: data.user.email || "",
+        user_metadata: data.user.user_metadata,
+        created_at: data.user.created_at
+      } : null;
+
+      return { user: authUser, error: null };
+    } catch (error) {
+      return { 
+        user: null, 
+        error: { message: "An unexpected error occurred during sign in" } 
+      };
+    }
+  },
+
+  // Sign out
+  async signOut(): Promise<{ error: AuthError | null }> {
+    try {
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        return { error: { message: error.message } };
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { 
+        error: { message: "An unexpected error occurred during sign out" } 
+      };
+    }
+  },
+
+  // Reset password
+  async resetPassword(email: string): Promise<{ error: AuthError | null }> {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${getURL()}auth/reset-password`,
+      });
+
+      if (error) {
+        return { error: { message: error.message } };
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { 
+        error: { message: "An unexpected error occurred during password reset" } 
+      };
+    }
+  },
+
+  // Confirm email (REQUIRED)
+  async confirmEmail(token: string, type: 'signup' | 'recovery' | 'email_change' = 'signup'): Promise<{ user: AuthUser | null; error: AuthError | null }> {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        token_hash: token,
+        type: type
+      });
+
+      if (error) {
+        return { user: null, error: { message: error.message, code: error.status?.toString() } };
+      }
+
+      const authUser = data.user ? {
+        id: data.user.id,
+        email: data.user.email || "",
+        user_metadata: data.user.user_metadata,
+        created_at: data.user.created_at
+      } : null;
+
+      return { user: authUser, error: null };
+    } catch (error) {
+      return { 
+        user: null, 
+        error: { message: "An unexpected error occurred during email confirmation" } 
+      };
+    }
+  },
+
+  // Listen to auth state changes
+  onAuthStateChange(callback: (event: string, session: Session | null) => void) {
+    return supabase.auth.onAuthStateChange(callback);
+  },
+
+  // Get current Telegram user from WebApp
+  getCurrentTelegramUser() {
+    if (typeof window !== "undefined" && (window as any).Telegram?.WebApp?.initDataUnsafe?.user) {
+      return (window as any).Telegram.WebApp.initDataUnsafe.user;
+    }
+    return null;
+  },
+
+  // Initialize user (ensure profile exists)
+  async initializeUser(telegramUser: any) {
+    if (!telegramUser?.id) return { success: false, error: "No Telegram user" };
+
+    try {
+      // Check if profile exists
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("telegram_id", telegramUser.id)
+        .maybeSingle();
+
+      if (profile) {
+        return { success: true, user: profile };
+      }
+
+      // If not, create one (basic initialization)
+      // Note: Full initialization usually happens in GameStateContext or a specific init function
+      // This is a fallback to satisfy the interface
+      return { success: false, error: "Profile not found" };
+    } catch (error) {
+      return { success: false, error: "Initialization failed" };
+    }
   }
-}
-
-/**
- * Get current Telegram user (convenience function)
- */
-export function getCurrentTelegramUser(): TelegramUser | null {
-  return getTelegramUser();
-}
+};

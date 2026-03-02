@@ -18,33 +18,33 @@ export type Database = {
       build_parts: {
         Row: {
           base_cost: number
-          base_yield: number
-          created_at: string | null
+          base_yield_per_hour: number
+          created_at: string
+          description: string | null
           icon: string
           id: string
-          max_level: number
           name: string
           part_number: number
           stage: number
         }
         Insert: {
           base_cost: number
-          base_yield: number
-          created_at?: string | null
+          base_yield_per_hour: number
+          created_at?: string
+          description?: string | null
           icon: string
           id: string
-          max_level?: number
           name: string
           part_number: number
           stage: number
         }
         Update: {
           base_cost?: number
-          base_yield?: number
-          created_at?: string | null
+          base_yield_per_hour?: number
+          created_at?: string
+          description?: string | null
           icon?: string
           id?: string
-          max_level?: number
           name?: string
           part_number?: number
           stage?: number
@@ -55,65 +55,53 @@ export type Database = {
         Row: {
           amount_in: number
           amount_out: number
-          burned_amount: number | null
+          bonus_percent: number | null
           conversion_type: string
           created_at: string | null
-          exchange_rate: number | null
           id: string
-          telegram_id: number | null
-          tier_at_conversion: string
-          tier_bonus_percent: number
-          user_id: string | null
+          telegram_id: number
+          tier_at_conversion: string | null
         }
         Insert: {
           amount_in: number
           amount_out: number
-          burned_amount?: number | null
+          bonus_percent?: number | null
           conversion_type: string
           created_at?: string | null
-          exchange_rate?: number | null
           id?: string
-          telegram_id?: number | null
-          tier_at_conversion: string
-          tier_bonus_percent: number
-          user_id?: string | null
+          telegram_id: number
+          tier_at_conversion?: string | null
         }
         Update: {
           amount_in?: number
           amount_out?: number
-          burned_amount?: number | null
+          bonus_percent?: number | null
           conversion_type?: string
           created_at?: string | null
-          exchange_rate?: number | null
           id?: string
-          telegram_id?: number | null
-          tier_at_conversion?: string
-          tier_bonus_percent?: number
-          user_id?: string | null
+          telegram_id?: number
+          tier_at_conversion?: string | null
         }
         Relationships: []
       }
       daily_rewards: {
         Row: {
-          bb_reward: number | null
-          bz_reward: number | null
           day: number
           description: string
-          xp_reward: number | null
+          reward_amount: number
+          reward_type: string
         }
         Insert: {
-          bb_reward?: number | null
-          bz_reward?: number | null
           day: number
           description: string
-          xp_reward?: number | null
+          reward_amount: number
+          reward_type: string
         }
         Update: {
-          bb_reward?: number | null
-          bz_reward?: number | null
           day?: number
           description?: string
-          xp_reward?: number | null
+          reward_amount?: number
+          reward_type?: string
         }
         Relationships: []
       }
@@ -214,34 +202,37 @@ export type Database = {
       }
       nfts: {
         Row: {
-          created_at: string | null
+          created_at: string
           description: string
           id: string
           image_url: string | null
           name: string
           price_bb: number
+          rarity: string
           requirement_type: string | null
-          requirement_value: string | null
+          requirement_value: number | null
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
           description: string
           id: string
           image_url?: string | null
           name: string
           price_bb: number
+          rarity: string
           requirement_type?: string | null
-          requirement_value?: string | null
+          requirement_value?: number | null
         }
         Update: {
-          created_at?: string | null
+          created_at?: string
           description?: string
           id?: string
           image_url?: string | null
           name?: string
           price_bb?: number
+          rarity?: string
           requirement_type?: string | null
-          requirement_value?: string | null
+          requirement_value?: number | null
         }
         Relationships: []
       }
@@ -249,135 +240,153 @@ export type Database = {
         Row: {
           active_build_end_time: string | null
           active_build_part_id: string | null
-          avatar_url: string | null
-          bb_balance: number | null
-          booster_energy_capacity: number | null
-          booster_energy_per_tap: number | null
-          booster_income_per_tap: number | null
-          booster_recovery_rate: number | null
-          bz_balance: number | null
+          bb_balance: number
+          booster_energy_capacity: number
+          booster_energy_per_tap: number
+          booster_income_per_tap: number
+          booster_recovery_rate: number
+          bz_balance: number
           created_at: string | null
-          current_energy: number | null
+          current_energy: number
           daily_reward_last_claim: string | null
-          daily_reward_streak: number | null
+          daily_reward_streak: number
+          daily_taps_reset_at: string | null
+          device_id: string | null
           display_name: string | null
-          email: string | null
-          energy_recovery_rate: number | null
-          full_name: string | null
+          energy_recovery_rate: number
           id: string
-          last_claim_timestamp: string | null
-          last_energy_update: string | null
-          max_energy: number | null
-          nfts_owned: Json | null
+          idle_bz_per_hour: number | null
+          last_claim_timestamp: string
+          last_energy_update: string
+          last_idle_claim_at: string | null
+          last_sync_at: string | null
+          last_tap_time: string | null
+          max_energy: number
+          nfts_owned: string[]
           quickcharge_cooldown_until: string | null
-          quickcharge_last_reset: string | null
-          quickcharge_uses_remaining: number | null
-          referral_code: string | null
-          referral_milestone_10_claimed: boolean | null
-          referral_milestone_25_claimed: boolean | null
-          referral_milestone_5_claimed: boolean | null
-          referral_milestone_50_claimed: boolean | null
+          quickcharge_last_reset: string
+          quickcharge_uses_remaining: number
+          referral_code: string
+          referral_milestone_10_claimed: boolean
+          referral_milestone_25_claimed: boolean
+          referral_milestone_5_claimed: boolean
+          referral_milestone_50_claimed: boolean
           referred_by_code: string | null
+          sync_version: number | null
+          taps_today: number | null
           telegram_first_name: string | null
           telegram_id: number | null
           telegram_last_name: string | null
           telegram_username: string | null
-          tier: string | null
-          total_referrals: number | null
+          tier: string
+          total_referrals: number
           total_taps: number | null
-          updated_at: string | null
-          xp: number | null
+          updated_at: string
+          username: string | null
+          xp: number
         }
         Insert: {
           active_build_end_time?: string | null
           active_build_part_id?: string | null
-          avatar_url?: string | null
-          bb_balance?: number | null
-          booster_energy_capacity?: number | null
-          booster_energy_per_tap?: number | null
-          booster_income_per_tap?: number | null
-          booster_recovery_rate?: number | null
-          bz_balance?: number | null
+          bb_balance?: number
+          booster_energy_capacity?: number
+          booster_energy_per_tap?: number
+          booster_income_per_tap?: number
+          booster_recovery_rate?: number
+          bz_balance?: number
           created_at?: string | null
-          current_energy?: number | null
+          current_energy?: number
           daily_reward_last_claim?: string | null
-          daily_reward_streak?: number | null
+          daily_reward_streak?: number
+          daily_taps_reset_at?: string | null
+          device_id?: string | null
           display_name?: string | null
-          email?: string | null
-          energy_recovery_rate?: number | null
-          full_name?: string | null
+          energy_recovery_rate?: number
           id: string
-          last_claim_timestamp?: string | null
-          last_energy_update?: string | null
-          max_energy?: number | null
-          nfts_owned?: Json | null
+          idle_bz_per_hour?: number | null
+          last_claim_timestamp?: string
+          last_energy_update?: string
+          last_idle_claim_at?: string | null
+          last_sync_at?: string | null
+          last_tap_time?: string | null
+          max_energy?: number
+          nfts_owned?: string[]
           quickcharge_cooldown_until?: string | null
-          quickcharge_last_reset?: string | null
-          quickcharge_uses_remaining?: number | null
-          referral_code?: string | null
-          referral_milestone_10_claimed?: boolean | null
-          referral_milestone_25_claimed?: boolean | null
-          referral_milestone_5_claimed?: boolean | null
-          referral_milestone_50_claimed?: boolean | null
+          quickcharge_last_reset?: string
+          quickcharge_uses_remaining?: number
+          referral_code: string
+          referral_milestone_10_claimed?: boolean
+          referral_milestone_25_claimed?: boolean
+          referral_milestone_5_claimed?: boolean
+          referral_milestone_50_claimed?: boolean
           referred_by_code?: string | null
+          sync_version?: number | null
+          taps_today?: number | null
           telegram_first_name?: string | null
           telegram_id?: number | null
           telegram_last_name?: string | null
           telegram_username?: string | null
-          tier?: string | null
-          total_referrals?: number | null
+          tier?: string
+          total_referrals?: number
           total_taps?: number | null
-          updated_at?: string | null
-          xp?: number | null
+          updated_at?: string
+          username?: string | null
+          xp?: number
         }
         Update: {
           active_build_end_time?: string | null
           active_build_part_id?: string | null
-          avatar_url?: string | null
-          bb_balance?: number | null
-          booster_energy_capacity?: number | null
-          booster_energy_per_tap?: number | null
-          booster_income_per_tap?: number | null
-          booster_recovery_rate?: number | null
-          bz_balance?: number | null
+          bb_balance?: number
+          booster_energy_capacity?: number
+          booster_energy_per_tap?: number
+          booster_income_per_tap?: number
+          booster_recovery_rate?: number
+          bz_balance?: number
           created_at?: string | null
-          current_energy?: number | null
+          current_energy?: number
           daily_reward_last_claim?: string | null
-          daily_reward_streak?: number | null
+          daily_reward_streak?: number
+          daily_taps_reset_at?: string | null
+          device_id?: string | null
           display_name?: string | null
-          email?: string | null
-          energy_recovery_rate?: number | null
-          full_name?: string | null
+          energy_recovery_rate?: number
           id?: string
-          last_claim_timestamp?: string | null
-          last_energy_update?: string | null
-          max_energy?: number | null
-          nfts_owned?: Json | null
+          idle_bz_per_hour?: number | null
+          last_claim_timestamp?: string
+          last_energy_update?: string
+          last_idle_claim_at?: string | null
+          last_sync_at?: string | null
+          last_tap_time?: string | null
+          max_energy?: number
+          nfts_owned?: string[]
           quickcharge_cooldown_until?: string | null
-          quickcharge_last_reset?: string | null
-          quickcharge_uses_remaining?: number | null
-          referral_code?: string | null
-          referral_milestone_10_claimed?: boolean | null
-          referral_milestone_25_claimed?: boolean | null
-          referral_milestone_5_claimed?: boolean | null
-          referral_milestone_50_claimed?: boolean | null
+          quickcharge_last_reset?: string
+          quickcharge_uses_remaining?: number
+          referral_code?: string
+          referral_milestone_10_claimed?: boolean
+          referral_milestone_25_claimed?: boolean
+          referral_milestone_5_claimed?: boolean
+          referral_milestone_50_claimed?: boolean
           referred_by_code?: string | null
+          sync_version?: number | null
+          taps_today?: number | null
           telegram_first_name?: string | null
           telegram_id?: number | null
           telegram_last_name?: string | null
           telegram_username?: string | null
-          tier?: string | null
-          total_referrals?: number | null
+          tier?: string
+          total_referrals?: number
           total_taps?: number | null
-          updated_at?: string | null
-          xp?: number | null
+          updated_at?: string
+          username?: string | null
+          xp?: number
         }
         Relationships: []
       }
       referral_earnings: {
         Row: {
           claimed: boolean | null
-          claimed_at: string | null
+          created_at: string | null
           id: string
           idle_earnings: number | null
           invitee_id: string
@@ -389,7 +398,7 @@ export type Database = {
         }
         Insert: {
           claimed?: boolean | null
-          claimed_at?: string | null
+          created_at?: string | null
           id?: string
           idle_earnings?: number | null
           invitee_id: string
@@ -401,7 +410,7 @@ export type Database = {
         }
         Update: {
           claimed?: boolean | null
-          claimed_at?: string | null
+          created_at?: string | null
           id?: string
           idle_earnings?: number | null
           invitee_id?: string
@@ -440,6 +449,7 @@ export type Database = {
       referrals: {
         Row: {
           bonus_claimed: boolean | null
+          claimed_at: string | null
           id: string
           invited_at: string | null
           invitee_id: string
@@ -448,6 +458,7 @@ export type Database = {
         }
         Insert: {
           bonus_claimed?: boolean | null
+          claimed_at?: string | null
           id?: string
           invited_at?: string | null
           invitee_id: string
@@ -456,6 +467,7 @@ export type Database = {
         }
         Update: {
           bonus_claimed?: boolean | null
+          claimed_at?: string | null
           id?: string
           invited_at?: string | null
           invitee_id?: string
@@ -510,7 +522,15 @@ export type Database = {
           telegram_user_id?: number
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "star_invoices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       star_transactions: {
         Row: {
@@ -551,85 +571,80 @@ export type Database = {
             referencedRelation: "star_invoices"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "star_transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       tasks: {
         Row: {
-          created_at: string | null
+          action_link: string | null
+          created_at: string
           description: string
           id: string
-          is_active: boolean | null
           reward_amount: number
           reward_type: string
           target_value: number
           task_type: string
           title: string
-          tracking_field: string
         }
         Insert: {
-          created_at?: string | null
+          action_link?: string | null
+          created_at?: string
           description: string
           id: string
-          is_active?: boolean | null
           reward_amount: number
           reward_type: string
           target_value: number
           task_type: string
           title: string
-          tracking_field: string
         }
         Update: {
-          created_at?: string | null
+          action_link?: string | null
+          created_at?: string
           description?: string
           id?: string
-          is_active?: boolean | null
           reward_amount?: number
           reward_type?: string
           target_value?: number
           task_type?: string
           title?: string
-          tracking_field?: string
         }
         Relationships: []
       }
       user_build_parts: {
         Row: {
           build_ends_at: string | null
-          build_started_at: string | null
-          created_at: string | null
-          current_level: number
+          created_at: string
           id: string
-          is_building: boolean | null
-          last_upgraded_at: string | null
+          is_building: boolean
+          level: number
           part_id: string
-          total_yield_contributed: number | null
-          updated_at: string | null
+          updated_at: string
           user_id: string
         }
         Insert: {
           build_ends_at?: string | null
-          build_started_at?: string | null
-          created_at?: string | null
-          current_level?: number
+          created_at?: string
           id?: string
-          is_building?: boolean | null
-          last_upgraded_at?: string | null
+          is_building?: boolean
+          level?: number
           part_id: string
-          total_yield_contributed?: number | null
-          updated_at?: string | null
+          updated_at?: string
           user_id: string
         }
         Update: {
           build_ends_at?: string | null
-          build_started_at?: string | null
-          created_at?: string | null
-          current_level?: number
+          created_at?: string
           id?: string
-          is_building?: boolean | null
-          last_upgraded_at?: string | null
+          is_building?: boolean
+          level?: number
           part_id?: string
-          total_yield_contributed?: number | null
-          updated_at?: string | null
+          updated_at?: string
           user_id?: string
         }
         Relationships: [
@@ -640,59 +655,77 @@ export type Database = {
             referencedRelation: "build_parts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_build_parts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_daily_claims: {
         Row: {
-          bb_claimed: number | null
-          bz_claimed: number | null
-          claimed_at: string | null
+          claimed_at: string
           day: number
           id: string
-          user_id: string
-          xp_claimed: number | null
+          reward_amount: number
+          reward_type: string
+          telegram_id: number | null
+          user_id: string | null
         }
         Insert: {
-          bb_claimed?: number | null
-          bz_claimed?: number | null
-          claimed_at?: string | null
+          claimed_at?: string
           day: number
           id?: string
-          user_id: string
-          xp_claimed?: number | null
+          reward_amount: number
+          reward_type: string
+          telegram_id?: number | null
+          user_id?: string | null
         }
         Update: {
-          bb_claimed?: number | null
-          bz_claimed?: number | null
-          claimed_at?: string | null
+          claimed_at?: string
           day?: number
           id?: string
-          user_id?: string
-          xp_claimed?: number | null
+          reward_amount?: number
+          reward_type?: string
+          telegram_id?: number | null
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_daily_claims_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_nfts: {
         Row: {
           id: string
           nft_id: string
           price_paid_bb: number
-          purchased_at: string | null
-          user_id: string
+          purchased_at: string
+          telegram_id: number | null
+          user_id: string | null
         }
         Insert: {
           id?: string
           nft_id: string
-          price_paid_bb: number
-          purchased_at?: string | null
-          user_id: string
+          price_paid_bb?: number
+          purchased_at?: string
+          telegram_id?: number | null
+          user_id?: string | null
         }
         Update: {
           id?: string
           nft_id?: string
           price_paid_bb?: number
-          purchased_at?: string | null
-          user_id?: string
+          purchased_at?: string
+          telegram_id?: number | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -700,6 +733,13 @@ export type Database = {
             columns: ["nft_id"]
             isOneToOne: false
             referencedRelation: "nfts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_nfts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -742,79 +782,96 @@ export type Database = {
       }
       user_task_progress: {
         Row: {
-          claimed: boolean | null
+          claimed: boolean
           claimed_at: string | null
+          completed: boolean
           completed_at: string | null
-          created_at: string | null
-          current_progress: number | null
-          id: string
-          is_completed: boolean | null
-          reset_at: string | null
-          task_id: string
-          updated_at: string | null
-          user_id: string
-        }
-        Insert: {
-          claimed?: boolean | null
-          claimed_at?: string | null
-          completed_at?: string | null
-          created_at?: string | null
-          current_progress?: number | null
-          id?: string
-          is_completed?: boolean | null
-          reset_at?: string | null
-          task_id: string
-          updated_at?: string | null
-          user_id: string
-        }
-        Update: {
-          claimed?: boolean | null
-          claimed_at?: string | null
-          completed_at?: string | null
-          created_at?: string | null
-          current_progress?: number | null
-          id?: string
-          is_completed?: boolean | null
-          reset_at?: string | null
-          task_id?: string
-          updated_at?: string | null
-          user_id?: string
-        }
-        Relationships: []
-      }
-      user_task_state: {
-        Row: {
           created_at: string
+          current_progress: number
+          expires_at: string | null
           id: string
-          last_daily_reset_date: string
-          last_weekly_reset_date: string
-          telegram_id: number
+          reset_at: string
+          task_id: string
+          task_type: string
+          telegram_id: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          claimed?: boolean
+          claimed_at?: string | null
+          completed?: boolean
+          completed_at?: string | null
           created_at?: string
+          current_progress?: number
+          expires_at?: string | null
           id?: string
-          last_daily_reset_date?: string
-          last_weekly_reset_date?: string
-          telegram_id: number
+          reset_at?: string
+          task_id: string
+          task_type?: string
+          telegram_id?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          claimed?: boolean
+          claimed_at?: string | null
+          completed?: boolean
+          completed_at?: string | null
           created_at?: string
+          current_progress?: number
+          expires_at?: string | null
           id?: string
-          last_daily_reset_date?: string
-          last_weekly_reset_date?: string
-          telegram_id?: number
+          reset_at?: string
+          task_id?: string
+          task_type?: string
+          telegram_id?: number | null
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_task_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_task_state: {
+        Row: {
+          created_at: string | null
+          id: string
+          last_daily_reset: string
+          last_weekly_reset: string
+          telegram_id: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          last_daily_reset?: string
+          last_weekly_reset?: string
+          telegram_id: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          last_daily_reset?: string
+          last_weekly_reset?: string
+          telegram_id?: number
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: [
           {
             foreignKeyName: "user_task_state_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -825,7 +882,48 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      calculate_referral_earnings: {
+        Args: { inviter_uuid: string }
+        Returns: {
+          lifetime_bz: number
+          pending_bz: number
+          total_referrals: number
+        }[]
+      }
+      get_user_stats: {
+        Args: { user_uuid: string }
+        Returns: {
+          bb_balance: number
+          bz_balance: number
+          current_energy: number
+          last_sync_at: string
+          max_energy: number
+          referral_count: number
+          sync_version: number
+          telegram_id: number
+          tier: string
+          total_taps: number
+          xp: number
+        }[]
+      }
+      increment_total_taps: {
+        Args: { tap_count?: number; user_uuid: string }
+        Returns: number
+      }
+      update_user_balance: {
+        Args: {
+          bb_delta?: number
+          bz_delta?: number
+          user_uuid: string
+          xp_delta?: number
+        }
+        Returns: {
+          new_bb: number
+          new_bz: number
+          new_tier: string
+          new_xp: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

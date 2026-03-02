@@ -36,7 +36,7 @@ export async function saveConversionToDB(
         conversion_type: conversion.type,
         amount_in: conversion.input,
         amount_out: conversion.output,
-        tier_bonus_percent: conversion.bonus ? Math.round(conversion.bonus * 100) : 0,
+        bonus_percent: conversion.bonus ? Math.round(conversion.bonus * 100) : 0,
         tier_at_conversion: conversion.tier || "Bronze",
         created_at: new Date(conversion.timestamp).toISOString()
       }, {
@@ -92,7 +92,7 @@ export async function loadConversionHistory(
       type: record.conversion_type as "bz-to-bb" | "bb-to-bz",
       input: Number(record.amount_in),
       output: Number(record.amount_out),
-      bonus: record.tier_bonus_percent ? record.tier_bonus_percent / 100 : undefined,
+      bonus: record.bonus_percent ? record.bonus_percent / 100 : undefined,
       tier: record.tier_at_conversion || undefined,
       timestamp: new Date(record.created_at).getTime()
     }));
@@ -128,7 +128,7 @@ export async function syncConversionsToDB(
       conversion_type: conv.type,
       amount_in: conv.input,
       amount_out: conv.output,
-      tier_bonus_percent: conv.bonus ? Math.round(conv.bonus * 100) : 0,
+      bonus_percent: conv.bonus ? Math.round(conv.bonus * 100) : 0,
       tier_at_conversion: conv.tier || "Bronze",
       created_at: new Date(conv.timestamp).toISOString()
     }));
