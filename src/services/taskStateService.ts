@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
  * Task State Service
  * Manages user_task_state table (reset date tracking)
  * Handles daily/weekly reset date persistence
- * USES EXACT REWARD STATE AUTHENTICATION PATTERN
+ * SIMPLIFIED TO MATCH ACTUAL USAGE PATTERN
  */
 
 export interface TaskState {
@@ -50,51 +50,23 @@ export async function getTaskState(telegramId: number): Promise<TaskState | null
 
 /**
  * Upsert task state to database
- * USES EXACT BUILD AUTHENTICATION PATTERN (same as rewardStateService)
+ * SIMPLIFIED: Just upsert with provided data (RLS policies are public)
  */
 export async function upsertTaskState(state: TaskState): Promise<{ success: boolean; error?: any }> {
   try {
     console.log(`🔄 [Task State] Upserting state for telegram_id: ${state.telegramId}`);
+    console.log(`🔄 [Task State] Data:`, state);
 
-    // EXACT REWARD STATE PATTERN: Get Telegram user ID
-    const tgUser = typeof window !== "undefined" ? (window as any).Telegram?.WebApp?.initDataUnsafe?.user : null;
-    
-    if (!tgUser) {
-      console.error("❌ [Task State] No Telegram user data");
-      return { success: false, error: "No Telegram user data" };
-    }
-    
-    console.log("🔵 [Task State] Telegram user ID:", tgUser.id);
-    
-    // EXACT REWARD STATE PATTERN: Find user profile by telegram_id
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("telegram_id", tgUser.id)
-      .maybeSingle();
-    
-    if (profileError) {
-      console.error("❌ [Task State] Profile lookup error:", profileError);
-      return { success: false, error: profileError.message };
-    }
-    
-    if (!profile) {
-      console.error("❌ [Task State] Profile not found for telegram_id:", tgUser.id);
-      return { success: false, error: "Profile not found" };
-    }
-    
-    console.log("🔵 [Task State] Found profile UUID:", profile.id);
-
-    // Prepare record with correct column names
+    // Simple upsert - RLS policies are public (same as user_reward_state)
     const record = {
-      user_id: profile.id, // ← Use profile.id from lookup!
+      user_id: state.userId,
       telegram_id: state.telegramId,
       last_daily_reset: state.lastDailyReset,
       last_weekly_reset: state.lastWeeklyReset,
       updated_at: new Date().toISOString(),
     };
 
-    console.log("🔵 [Task State] Upserting record:", record);
+    console.log("🔄 [Task State] Upserting record:", record);
 
     const { error } = await supabase
       .from("user_task_state")
