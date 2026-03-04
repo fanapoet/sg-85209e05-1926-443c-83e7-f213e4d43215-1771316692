@@ -122,7 +122,8 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
         "dailyTasks",
         "weeklyTasks",
         "progressiveTasks",
-        "weeklyTaskBaselines"
+        "weeklyTaskBaselines",
+        "weeklyTasksResetDate" // ✅ ADD THIS - it was missing!
       ];
       taskRelatedKeys.forEach(key => localStorage.removeItem(key));
       window.location.reload();
