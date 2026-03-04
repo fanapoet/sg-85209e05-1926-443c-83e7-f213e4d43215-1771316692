@@ -1069,21 +1069,6 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // CHECK 3: WEEKLY REWARDS PERIOD - Keep as >= 7 (separate system)
-      if (currentWeeklyPeriodStart) {
-        const periodStart = new Date(currentWeeklyPeriodStart);
-        const now = new Date();
-        const daysSincePeriodStart = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
-        
-        console.log(`📅 [Weekly Rewards] Days since period start: ${daysSincePeriodStart}`);
-        
-        if (daysSincePeriodStart >= 7) {
-          console.log("🔄 [Weekly Rewards] Triggering weekly period reset (7+ days passed)");
-          await resetWeeklyPeriod();
-          needsSync = true;
-        }
-      }
-
       if (needsSync) {
         console.log("🔄 Syncing game state after resets...");
         await manualSync();
@@ -1091,7 +1076,7 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
     };
 
     checkResets();
-  }, [lastDailyReset, lastWeeklyReset, currentWeeklyPeriodStart, userId, telegramId, resetDailyTasks, resetWeeklyTasks, resetWeeklyPeriod, manualSync, isInitialized]);
+  }, [lastDailyReset, lastWeeklyReset, userId, telegramId, resetDailyTasks, resetWeeklyTasks, manualSync, isInitialized]);
 
   return (
     <GameStateContext.Provider value={{
