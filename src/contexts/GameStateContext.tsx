@@ -379,6 +379,35 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
         // Load Task State & Initialize reset tracking record
         // FIX: Use authResult directly instead of state variables (which are null in closure)
         if (authResult.profile.id && authResult.profile.telegram_id) {
+          // ✅ CRITICAL FIX: Initialize ALL tasks BEFORE loading from DB
+          console.log("🎬 [GameState] Initializing all tasks...");
+          
+          // Import task definitions (inline to avoid circular dependency)
+          const taskDefinitions = {
+            daily: [
+              { id: "daily_check_in", type: "daily" as const },
+              { id: "daily_tap_100", type: "daily" as const },
+              { id: "daily_idle", type: "daily" as const }
+            ],
+            weekly: [
+              { id: "weekly_upgrade", type: "weekly" as const },
+              { id: "weekly_convert", type: "weekly" as const },
+              { id: "weekly_invite", type: "weekly" as const }
+            ],
+            progressive: [
+              { id: "milestone_taps", type: "progressive" as const },
+              { id: "milestone_invite", type: "progressive" as const }
+            ]
+          };
+          
+          // Initialize all tasks
+          const { initializeTask } = await import("@/services/tasksService");
+          [...taskDefinitions.daily, ...taskDefinitions.weekly, ...taskDefinitions.progressive].forEach(def => {
+            initializeTask(def.id, def.type);
+          });
+          
+          console.log("✅ [GameState] All tasks initialized");
+          
           await loadTasksFromDB();
           console.log("✅ [GameState] Tasks loaded and merged");
           

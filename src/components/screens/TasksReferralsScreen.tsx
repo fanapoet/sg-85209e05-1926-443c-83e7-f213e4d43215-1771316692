@@ -57,8 +57,8 @@ export function TasksReferralsScreen() {
   // State
   const [dailyTasks, setDailyTasks] = useState<Task[]>([]);
   const [weeklyTasks, setWeeklyTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
+  const [loading, setLoading] = useState(false); // Changed to false since tasks are pre-initialized
+  const [initialized, setInitialized] = useState(true); // Changed to true since GameStateContext initializes tasks
   
   // Referral state
   const [referralCode, setReferralCode] = useState<string>("");
@@ -149,23 +149,6 @@ export function TasksReferralsScreen() {
       }
     ]
   };
-
-  // Initialize tasks on first load
-  useEffect(() => {
-    if (initialized) return;
-    
-    console.log("🎬 [Tasks-Init] Initializing tasks...");
-    
-    // Initialize all tasks in tasksService
-    [...taskDefinitions.daily, ...taskDefinitions.weekly, ...taskDefinitions.progressive].forEach(def => {
-      initializeTask(def.id, def.type);
-    });
-    
-    setInitialized(true);
-    setLoading(false);
-    
-    console.log("✅ [Tasks-Init] All tasks initialized");
-  }, [initialized]);
 
   // Load referral data
   useEffect(() => {
