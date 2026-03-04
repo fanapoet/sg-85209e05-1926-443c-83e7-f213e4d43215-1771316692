@@ -1054,7 +1054,7 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
         needsSync = true;
       }
 
-      // CHECK 2: WEEKLY TASK RESET - Changed to >= 8 (reset on day 8, not day 7)
+      // CHECK 2: WEEKLY TASK RESET - Check if 7 days have passed
       if (lastWeeklyReset) {
         const lastWeeklyResetDateObj = new Date(lastWeeklyReset + 'T00:00:00Z');
         const nowUTC = new Date(today + 'T00:00:00Z');
@@ -1062,8 +1062,8 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
         
         console.log(`📅 [Weekly Tasks] Days since last reset: ${daysSinceWeeklyReset}`);
         
-        if (daysSinceWeeklyReset >= 8) {
-          console.log("🔄 [Weekly Tasks] Triggering weekly reset (8+ days passed)");
+        if (daysSinceWeeklyReset >= 7) {
+          console.log("🔄 [Weekly Tasks] Triggering weekly reset (7+ days passed)");
           await resetWeeklyTasks();
           needsSync = true;
         }
