@@ -21,9 +21,11 @@ import {
   loadTasksFromDB, 
   syncTasksWithServer,
   checkAndResetTasks,
-  claimTaskReward
+  claimTaskReward,
+  getLocalTaskProgress
 } from "@/services/tasksService";
 import { upsertTaskState } from "@/services/taskStateService";
+import { syncTaskProgressToDB } from "@/services/taskDataService";
 import { useToast } from "@/hooks/use-toast";
 
 type Tier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
@@ -176,7 +178,7 @@ const safeParse = (value: string | null): string | null => {
   }
 };
 
-export function GameStateProvider({ children }: { children: ReactNode }) {
+export function GameStateProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   const mountedRef = useRef(false);
   const [initError, setInitError] = useState<string | null>(null);
@@ -914,26 +916,54 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const today = new Date().toISOString().split('T')[0];
     
     console.log("🔄 [Weekly Tasks Reset] Resetting weekly tasks");
-    console.log("🔄 [Weekly Tasks Reset] New reset date:", today);
-    
     setLastWeeklyReset(today);
-    
-    // Update localStorage
     safeSetItem("lastWeeklyReset", today);
     
-    // Reset tasks in tasksService
+    // Reset tasks in localStorage
     checkAndResetTasks();
     
-    // Sync to database
+    // ✅ NEW: Sync reset task progress to database
     if (userId && telegramId) {
-      console.log("📤 [Weekly Tasks Reset] Syncing to database...");
+      console.log("📤 [Weekly Tasks Reset] Syncing reset tasks to database...");
+      const tasks = getLocalTaskProgress();
+      let syncCount = 0;
+      
+      const weeklyTasks: any[] = [];
+      for (const [taskId, task] of tasks) {
+        if (task.taskType === "weekly") {
+          weeklyTasks.push({
+            taskId: task.taskId,
+            currentProgress: task.currentProgress,
+            completed: task.completed,
+            claimed: task.claimed,
+            completedAt: task.completedAt,
+            claimedAt: task.claimedAt,
+            resetAt: task.resetAt,
+            taskType: task.taskType,
+            expiresAt: task.expiresAt
+          });
+          syncCount++;
+        }
+      }
+      
+      if (weeklyTasks.length > 0) {
+        try {
+          await syncTaskProgressToDB(telegramId.toString(), weeklyTasks);
+          console.log(`✅ [Weekly Tasks Reset] Synced ${syncCount} weekly tasks to database`);
+        } catch (error) {
+          console.error(`❌ [Weekly Tasks Reset] Failed to sync tasks:`, error);
+        }
+      }
+    }
+    
+    // Sync reset date to database
+    if (userId && telegramId) {
       await upsertTaskState({
         telegramId,
         userId,
         lastDailyReset: lastDailyReset || today,
         lastWeeklyReset: today
       });
-      console.log("✅ [Weekly Tasks Reset] Synced to database");
     }
   }, [userId, telegramId, lastDailyReset]);
 
@@ -941,9 +971,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const today = new Date().toISOString().split('T')[0];
     
     console.log("🔄 [Daily Tasks Reset] Resetting daily tasks");
-    console.log("🔄 [Daily Tasks Reset] New reset date:", today);
-    
-    // CRITICAL: Update React state IMMEDIATELY
     setLastDailyReset(today);
     setTodayTaps(0);
     setHasClaimedIdleToday(false);
@@ -955,7 +982,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     safeSetItem("bunergy_todayTaps", 0);
     safeSetItem("bunergy_hasClaimedIdleToday", false);
     
-    // Reset tasks in tasksService
+    // Reset tasks in localStorage
     checkAndResetTasks();
     
     // Sync to database
@@ -1000,9 +1027,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     console.log("🔄 [NFT-PURCHASE] NFT purchase will sync on next sync");
   };
 
-  // COMBINED DAILY + WEEKLY RESET CHECKER - FIXED VERSION
+  // COMBINED DAILY + WEEKLY RESET CHECKER
   useEffect(() => {
-    // Prevent resets running before server data loads (avoids overwrite race condition)
     if (!isInitialized) {
       console.log("[Reset Checker] ⏳ Waiting for initialization...");
       return;
@@ -1011,131 +1037,56 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     console.log("[Reset Checker] ✅ Reset checker active");
     
     const checkResets = async () => {
-      const now = new Date();
-      const currentDateString = now.toDateString();
-      const today = now.toISOString().split("T")[0];
-      
-      // Read CURRENT values from localStorage (source of truth)
-      const storedLastResetDate = localStorage.getItem("bunergy_lastResetDate");
-      const storedDailyReset = localStorage.getItem("lastDailyReset");
-      const storedWeeklyReset = localStorage.getItem("lastWeeklyReset");
-      const storedWeeklyPeriodStart = localStorage.getItem("currentWeeklyPeriodStart");
-      
-      const lastResetDateStr = safeParse(storedLastResetDate);
-      const lastDailyResetStr = safeParse(storedDailyReset);
-      const lastWeeklyResetStr = safeParse(storedWeeklyReset);
-      const weeklyPeriodStartStr = safeParse(storedWeeklyPeriodStart);
-      
-      console.log(`[Reset Checker] 🔍 Checking at ${now.toLocaleTimeString()}`);
-      
+      if (!userId || !telegramId) return;
+
+      const today = new Date().toISOString().split("T")[0];
       let needsSync = false;
 
-      // INITIALIZE lastDailyReset and lastWeeklyReset if null
-      if (!lastDailyResetStr) {
-        setLastDailyReset(today);
-        safeSetItem("lastDailyReset", today);
-        needsSync = true;
-      }
-
-      if (!lastWeeklyResetStr) {
-        setLastWeeklyReset(today);
-        safeSetItem("lastWeeklyReset", today);
-        needsSync = true;
-      }
-
-      // CHECK 1: DAILY RESET (local toDateString comparison)
-      if (currentDateString !== lastResetDateStr && !hasResetTodayRef.current) {
-        console.log(`[Reset Checker] 🔄 NEW DAY DETECTED!`);
-        
-        // Mark reset in progress
-        hasResetTodayRef.current = true;
-
-        // ATOMIC WRITE TO LOCALSTORAGE
-        localStorage.setItem("bunergy_todayTaps", "0");
-        localStorage.setItem("bunergy_hasClaimedIdleToday", "false");
-        localStorage.setItem("bunergy_qc_uses", "5");
-        localStorage.setItem("bunergy_qc_cooldown", "null");
-        localStorage.setItem("bunergy_qc_last_reset", currentDateString);
-        localStorage.setItem("bunergy_lastResetDate", currentDateString);
-
-        // Update React state
-        setTodayTaps(0);
-        setHasClaimedIdleToday(false);
-        setQuickChargeUsesRemaining(5);
-        setQuickChargeCooldownUntil(null);
-        setQuickChargeLastResetDate(currentDateString);
-        setLastResetDate(currentDateString);
-
-        console.log(`[Reset Checker] ✅ Daily reset complete! QuickCharge restored.`);
-        
-        // IMMEDIATE DATABASE SYNC
-        setTimeout(async () => {
-          try {
-            await syncPlayerState({
-              ...getFullStateForSync(),
-              quickChargeUsesRemaining: 5,
-              quickChargeCooldownUntil: null,
-              quickChargeLastReset: Date.now(), // FIX: Send timestamp number, not string
-              currentEnergy: energy,
-              todayTaps: 0
-            });
-            console.log(`[Reset Checker] ✅ Reset synced to database`);
-          } catch (error) {
-            console.error(`[Reset Checker] ❌ Failed to sync reset:`, error);
-          }
-        }, 100);
-        
-        toast({
-          title: "🌅 New Day!",
-          description: "Daily tasks and limits have been reset. QuickCharge restored!",
-        });
-        
-        needsSync = true;
-      }
-
-      // CHECK 2: DAILY TASK RESET
-      if (lastDailyResetStr && lastDailyResetStr !== today) {
+      // CHECK 1: DAILY TASK RESET
+      if (lastDailyReset !== today) {
+        console.log("🔄 [Daily Tasks] Triggering daily reset");
         await resetDailyTasks();
         needsSync = true;
       }
 
-      // CHECK 3: WEEKLY TASK RESET
-      if (lastWeeklyResetStr) {
-        const lastWeeklyResetDateObj = new Date(lastWeeklyResetStr + 'T00:00:00Z');
+      // CHECK 2: WEEKLY TASK RESET - Changed to >= 8 (reset on day 8, not day 7)
+      if (lastWeeklyReset) {
+        const lastWeeklyResetDateObj = new Date(lastWeeklyReset + 'T00:00:00Z');
         const nowUTC = new Date(today + 'T00:00:00Z');
         const daysSinceWeeklyReset = Math.floor((nowUTC.getTime() - lastWeeklyResetDateObj.getTime()) / (1000 * 60 * 60 * 24));
         
-        if (daysSinceWeeklyReset >= 7) {
+        console.log(`📅 [Weekly Tasks] Days since last reset: ${daysSinceWeeklyReset}`);
+        
+        if (daysSinceWeeklyReset >= 8) {
+          console.log("🔄 [Weekly Tasks] Triggering weekly reset (8+ days passed)");
           await resetWeeklyTasks();
           needsSync = true;
         }
       }
 
-      // CHECK 4: WEEKLY REWARDS PERIOD
-      if (weeklyPeriodStartStr) {
-        const periodStart = new Date(weeklyPeriodStartStr);
+      // CHECK 3: WEEKLY REWARDS PERIOD - Keep as >= 7 (separate system)
+      if (currentWeeklyPeriodStart) {
+        const periodStart = new Date(currentWeeklyPeriodStart);
+        const now = new Date();
         const daysSincePeriodStart = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
         
+        console.log(`📅 [Weekly Rewards] Days since period start: ${daysSincePeriodStart}`);
+        
         if (daysSincePeriodStart >= 7) {
+          console.log("🔄 [Weekly Rewards] Triggering weekly period reset (7+ days passed)");
           await resetWeeklyPeriod();
           needsSync = true;
         }
       }
 
       if (needsSync) {
-        setTimeout(() => syncPlayerState(getFullStateForSync()), 500);
+        console.log("🔄 Syncing game state after resets...");
+        await manualSync();
       }
     };
 
-    // Run check immediately and then every minute
     checkResets();
-    const interval = setInterval(checkResets, 60000);
-
-    return () => {
-      clearInterval(interval);
-      hasResetTodayRef.current = false;
-    };
-  }, [isInitialized, lastResetDate, lastDailyReset, lastWeeklyReset, currentWeeklyPeriodStart, quickChargeUsesRemaining, toast, resetDailyTasks, resetWeeklyTasks, getFullStateForSync, energy]);
+  }, [lastDailyReset, lastWeeklyReset, currentWeeklyPeriodStart, userId, telegramId, resetDailyTasks, resetWeeklyTasks, resetWeeklyPeriod, manualSync, isInitialized]);
 
   return (
     <GameStateContext.Provider value={{

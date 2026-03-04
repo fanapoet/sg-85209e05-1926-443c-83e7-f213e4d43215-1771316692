@@ -116,6 +116,26 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  // Calculate days since weekly reset for Tasks
+  let daysSinceWeeklyReset = 0;
+  let weeklyTaskDay = 0;
+  if (gameState.lastWeeklyReset) {
+    const lastWeeklyResetDateObj = new Date(gameState.lastWeeklyReset + 'T00:00:00Z');
+    const nowUTC = new Date(new Date().toDateString() + 'T00:00:00Z');
+    daysSinceWeeklyReset = Math.floor((nowUTC.getTime() - lastWeeklyResetDateObj.getTime()) / (1000 * 60 * 60 * 24));
+    weeklyTaskDay = Math.min(daysSinceWeeklyReset, 7); // ✅ Show Day 0-7 (reset happens on day 8)
+  }
+
+  // Calculate days since weekly period start for Rewards
+  let daysSincePeriodStart = 0;
+  let weeklyRewardDay = 0;
+  if (gameState.currentWeeklyPeriodStart) {
+    const periodStart = new Date(gameState.currentWeeklyPeriodStart);
+    const now = new Date();
+    daysSincePeriodStart = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
+    weeklyRewardDay = Math.min(daysSincePeriodStart, 6); // ✅ Show Day 0-6 (reset happens on day 7)
+  }
+
   return (
     <div className="fixed inset-0 bg-black/90 z-50 overflow-auto text-white p-4">
       <div className="flex justify-between items-center mb-4">
