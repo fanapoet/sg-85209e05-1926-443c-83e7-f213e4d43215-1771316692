@@ -42,7 +42,7 @@ export function TasksReferralsScreen() {
     totalConversions, 
     totalTaps,
     currentWeeklyPeriodStart, // Use same as Rewards screen
-    resetWeeklyPeriod
+    resetWeeklyPeriod // ✅ ADD THIS - it was missing!
   } = useGameState();
   const { toast } = useToast();
   
