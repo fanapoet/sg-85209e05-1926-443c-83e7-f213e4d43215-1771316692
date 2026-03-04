@@ -31,6 +31,13 @@ interface Task {
 }
 
 export function TasksReferralsScreen() {
+  console.log("🔵 [Tasks] TasksReferralsScreen: Component render START");
+  
+  // ✅ FIX: Hooks at top level, NO try/catch around hooks!
+  const gameStateHook = useGameState();
+  const { toast } = useToast();
+  
+  // Destructure values from hook
   const { 
     addBZ, 
     addBB, 
@@ -41,11 +48,22 @@ export function TasksReferralsScreen() {
     totalUpgrades, 
     totalConversions, 
     totalTaps,
-    currentWeeklyPeriodStart, // Use same as Rewards screen
-    resetWeeklyPeriod // ✅ ADD THIS - it was missing!
-  } = useGameState();
-  const { toast } = useToast();
-  
+    currentWeeklyPeriodStart,
+    resetWeeklyPeriod
+  } = gameStateHook;
+
+  // Log values for debugging (after hooks are called)
+  useEffect(() => {
+    console.log("✅ [Tasks] GameState values loaded:", {
+      referralCount,
+      todayTaps,
+      totalUpgrades,
+      totalConversions,
+      currentWeeklyPeriodStart,
+      hasResetFunction: !!resetWeeklyPeriod
+    });
+  }, [referralCount, todayTaps, totalUpgrades, totalConversions, currentWeeklyPeriodStart, resetWeeklyPeriod]);
+
   // State
   const [dailyTasks, setDailyTasks] = useState<Task[]>([]);
   const [weeklyTasks, setWeeklyTasks] = useState<Task[]>([]);
@@ -316,7 +334,10 @@ export function TasksReferralsScreen() {
         
         const newCompleted = newProgress >= task.target;
         
-        console.log(`🎯 [Weekly-Tasks] ${task.id}: ${task.current} → ${newProgress}`);
+        // Only log if changed
+        if (newProgress !== task.current) {
+          console.log(`🎯 [Weekly-Tasks] ${task.id}: ${task.current} → ${newProgress}`);
+        }
         
         return {
           ...task,
@@ -345,27 +366,31 @@ export function TasksReferralsScreen() {
 
   // Reset weekly tasks if period has changed (align with RewardsNFTsScreen pattern)
   useEffect(() => {
-    if (loading || !currentWeeklyPeriodStart) return;
+    const checkAndReset = async () => {
+      if (loading || !currentWeeklyPeriodStart) return;
 
-    const localStoredPeriod = localStorage.getItem("weeklyTasksResetDate");
-    const dbPeriodStart = new Date(currentWeeklyPeriodStart).getTime();
-    const now = Date.now();
+      const localStoredPeriod = localStorage.getItem("weeklyTasksResetDate");
+      const dbPeriodStart = new Date(currentWeeklyPeriodStart).getTime();
+      const now = Date.now();
 
-    if (!localStoredPeriod) {
-      console.log("🔄 [Weekly Reset] No local period found, setting to DB value");
-      localStorage.setItem("weeklyTasksResetDate", currentWeeklyPeriodStart);
-      console.log("🔄 [Weekly Reset] Calling resetWeeklyPeriod...");
-      resetWeeklyPeriod();
-      return;
-    }
+      if (!localStoredPeriod) {
+        console.log("🔄 [Weekly Reset] No local period found, setting to DB value");
+        localStorage.setItem("weeklyTasksResetDate", currentWeeklyPeriodStart);
+        console.log("🔄 [Weekly Reset] Calling resetWeeklyPeriod...");
+        if (resetWeeklyPeriod) await resetWeeklyPeriod();
+        return;
+      }
 
-    const localPeriodStart = new Date(localStoredPeriod).getTime();
-    if (localPeriodStart !== dbPeriodStart) {
-      console.log("🔄 [Weekly Reset] Period mismatch detected, resetting tasks");
-      localStorage.setItem("weeklyTasksResetDate", currentWeeklyPeriodStart);
-      resetWeeklyPeriod();
-    }
-  }, [currentWeeklyPeriodStart, loading, resetWeeklyPeriod, totalUpgrades, referralCount, totalConversions]);
+      const localPeriodStart = new Date(localStoredPeriod).getTime();
+      if (localPeriodStart !== dbPeriodStart) {
+        console.log("🔄 [Weekly Reset] Period mismatch detected, resetting tasks");
+        localStorage.setItem("weeklyTasksResetDate", currentWeeklyPeriodStart);
+        if (resetWeeklyPeriod) await resetWeeklyPeriod();
+      }
+    };
+    
+    checkAndReset();
+  }, [currentWeeklyPeriodStart, loading, resetWeeklyPeriod]);
 
   const handleClaim = async (task: Task) => {
     if (task.claimed || !task.completed) return;
