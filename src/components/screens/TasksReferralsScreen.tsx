@@ -343,61 +343,27 @@ export function TasksReferralsScreen() {
     }
   }, [weeklyTasks, loading]);
 
-  // Check for weekly reset (SAME AS REWARDS SCREEN)
+  // Reset weekly tasks if period has changed (align with RewardsNFTsScreen pattern)
   useEffect(() => {
-    console.log("🔍 [Weekly Reset Check] Effect triggered");
-    console.log("🔍 [Weekly Reset Check] loading:", loading);
-    console.log("🔍 [Weekly Reset Check] currentWeeklyPeriodStart:", currentWeeklyPeriodStart);
-    
-    if (!loading && currentWeeklyPeriodStart) {
-      const now = new Date();
-      const periodStart = new Date(currentWeeklyPeriodStart);
-      
-      // Calculate difference in days
-      const diffTime = Math.abs(now.getTime() - periodStart.getTime());
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      
-      console.log("📅 [Weekly Reset Check] Current time:", now.toISOString());
-      console.log("📅 [Weekly Reset Check] Period start:", periodStart.toISOString());
-      console.log("📅 [Weekly Reset Check] Days passed:", diffDays);
+    if (loading || !currentWeeklyPeriodStart) return;
 
-      if (diffDays >= 7) {
-        console.log("🔄 [Weekly Reset] 7+ days detected! Resetting weekly tasks...");
-        
-        // 1. Store current values as weekly baselines for delta calculation
-        const weeklyBaselines = {
-          upgrades: totalUpgrades || 0,
-          referrals: referralCount || 0,
-          conversions: totalConversions || 0,
-          timestamp: Date.now()
-        };
-        localStorage.setItem("weeklyTaskBaselines", JSON.stringify(weeklyBaselines));
-        console.log("📊 [Weekly Reset] Stored baselines:", weeklyBaselines);
-        
-        // 2. Clear old localStorage to prevent stale data
-        localStorage.removeItem("weeklyTasks");
-        
-        // 3. Reset Weekly Tasks to 0 progress
-        const resetWeekly = taskDefinitions.weekly.map(def => ({
-          ...def,
-          current: 0,
-          completed: false,
-          claimed: false
-        }));
-        setWeeklyTasks(resetWeekly);
-        localStorage.setItem("weeklyTasks", JSON.stringify(resetWeekly));
-        
-        // 4. Update Context & Database with NEW period start date
-        console.log("🔄 [Weekly Reset] Calling resetWeeklyPeriod...");
-        resetWeeklyPeriod();
-      } else {
-        console.log("✅ [Weekly Reset Check] Still within 7-day period, no reset needed");
-      }
-    } else if (!loading && !currentWeeklyPeriodStart) {
-      console.log("⚠️ [Weekly Reset Check] Missing currentWeeklyPeriodStart - initializing");
+    const localStoredPeriod = localStorage.getItem("weeklyTasksResetDate");
+    const dbPeriodStart = new Date(currentWeeklyPeriodStart).getTime();
+    const now = Date.now();
+
+    if (!localStoredPeriod) {
+      console.log("🔄 [Weekly Reset] No local period found, setting to DB value");
+      localStorage.setItem("weeklyTasksResetDate", currentWeeklyPeriodStart);
+      console.log("🔄 [Weekly Reset] Calling resetWeeklyPeriod...");
       resetWeeklyPeriod();
-    } else {
-      console.log("⏳ [Weekly Reset Check] Still loading or waiting for data");
+      return;
+    }
+
+    const localPeriodStart = new Date(localStoredPeriod).getTime();
+    if (localPeriodStart !== dbPeriodStart) {
+      console.log("🔄 [Weekly Reset] Period mismatch detected, resetting tasks");
+      localStorage.setItem("weeklyTasksResetDate", currentWeeklyPeriodStart);
+      resetWeeklyPeriod();
     }
   }, [currentWeeklyPeriodStart, loading, resetWeeklyPeriod, totalUpgrades, referralCount, totalConversions]);
 
