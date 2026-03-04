@@ -116,6 +116,19 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const clearTaskRelatedLocalStorage = () => {
+    if (typeof window !== 'undefined') {
+      const taskRelatedKeys = [
+        "dailyTasks",
+        "weeklyTasks",
+        "progressiveTasks",
+        "weeklyTaskBaselines"
+      ];
+      taskRelatedKeys.forEach(key => localStorage.removeItem(key));
+      window.location.reload();
+    }
+  };
+
   // Calculate days since weekly reset for Tasks
   let daysSinceWeeklyReset = 0;
   let weeklyTaskDay = 0;
@@ -272,6 +285,12 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
           className="w-full bg-red-600 hover:bg-red-700"
         >
           🧪 Force Reset Challenges
+        </Button>
+        <Button 
+          onClick={clearTaskRelatedLocalStorage} 
+          className="w-full bg-red-600 hover:bg-red-700"
+        >
+          🧪 Clear Task-Related LocalStorage
         </Button>
       </div>
 
