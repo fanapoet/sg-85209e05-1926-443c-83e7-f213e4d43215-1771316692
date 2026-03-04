@@ -922,42 +922,16 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
     // Reset tasks in localStorage
     checkAndResetTasks();
     
-    // ✅ NEW: Sync reset task progress to database
+    // ✅ CRITICAL FIX: Sync ALL reset tasks to database
+    // syncTasksWithServer() reads from localStorage (which now has reset tasks)
+    // and syncs them to user_task_progress table
     if (userId && telegramId) {
       console.log("📤 [Weekly Tasks Reset] Syncing reset tasks to database...");
-      // Use getAllTaskProgress instead of getLocalTaskProgress
-      const tasks = getAllTaskProgress();
-      let syncCount = 0;
-      
-      const weeklyTasks: any[] = [];
-      for (const [taskId, task] of Array.from(tasks.entries())) {
-        if (task.taskType === "weekly") {
-          weeklyTasks.push({
-            taskId: task.taskId,
-            currentProgress: task.currentProgress,
-            completed: task.completed,
-            claimed: task.claimed,
-            completedAt: task.completedAt,
-            claimedAt: task.claimedAt,
-            resetAt: task.resetAt,
-            taskType: task.taskType,
-            expiresAt: task.expiresAt
-          });
-          syncCount++;
-        }
-      }
-      
-      if (weeklyTasks.length > 0) {
-        try {
-          await syncTaskProgressToDB(telegramId.toString(), weeklyTasks);
-          console.log(`✅ [Weekly Tasks Reset] Synced ${syncCount} weekly tasks to database`);
-        } catch (error) {
-          console.error(`❌ [Weekly Tasks Reset] Failed to sync tasks:`, error);
-        }
-      }
+      await syncTasksWithServer();
+      console.log("✅ [Weekly Tasks Reset] Reset tasks synced to database");
     }
     
-    // Sync reset date to database
+    // Sync reset date to user_task_state table
     if (userId && telegramId) {
       await upsertTaskState({
         telegramId,
@@ -965,6 +939,7 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
         lastDailyReset: lastDailyReset || today,
         lastWeeklyReset: today
       });
+      console.log("✅ [Weekly Tasks Reset] Reset date synced to database");
     }
   }, [userId, telegramId, lastDailyReset]);
 
