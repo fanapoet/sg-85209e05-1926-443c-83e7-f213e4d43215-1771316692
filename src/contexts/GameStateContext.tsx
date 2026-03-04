@@ -22,7 +22,7 @@ import {
   syncTasksWithServer,
   checkAndResetTasks,
   claimTaskReward,
-  getLocalTaskProgress
+  getAllTaskProgress
 } from "@/services/tasksService";
 import { upsertTaskState } from "@/services/taskStateService";
 import { syncTaskProgressToDB } from "@/services/taskDataService";
@@ -925,11 +925,12 @@ export function GameStateProvider({ children }: { children: React.ReactNode }) {
     // ✅ NEW: Sync reset task progress to database
     if (userId && telegramId) {
       console.log("📤 [Weekly Tasks Reset] Syncing reset tasks to database...");
-      const tasks = getLocalTaskProgress();
+      // Use getAllTaskProgress instead of getLocalTaskProgress
+      const tasks = getAllTaskProgress();
       let syncCount = 0;
       
       const weeklyTasks: any[] = [];
-      for (const [taskId, task] of tasks) {
+      for (const [taskId, task] of Array.from(tasks.entries())) {
         if (task.taskType === "weekly") {
           weeklyTasks.push({
             taskId: task.taskId,

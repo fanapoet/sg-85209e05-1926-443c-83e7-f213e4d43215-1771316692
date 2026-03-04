@@ -248,7 +248,7 @@ export function checkAndResetTasks(): void {
     if (task.taskType === "weekly" && task.resetAt) {
       const resetDate = new Date(task.resetAt);
       const daysSinceReset = Math.floor((now.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
-      shouldReset = daysSinceReset >= 8;
+      shouldReset = daysSinceReset >= 8;  // Reset on day 8
       
       console.log(`📋 [Tasks-Reset] Weekly task ${taskId}: resetAt=${task.resetAt}, daysSinceReset=${daysSinceReset}, shouldReset=${shouldReset}`);
     }
