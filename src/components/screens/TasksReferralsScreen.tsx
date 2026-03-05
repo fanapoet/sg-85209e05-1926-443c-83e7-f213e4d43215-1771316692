@@ -213,8 +213,14 @@ export function TasksReferralsScreen() {
         console.log(`🎯 [Tasks-Value] weekly_upgrade: totalUpgrades=${totalUpgrades}`);
         return totalUpgrades;
       case "weekly_convert":
-        console.log(`🎯 [Tasks-Value] weekly_convert: totalConversions=${totalConversions}`);
-        return totalConversions;
+        // Fix: Calculate delta from weekly baseline instead of using lifetime total
+        const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
+        const baseConversions = weeklyBaselines.conversions || 0; // Amount at start of week
+        const currentAmount = totalConversions || 0;
+        const weeklyDelta = Math.max(0, currentAmount - baseConversions);
+        
+        console.log(`🎯 [Tasks-Value] weekly_convert: total=${currentAmount}, base=${baseConversions}, delta=${weeklyDelta}`);
+        return weeklyDelta;
       case "weekly_invite":
         console.log(`🎯 [Tasks-Value] weekly_invite: referralCount=${referralCount}`);
         return referralCount;

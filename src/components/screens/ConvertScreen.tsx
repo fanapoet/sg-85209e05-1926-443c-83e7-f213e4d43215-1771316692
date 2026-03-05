@@ -34,6 +34,7 @@ export function ConvertScreen() {
     addBB, 
     subtractBB, 
     incrementConversions,
+    incrementConversionEvents,
     telegramId
   } = useGameState();
   
@@ -249,6 +250,7 @@ export function ConvertScreen() {
         if (subtractBZ(amount)) {
           addBB(preview.output);
           incrementConversions(amount);
+          incrementConversionEvents();
           
           saveTransaction({
             id: txId,
@@ -266,6 +268,7 @@ export function ConvertScreen() {
         const totalCost = amount + preview.burned;
         if (subtractBB(totalCost)) {
           addBZ(preview.output);
+          incrementConversionEvents();
           
           saveTransaction({
             id: txId,

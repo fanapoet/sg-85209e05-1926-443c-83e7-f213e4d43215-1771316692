@@ -86,6 +86,7 @@ export function RewardsNFTsScreen() {
     totalUpgrades, 
     referralCount, 
     totalConversions, 
+    totalConversionEvents,
     totalTapIncome, 
     totalTaps, 
     xp, 
@@ -229,25 +230,29 @@ export function RewardsNFTsScreen() {
     const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
     const baseUpgrades = weeklyBaselines.upgrades || 0;
     const baseReferrals = weeklyBaselines.referrals || 0;
-    const baseConversions = weeklyBaselines.conversions || 0;
+    const baseConversions = weeklyBaselines.conversions || 0; // This is BZ amount
+    const baseTaps = weeklyBaselines.taps || 0;
+    const baseConversionEvents = weeklyBaselines.conversionEvents || 0; // New: This is count
     
     console.log("🎯 [Weekly-Challenge] Updating progress with game state:", {
       totalUpgrades,
       referralCount,
-      totalConversions,
+      totalConversionEvents,
       baseUpgrades,
       baseReferrals,
-      baseConversions
+      baseConversionEvents
     });
     
     setWeeklyChallenges(prev => {
       const updated = prev.map(c => {
         let newProgress = c.progress;
         
-        // Calculate progress as DELTA from weekly baseline
-        if (c.key === "builder") newProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
+        // Calculate progress based on current counters vs baselines
+        if (c.key === "tapper") newProgress = Math.max(0, (totalTaps || 0) - baseTaps);
+        if (c.key === "upgrader") newProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
+        // Fix: Use totalConversionEvents (count) vs baseConversionEvents
+        if (c.key === "converter") newProgress = Math.max(0, (totalConversionEvents || 0) - baseConversionEvents);
         if (c.key === "recruiter") newProgress = Math.max(0, (referralCount || 0) - baseReferrals);
-        if (c.key === "converter") newProgress = Math.max(0, (totalConversions || 0) - baseConversions);
         
         console.log(`🎯 [Weekly-Challenge] ${c.key}: ${c.progress} → ${newProgress}`);
         
@@ -256,7 +261,7 @@ export function RewardsNFTsScreen() {
       
       return updated;
     });
-  }, [totalUpgrades, referralCount, totalConversions, loading]);
+  }, [totalUpgrades, referralCount, totalConversions, totalConversionEvents, totalTaps, loading]);
 
   // Persist Challenges to LocalStorage
   useEffect(() => {
@@ -291,6 +296,8 @@ export function RewardsNFTsScreen() {
           upgrades: totalUpgrades || 0,
           referrals: referralCount || 0,
           conversions: totalConversions || 0,
+          taps: totalTaps || 0,
+          conversionEvents: totalConversionEvents || 0,
           timestamp: Date.now()
         };
         localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
