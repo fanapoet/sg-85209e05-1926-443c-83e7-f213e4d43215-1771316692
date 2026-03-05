@@ -30,7 +30,9 @@ if (typeof window !== "undefined" && !isInterceptionSetup) {
         message.includes("[TASKS-SYNC]") || 
         message.includes("[Tasks]") ||
         message.includes("[Daily Reset]") ||
-        message.includes("[Weekly Reset]")) {
+        message.includes("[Weekly Reset]") ||
+        message.includes("[Exchange Guru Debug]") ||
+        message.includes("[RewardsNFTs]")) {
       
       globalLogs.push({
         timestamp: new Date().toLocaleTimeString(),
@@ -150,6 +152,25 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
               {Math.floor((Date.now() - new Date(gameState.currentWeeklyPeriodStart).getTime()) / (1000 * 60 * 60 * 24))}
             </span></div>
           )}
+        </div>
+      </div>
+
+      {/* Exchange Guru Challenge Debug */}
+      <div className="bg-orange-900 p-4 rounded-lg mb-4">
+        <h3 className="font-bold mb-2">🔍 Exchange Guru Challenge Debug</h3>
+        <div className="text-xs space-y-1 font-mono">
+          <div className="text-orange-300 mb-2">Challenge Definition:</div>
+          <div>Challenge Key: <span className="text-cyan-400">converter</span></div>
+          <div>Target Value: <span className="text-cyan-400">10 conversions</span></div>
+          <div className="border-t border-orange-700 pt-2 mt-2">
+            <div className="text-orange-300 mb-1">Current State:</div>
+            <div>Total Conversion Events: <span className="text-yellow-400">
+              {gameState.totalConversionEvents || 0}
+            </span></div>
+            <div className="text-xs text-orange-300 mt-2">
+              💡 Check logs below for baseline, progress, and completion status
+            </div>
+          </div>
         </div>
       </div>
 

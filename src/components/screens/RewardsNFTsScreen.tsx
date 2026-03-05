@@ -135,6 +135,15 @@ export function RewardsNFTsScreen() {
           case "converter":
             // FIX: Use delta from baseline, not absolute totalConversionEvents
             newProgress = Math.max(0, (totalConversionEvents || 0) - challenge.baselineValue);
+            
+            // DEBUG: Log the calculation
+            console.log("🐛 [Exchange Guru Debug]", {
+              totalConversionEvents,
+              baseline: challenge.baselineValue,
+              newProgress,
+              target: challenge.targetValue,
+              isCompleted: newProgress >= challenge.targetValue
+            });
             break;
           case "recruiter":
             newProgress = Math.max(0, (referralCount || 0) - challenge.baselineValue);
