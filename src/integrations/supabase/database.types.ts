@@ -1,4 +1,4 @@
- 
+/* eslint-disable @typescript-eslint/no-empty-object-type */
 export type Json =
   | string
   | number
@@ -870,6 +870,71 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "user_task_state_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_weekly_challenges: {
+        Row: {
+          baseline_value: number
+          challenge_key: string
+          claimed: boolean
+          claimed_at: string | null
+          completed: boolean
+          completed_at: string | null
+          created_at: string
+          current_progress: number
+          id: string
+          target_value: number
+          telegram_id: number
+          updated_at: string
+          user_id: string
+          week_number: number
+          week_start_date: string
+          year: number
+        }
+        Insert: {
+          baseline_value?: number
+          challenge_key: string
+          claimed?: boolean
+          claimed_at?: string | null
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          current_progress?: number
+          id?: string
+          target_value: number
+          telegram_id: number
+          updated_at?: string
+          user_id: string
+          week_number: number
+          week_start_date?: string
+          year?: number
+        }
+        Update: {
+          baseline_value?: number
+          challenge_key?: string
+          claimed?: boolean
+          claimed_at?: string | null
+          completed?: boolean
+          completed_at?: string | null
+          created_at?: string
+          current_progress?: number
+          id?: string
+          target_value?: number
+          telegram_id?: number
+          updated_at?: string
+          user_id?: string
+          week_number?: number
+          week_start_date?: string
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_weekly_challenges_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
