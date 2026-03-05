@@ -70,9 +70,11 @@ export function RewardsNFTsScreen() {
 
       try {
         console.log("🔄 [RewardsNFTs] Loading weekly challenges from database...");
+        console.log("🔄 [RewardsNFTs] User context:", { userId, telegramId, challengesLoaded });
         
         // Load existing challenges
         let challenges = await loadWeeklyChallenges(userId, telegramId);
+        console.log("🔄 [RewardsNFTs] Loaded challenges:", challenges);
 
         // If no challenges exist for current week, initialize them
         if (challenges.length === 0) {
@@ -99,15 +101,22 @@ export function RewardsNFTsScreen() {
             console.log("📦 [RewardsNFTs] Migrated baselines from localStorage:", baselines);
           }
 
+          console.log("📝 [RewardsNFTs] Initializing with baselines:", baselines);
           challenges = await initializeWeeklyChallenges(userId, telegramId, baselines);
+          console.log("✅ [RewardsNFTs] Challenges initialized:", challenges);
         }
 
         setWeeklyChallenges(challenges);
         setChallengesLoaded(true);
-        console.log("✅ [RewardsNFTs] Challenges loaded:", challenges);
+        console.log("✅ [RewardsNFTs] Challenges loaded into state:", challenges);
+        console.log("✅ [RewardsNFTs] State updated - challengesLoaded:", true);
 
       } catch (error) {
         console.error("❌ [RewardsNFTs] Failed to load challenges:", error);
+        console.error("❌ [RewardsNFTs] Error details:", {
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        });
       }
     }
 
@@ -218,6 +227,8 @@ export function RewardsNFTsScreen() {
 
   // Convert database format to UI format
   const uiChallenges: WeeklyChallenge[] = useMemo(() => {
+    console.log("🔄 [RewardsNFTs] Computing uiChallenges from weeklyChallenges:", weeklyChallenges);
+    
     const challengeDefinitions: Record<ChallengeKey, { name: string; icon: string; description: string; reward: { type: "XP" | "BB"; amount: number } }> = {
       tapper: { name: "Tap Master", icon: "Zap", description: "Tap 100,000 times", reward: { type: "XP", amount: 5000 } },
       builder: { name: "Builder", icon: "Hammer", description: "Buy 10 upgrades", reward: { type: "XP", amount: 5000 } },
@@ -225,7 +236,7 @@ export function RewardsNFTsScreen() {
       recruiter: { name: "Networker", icon: "Users", description: "Invite 5 friends", reward: { type: "BB", amount: 1000 } }
     };
 
-    return weeklyChallenges.map((challenge) => {
+    const result = weeklyChallenges.map((challenge) => {
       const def = challengeDefinitions[challenge.challengeKey];
       return {
         key: challenge.challengeKey,
@@ -238,6 +249,9 @@ export function RewardsNFTsScreen() {
         claimed: challenge.claimed
       };
     });
+    
+    console.log("✅ [RewardsNFTs] uiChallenges computed:", result);
+    return result;
   }, [weeklyChallenges]);
 
   // Handle Challenge Claim

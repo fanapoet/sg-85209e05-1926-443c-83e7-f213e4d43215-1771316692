@@ -155,20 +155,37 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      {/* Exchange Guru Challenge Debug */}
+      {/* Exchange Guru Debug */}
       <div className="bg-orange-900 p-4 rounded-lg mb-4">
-        <h3 className="font-bold mb-2">🔍 Exchange Guru Challenge Debug</h3>
-        <div className="text-xs space-y-1 font-mono">
-          <div className="text-orange-300 mb-2">Challenge Definition:</div>
-          <div>Challenge Key: <span className="text-cyan-400">converter</span></div>
-          <div>Target Value: <span className="text-cyan-400">10 conversions</span></div>
-          <div className="border-t border-orange-700 pt-2 mt-2">
-            <div className="text-orange-300 mb-1">Current State:</div>
-            <div>Total Conversion Events: <span className="text-yellow-400">
-              {gameState.totalConversionEvents || 0}
-            </span></div>
-            <div className="text-xs text-orange-300 mt-2">
-              💡 Check logs below for baseline, progress, and completion status
+        <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
+          <span>🔍</span>
+          Exchange Guru Challenge Debug
+        </h3>
+        <div className="space-y-2 text-sm font-mono">
+          <div>
+            <strong>Challenge Definition:</strong>
+            <div className="pl-4">
+              <div>Challenge Key: converter</div>
+              <div className="text-cyan-300">Target Value: 10 conversions</div>
+            </div>
+          </div>
+          <div>
+            <strong>Current State:</strong>
+            <div className="pl-4">
+              <div>Total Conversion Events: {gameState.totalConversionEvents || 0}</div>
+              <div className="text-yellow-300">
+                💡 Check logs below for baseline, progress, and completion status
+              </div>
+            </div>
+          </div>
+          <div>
+            <strong>Loading State:</strong>
+            <div className="pl-4">
+              <div>Challenges Loaded: {String(gameState.challengesLoaded)}</div>
+              <div>Weekly Challenges Count: {gameState.weeklyChallenges?.length || 0}</div>
+              <div className="text-yellow-300">
+                💡 Check "🔄 [RewardsNFTs]" logs below for initialization details
+              </div>
             </div>
           </div>
         </div>
