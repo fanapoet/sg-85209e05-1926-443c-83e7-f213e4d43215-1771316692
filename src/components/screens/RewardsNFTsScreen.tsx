@@ -1,88 +1,43 @@
+import React, { useState, useEffect, useMemo } from "react";
 import { useGameState } from "@/contexts/GameStateContext";
-import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { AlertCircle, Trophy, Zap, Target, Users, ArrowLeftRight, Hammer, Coins, Gift, Sparkles, TrendingUp, Award, CheckCircle2, Lock } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { 
-  Gift, 
-  Trophy, 
-  Users, 
-  Hammer, 
-  ArrowLeftRight, 
-  Zap, 
-  Star, 
-  Crown,
-  Check,
-  Lock,
-  Calendar,
-  Target,
-  TrendingUp
-} from "lucide-react";
+  loadWeeklyChallenges, 
+  initializeWeeklyChallenges, 
+  updateChallengeProgress,
+  claimChallengeReward,
+  resetWeeklyChallenges,
+  type ChallengeKey,
+  type WeeklyChallengeData
+} from "@/services/weeklyChallengeSyncService";
 
-interface DailyReward {
-  day: number;
-  type: "BZ" | "BB" | "XP";
-  amount: number;
-}
+type NFT = Database["public"]["Tables"]["nfts"]["Row"];
 
 interface WeeklyChallenge {
-  key: string;
+  key: ChallengeKey;
   name: string;
   icon: string;
   description: string;
   target: number;
   progress: number;
-  reward: { type: "BZ" | "BB" | "XP"; amount: number };
+  reward: { type: "XP" | "BB"; amount: number };
   claimed: boolean;
 }
 
-interface NFT {
-  key: string;
-  name: string;
-  icon: string;
-  description: string;
-  price: number;
-  requirement: string;
-  requirementMet: boolean;
-  owned: boolean;
-}
-
-const getWeeklyRewards = (weekNumber: number): DailyReward[] => {
-  const baseRewards = [
-    { day: 1, type: "XP" as const, amount: 2000 },
-    { day: 2, type: "BZ" as const, amount: 5000 },
-    { day: 3, type: "XP" as const, amount: 3000 },
-    { day: 4, type: "BZ" as const, amount: 8000 },
-    { day: 5, type: "XP" as const, amount: 5000 },
-    { day: 6, type: "BB" as const, amount: 0.001 },
-    { day: 7, type: "BZ" as const, amount: 15000 }
-  ];
-
-  return baseRewards.map(reward => ({
-    ...reward,
-    amount: reward.type === "BB" 
-      ? reward.amount * weekNumber 
-      : reward.amount * weekNumber
-  }));
-};
-
-const getIconComponent = (iconName: string) => {
-  const icons: Record<string, any> = {
-    Hammer, Users, ArrowLeftRight, Star, Zap, Trophy, Crown
-  };
-  return icons[iconName] || Star;
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  Trophy, Zap, Target, Users, ArrowLeftRight, Hammer, Coins, Gift, Sparkles, TrendingUp, Award
 };
 
 export function RewardsNFTsScreen() {
-  const { 
-    // State
-    dailyStreak, 
-    currentRewardWeek, 
-    lastDailyClaimDate,
-    currentWeeklyPeriodStart,
-    
-    // Stats for Challenges
+  const {
+    bz,
+    bb,
     totalUpgrades, 
     referralCount, 
     totalConversions, 
@@ -90,763 +45,524 @@ export function RewardsNFTsScreen() {
     totalTapIncome, 
     totalTaps, 
     xp, 
-    bb, 
-    
-    // Methods
-    performDailyClaim,
-    addBZ, 
-    addBB, 
-    addXP,
-    purchaseNFT,
-    resetWeeklyPeriod
+    bb: playerBB,
+    addXP, 
+    addBB,
+    currentWeeklyPeriodStart,
+    resetWeeklyPeriod,
+    telegramId,
+    userId
   } = useGameState();
-  
-  console.log("[Weekly Reset] 🎬 RewardsNFTsScreen mounted/rendered");
-  console.log("[Weekly Reset] 📊 currentWeeklyPeriodStart from context:", currentWeeklyPeriodStart);
-  
-  const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
-  const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallenge[]>([]);
+
+  const [nfts, setNfts] = useState<NFT[]>([]);
+  const [ownedNFTs, setOwnedNFTs] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [selectedTab, setSelectedTab] = useState<"challenges" | "nfts">("challenges");
 
-  // Use context values for rewards
-  const currentWeek = currentRewardWeek || 1;
-  const streak = dailyStreak || 0;
-  const dailyRewards = getWeeklyRewards(currentWeek);
+  // Weekly Challenges State (now synced with database)
+  const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallengeData[]>([]);
+  const [challengesLoaded, setChallengesLoaded] = useState(false);
 
-  // Initialize Challenges & NFTs from LocalStorage (UI state only)
+  // Initialize Weekly Challenges from Database
   useEffect(() => {
-    // Load Owned NFTs
-    try {
-      const savedNFTs = localStorage.getItem("ownedNFTs");
-      if (savedNFTs) {
-        const parsed = JSON.parse(savedNFTs);
-        // Handle both old format (strings) and new format (objects)
-        if (Array.isArray(parsed)) {
-          const nftIds = parsed.map((item: any) => 
-            typeof item === "string" ? item : item.nftId
-          );
+    async function initChallenges() {
+      if (!userId || !telegramId || challengesLoaded) return;
+
+      try {
+        console.log("🔄 [RewardsNFTs] Loading weekly challenges from database...");
+        
+        // Load existing challenges
+        let challenges = await loadWeeklyChallenges(userId, telegramId);
+
+        // If no challenges exist for current week, initialize them
+        if (challenges.length === 0) {
+          console.log("📝 [RewardsNFTs] No challenges found, initializing...");
           
-          // ✅ DEDUPLICATE: Use Set to ensure uniqueness
-          const uniqueNFTs = Array.from(new Set(nftIds));
-          setOwnedNFTs(uniqueNFTs);
-          
-          // ✅ CLEANUP: Save deduplicated version back to localStorage
-          if (uniqueNFTs.length !== nftIds.length) {
-            console.log(`🧹 [NFT-CLEANUP] Removed ${nftIds.length - uniqueNFTs.length} duplicate NFTs from localStorage`);
-            localStorage.setItem("ownedNFTs", JSON.stringify(uniqueNFTs));
+          // Migrate from localStorage if exists
+          const localBaselines = localStorage.getItem("weeklyBaselines");
+          let baselines = {
+            taps: totalTaps || 0,
+            upgrades: totalUpgrades || 0,
+            conversionEvents: totalConversionEvents || 0,
+            referrals: referralCount || 0
+          };
+
+          // Use localStorage baselines if available (migration)
+          if (localBaselines) {
+            const parsed = JSON.parse(localBaselines);
+            baselines = {
+              taps: parsed.taps || totalTaps || 0,
+              upgrades: parsed.upgrades || totalUpgrades || 0,
+              conversionEvents: parsed.conversionEvents || totalConversionEvents || 0,
+              referrals: parsed.referrals || referralCount || 0
+            };
+            console.log("📦 [RewardsNFTs] Migrated baselines from localStorage:", baselines);
           }
+
+          challenges = await initializeWeeklyChallenges(userId, telegramId, baselines);
         }
+
+        setWeeklyChallenges(challenges);
+        setChallengesLoaded(true);
+        console.log("✅ [RewardsNFTs] Challenges loaded:", challenges);
+
+      } catch (error) {
+        console.error("❌ [RewardsNFTs] Failed to load challenges:", error);
       }
-    } catch (e) {
-      console.error("Failed to load NFTs", e);
     }
 
-    // Load/Init Challenges with validation
-    try {
-      // ✅ CRITICAL FIX: Validate localStorage against current weekly period
-      const savedChallenges = localStorage.getItem("weeklyChallenges");
-      const savedBaselines = localStorage.getItem("weeklyBaselines");
-      
-      // Check if we need to initialize fresh challenges
-      let shouldInitializeFresh = false;
-      
-      if (currentWeeklyPeriodStart && savedBaselines) {
-        try {
-          const baselines = JSON.parse(savedBaselines);
-          const baselineTimestamp = baselines.timestamp || 0;
-          const periodStart = new Date(currentWeeklyPeriodStart).getTime();
-          
-          // If baselines are from before the current period start, they're stale
-          if (baselineTimestamp < periodStart) {
-            console.log("🧹 [Challenges] Baselines are stale, initializing fresh");
-            shouldInitializeFresh = true;
-            localStorage.removeItem("weeklyChallenges");
-            localStorage.removeItem("weeklyBaselines");
-          }
-        } catch (e) {
-          console.error("Error validating baselines:", e);
-          shouldInitializeFresh = true;
-        }
-      }
-      
-      if (savedChallenges && !shouldInitializeFresh) {
-        setWeeklyChallenges(JSON.parse(savedChallenges));
-      } else {
-        // Initialize fresh challenges with current baselines
-        const initialBaselines = {
-          upgrades: totalUpgrades || 0,
-          referrals: referralCount || 0,
-          conversions: totalConversions || 0,
-          timestamp: Date.now()
-        };
-        localStorage.setItem("weeklyBaselines", JSON.stringify(initialBaselines));
-        
-        // Default Challenges - Initialize with 0 progress
-        setWeeklyChallenges([
-          {
-            key: "builder",
-            name: "Master Builder",
-            icon: "Hammer",
-            description: "Perform 50 upgrades",
-            target: 50,
-            progress: 0,
-            reward: { type: "BZ", amount: 10000 },
-            claimed: false
-          },
-          {
-            key: "recruiter",
-            name: "Top Recruiter",
-            icon: "Users",
-            description: "Invite 5 friends",
-            target: 5,
-            progress: 0,
-            reward: { type: "BB", amount: 0.005 },
-            claimed: false
-          },
-          {
-            key: "converter",
-            name: "Exchange Guru",
-            icon: "ArrowLeftRight",
-            description: "Convert 10 times",
-            target: 10,
-            progress: 0,
-            reward: { type: "XP", amount: 5000 },
-            claimed: false
-          }
-        ]);
-      }
-    } catch (e) {
-      console.error("Failed to load challenges", e);
-    }
-    
-    setLoading(false);
-  }, [currentWeeklyPeriodStart]);
+    initChallenges();
+  }, [userId, telegramId, challengesLoaded]);
 
-  // Update Challenge Progress based on Context Stats
+  // Update Challenge Progress (syncs with database)
   useEffect(() => {
-    if (loading) return;
-    
-    // Get weekly baselines (values at start of current week)
-    const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
-    const baseUpgrades = weeklyBaselines.upgrades || 0;
-    const baseReferrals = weeklyBaselines.referrals || 0;
-    const baseConversions = weeklyBaselines.conversions || 0; // This is BZ amount
-    const baseTaps = weeklyBaselines.taps || 0;
-    const baseConversionEvents = weeklyBaselines.conversionEvents || 0; // New: This is count
-    
-    console.log("🎯 [Weekly-Challenge] Updating progress with game state:", {
-      totalUpgrades,
-      referralCount,
-      totalConversionEvents,
-      baseUpgrades,
-      baseReferrals,
-      baseConversionEvents
-    });
-    
-    setWeeklyChallenges(prev => {
-      const updated = prev.map(c => {
-        let newProgress = c.progress;
-        
-        // Calculate progress based on current counters vs baselines
-        if (c.key === "tapper") newProgress = Math.max(0, (totalTaps || 0) - baseTaps);
-        if (c.key === "upgrader") newProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
-        // Fix: Use totalConversionEvents (count) vs baseConversionEvents
-        if (c.key === "converter") newProgress = Math.max(0, (totalConversionEvents || 0) - baseConversionEvents);
-        if (c.key === "recruiter") newProgress = Math.max(0, (referralCount || 0) - baseReferrals);
-        
-        console.log(`🎯 [Weekly-Challenge] ${c.key}: ${c.progress} → ${newProgress}`);
-        
-        return { ...c, progress: Math.min(newProgress, c.target) };
+    if (!userId || !challengesLoaded || weeklyChallenges.length === 0) return;
+
+    async function syncProgress() {
+      const updates: Array<{ key: ChallengeKey; progress: number; completed: boolean }> = [];
+
+      weeklyChallenges.forEach((challenge) => {
+        let newProgress = 0;
+
+        // Calculate progress based on challenge type
+        switch (challenge.challengeKey) {
+          case "tapper":
+            newProgress = Math.max(0, (totalTaps || 0) - challenge.baselineValue);
+            break;
+          case "builder":
+            newProgress = Math.max(0, (totalUpgrades || 0) - challenge.baselineValue);
+            break;
+          case "converter":
+            // FIX: Use delta from baseline, not absolute totalConversionEvents
+            newProgress = Math.max(0, (totalConversionEvents || 0) - challenge.baselineValue);
+            break;
+          case "recruiter":
+            newProgress = Math.max(0, (referralCount || 0) - challenge.baselineValue);
+            break;
+        }
+
+        // Check if progress changed or completion status changed
+        const wasCompleted = challenge.completed;
+        const isCompleted = newProgress >= challenge.targetValue;
+
+        if (newProgress !== challenge.currentProgress || wasCompleted !== isCompleted) {
+          updates.push({
+            key: challenge.challengeKey,
+            progress: newProgress,
+            completed: isCompleted
+          });
+        }
       });
-      
-      return updated;
-    });
-  }, [totalUpgrades, referralCount, totalConversions, totalConversionEvents, totalTaps, loading]);
 
-  // Persist Challenges to LocalStorage
-  useEffect(() => {
-    if (!loading && weeklyChallenges.length > 0) {
-      localStorage.setItem("weeklyChallenges", JSON.stringify(weeklyChallenges));
+      // Batch update all changed challenges
+      if (updates.length > 0) {
+        console.log("🔄 [RewardsNFTs] Syncing challenge progress:", updates);
+
+        for (const update of updates) {
+          await updateChallengeProgress(userId, update.key, update.progress, update.completed);
+        }
+
+        // Reload challenges to get updated state
+        const freshChallenges = await loadWeeklyChallenges(userId, telegramId!);
+        setWeeklyChallenges(freshChallenges);
+      }
     }
-  }, [weeklyChallenges, loading]);
 
-  // Check for weekly reset after challenges are loaded and context is available
+    syncProgress();
+  }, [userId, telegramId, totalTaps, totalUpgrades, totalConversionEvents, referralCount, challengesLoaded, weeklyChallenges]);
+
+  // Check for Weekly Reset
   useEffect(() => {
-    console.log("🔍 [Weekly Reset Check] Effect triggered");
-    console.log("🔍 [Weekly Reset Check] loading:", loading);
-    console.log("🔍 [Weekly Reset Check] currentWeeklyPeriodStart:", currentWeeklyPeriodStart);
-    
-    if (!loading && currentWeeklyPeriodStart) {
-      const now = new Date();
-      const periodStart = new Date(currentWeeklyPeriodStart);
-      
-      // Calculate difference in days
-      const diffTime = Math.abs(now.getTime() - periodStart.getTime());
-      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      
-      console.log("📅 [Weekly Reset Check] Current time:", now.toISOString());
-      console.log("📅 [Weekly Reset Check] Period start:", periodStart.toISOString());
-      console.log("📅 [Weekly Reset Check] Days passed:", diffDays);
+    async function checkWeeklyReset() {
+      if (!userId || !telegramId || !challengesLoaded) return;
 
-      if (diffDays >= 7) {
-        console.log("🔄 [Weekly Reset] 7+ days detected! Resetting challenges...");
+      const currentWeekStartDate = new Date();
+      const day = currentWeekStartDate.getDay();
+      const diff = currentWeekStartDate.getDate() - day + (day === 0 ? -6 : 1);
+      currentWeekStartDate.setDate(diff);
+      currentWeekStartDate.setHours(0, 0, 0, 0);
+      const weekStartISO = currentWeekStartDate.toISOString().split("T")[0];
+
+      // Check if we need to reset (week has changed)
+      if (weeklyChallenges.length > 0 && weeklyChallenges[0].weekStartDate !== weekStartISO) {
+        console.log("🔄 [RewardsNFTs] Week changed, resetting challenges...");
         
-        // 0. Store current values as weekly baselines for delta calculation
-        const weeklyBaselines = {
-          upgrades: totalUpgrades || 0,
-          referrals: referralCount || 0,
-          conversions: totalConversions || 0,
+        // Reset with current values as new baselines
+        await resetWeeklyChallenges(userId, telegramId, {
           taps: totalTaps || 0,
+          upgrades: totalUpgrades || 0,
           conversionEvents: totalConversionEvents || 0,
-          timestamp: Date.now()
-        };
-        localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
-        console.log("📊 [Weekly Reset] Stored baselines:", weeklyBaselines);
+          referrals: referralCount || 0
+        });
+
+        // Reload challenges
+        const freshChallenges = await loadWeeklyChallenges(userId, telegramId);
+        setWeeklyChallenges(freshChallenges);
         
-        // 1. Clear old localStorage to prevent stale data
-        localStorage.removeItem("weeklyChallenges");
-        
-        // 2. Reset Local Challenges to 0 progress
-        setWeeklyChallenges([
-          {
-            key: "builder",
-            name: "Master Builder",
-            icon: "Hammer",
-            description: "Perform 50 upgrades",
-            target: 50,
-            progress: 0,
-            reward: { type: "BZ", amount: 10000 },
-            claimed: false
-          },
-          {
-            key: "recruiter",
-            name: "Top Recruiter",
-            icon: "Users",
-            description: "Invite 5 friends",
-            target: 5,
-            progress: 0,
-            reward: { type: "BB", amount: 0.005 },
-            claimed: false
-          },
-          {
-            key: "converter",
-            name: "Exchange Guru",
-            icon: "ArrowLeftRight",
-            description: "Convert 10 times",
-            target: 10,
-            progress: 0,
-            reward: { type: "XP", amount: 5000 },
-            claimed: false
-          }
-        ]);
-        
-        // 3. Update Database & Context with NEW period start date
-        console.log("🔄 [Weekly Reset] Calling resetWeeklyPeriod...");
+        // Update context
         resetWeeklyPeriod();
-      } else {
-        console.log("✅ [Weekly Reset Check] Still within 7-day period, no reset needed");
       }
-    } else if (!loading && !currentWeeklyPeriodStart) {
-      console.log("⚠️ [Weekly Reset Check] Missing currentWeeklyPeriodStart - initializing");
-      resetWeeklyPeriod();
-    } else {
-      console.log("⏳ [Weekly Reset Check] Still loading or waiting for data");
     }
-  }, [currentWeeklyPeriodStart, loading, resetWeeklyPeriod, totalUpgrades, referralCount, totalConversions]);
 
-  const isStage2Complete = (): boolean => {
+    checkWeeklyReset();
+  }, [userId, telegramId, challengesLoaded, weeklyChallenges]);
+
+  // Convert database format to UI format
+  const uiChallenges: WeeklyChallenge[] = useMemo(() => {
+    const challengeDefinitions: Record<ChallengeKey, { name: string; icon: string; description: string; reward: { type: "XP" | "BB"; amount: number } }> = {
+      tapper: { name: "Tap Master", icon: "Zap", description: "Tap 100,000 times", reward: { type: "XP", amount: 5000 } },
+      builder: { name: "Builder", icon: "Hammer", description: "Buy 10 upgrades", reward: { type: "XP", amount: 5000 } },
+      converter: { name: "Exchange Guru", icon: "ArrowLeftRight", description: "Convert 10 times", reward: { type: "XP", amount: 5000 } },
+      recruiter: { name: "Networker", icon: "Users", description: "Invite 5 friends", reward: { type: "BB", amount: 1000 } }
+    };
+
+    return weeklyChallenges.map((challenge) => {
+      const def = challengeDefinitions[challenge.challengeKey];
+      return {
+        key: challenge.challengeKey,
+        name: def.name,
+        icon: def.icon,
+        description: def.description,
+        target: challenge.targetValue,
+        progress: challenge.currentProgress,
+        reward: def.reward,
+        claimed: challenge.claimed
+      };
+    });
+  }, [weeklyChallenges]);
+
+  // Handle Challenge Claim
+  const handleClaimChallenge = async (challengeKey: ChallengeKey, reward: { type: "XP" | "BB"; amount: number }) => {
+    if (!userId) return;
+
     try {
-      const buildParts = localStorage.getItem("buildParts");
-      if (!buildParts) return false;
-      
-      const parts = JSON.parse(buildParts);
-      const stage2Parts = Object.keys(parts).filter(k => k.startsWith("s2p"));
-      const stage2L5Count = stage2Parts.filter(k => parts[k].level >= 5).length;
-      return stage2L5Count >= 10;
-    } catch {
-      return false;
-    }
-  };
+      console.log("🎁 [RewardsNFTs] Claiming challenge:", challengeKey);
 
-  const areBoostersMaxed = (): boolean => {
-    try {
-      const boosters = localStorage.getItem("boosters");
-      if (!boosters) return false;
+      // Claim in database
+      const success = await claimChallengeReward(userId, challengeKey);
       
-      const data = JSON.parse(boosters);
-      return (
-        data.energyPerTap >= 10 && 
-        data.energyCapacity >= 10 && 
-        data.recoveryRate >= 10
-      );
-    } catch {
-      return false;
-    }
-  };
+      if (success) {
+        // Add reward
+        if (reward.type === "XP") {
+          addXP(reward.amount);
+        } else {
+          addBB(reward.amount);
+        }
 
-  const nfts: NFT[] = [
-    {
-      key: "NFT_EARLY",
-      name: "Early Adopter",
-      icon: "Star",
-      description: "Welcome to Bunergy! Free for all players.",
-      price: 0,
-      requirement: "Free",
-      requirementMet: true,
-      owned: ownedNFTs.includes("NFT_EARLY")
-    },
-    {
-      key: "NFT_SOCIAL",
-      name: "Social King",
-      icon: "Users",
-      description: "Master of connections and community.",
-      price: 2,
-      requirement: "20 referrals",
-      requirementMet: (referralCount || 0) >= 20,
-      owned: ownedNFTs.includes("NFT_SOCIAL")
-    },
-    {
-      key: "NFT_BUILDER",
-      name: "Builder Pro",
-      icon: "Hammer",
-      description: "Expert in construction and upgrades.",
-      price: 2,
-      requirement: "Complete Stage 2",
-      requirementMet: isStage2Complete(),
-      owned: ownedNFTs.includes("NFT_BUILDER")
-    },
-    {
-      key: "NFT_TAPPER",
-      name: "Tap Legend",
-      icon: "Zap",
-      description: "Legendary tapping power unleashed.",
-      price: 4,
-      requirement: "Earn 10M BZ from tapping",
-      requirementMet: (totalTapIncome || 0) >= 10000000,
-      owned: ownedNFTs.includes("NFT_TAPPER")
-    },
-    {
-      key: "NFT_ENERGY",
-      name: "Energy Master",
-      icon: "Trophy",
-      description: "Perfect energy management achieved.",
-      price: 3,
-      requirement: "Max all energy boosters",
-      requirementMet: areBoostersMaxed(),
-      owned: ownedNFTs.includes("NFT_ENERGY")
-    },
-    {
-      key: "NFT_GOLDEN",
-      name: "Golden Bunny",
-      icon: "Crown",
-      description: "The ultimate tapping achievement.",
-      price: 5,
-      requirement: "5M taps total",
-      requirementMet: (totalTaps || 0) >= 5000000,
-      owned: ownedNFTs.includes("NFT_GOLDEN")
-    },
-    {
-      key: "NFT_DIAMOND",
-      name: "Diamond Crystal",
-      icon: "Trophy",
-      description: "Reached the pinnacle of experience.",
-      price: 7,
-      requirement: "500k+ XP",
-      requirementMet: (xp || 0) >= 500000,
-      owned: ownedNFTs.includes("NFT_DIAMOND")
-    }
-  ];
-
-  const handleDailyClaim = async () => {
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      
-      // Check if already claimed today
-      if (lastDailyClaimDate) {
-        const lastClaim = new Date(lastDailyClaimDate);
-        lastClaim.setHours(0, 0, 0, 0);
-        if (lastClaim.getTime() === today.getTime()) return;
+        // Reload challenges
+        const freshChallenges = await loadWeeklyChallenges(userId, telegramId!);
+        setWeeklyChallenges(freshChallenges);
+        
+        console.log("✅ [RewardsNFTs] Challenge claimed successfully");
       }
-
-      const nextDay = (streak % 7) + 1;
-      const reward = dailyRewards[nextDay - 1];
-      
-      let nextWeek = currentWeek;
-      if (nextDay === 7) {
-        nextWeek = currentWeek + 1;
-      }
-
-      console.log(`🎁 [Rewards] Claiming Day ${nextDay}, Week ${nextWeek}`);
-      
-      // Use Context Method to update state & sync to DB
-      await performDailyClaim(nextDay, nextWeek, reward.type, reward.amount);
-      
     } catch (error) {
-      console.error("❌ [Rewards] Error claiming daily reward:", error);
+      console.error("❌ [RewardsNFTs] Claim failed:", error);
     }
   };
 
-  const handleClaimChallenge = (challengeKey: string) => {
-    try {
-      setWeeklyChallenges(prev => 
-        prev.map(c => {
-          if (c.key === challengeKey && c.progress >= c.target && !c.claimed) {
-            console.log(`🎯 [Rewards] Claiming challenge: ${c.name}`);
-            
-            // Update Balances via Context
-            if (c.reward.type === "BZ") addBZ(c.reward.amount);
-            if (c.reward.type === "BB") addBB(c.reward.amount);
-            if (c.reward.type === "XP") addXP(c.reward.amount);
-            
-            return { ...c, claimed: true };
-          }
-          return c;
-        })
-      );
-    } catch (error) {
-      console.error("❌ [Rewards] Error claiming challenge:", error);
-    }
-  };
+  // Fetch NFTs from Database
+  useEffect(() => {
+    async function fetchNFTs() {
+      if (!userId) return;
 
-  // Helper to check if claimed today
-  const isClaimedToday = () => {
-    if (!lastDailyClaimDate) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const lastClaim = new Date(lastDailyClaimDate);
-    lastClaim.setHours(0, 0, 0, 0);
-    return lastClaim.getTime() === today.getTime();
-  };
+      try {
+        setLoading(true);
+
+        const { data: nftsData, error: nftsError } = await supabase
+          .from("nfts")
+          .select("*")
+          .order("price_bb", { ascending: true });
+
+        if (nftsError) throw nftsError;
+
+        const { data: userNFTsData, error: userNFTsError } = await supabase
+          .from("user_nfts")
+          .select("nft_id")
+          .eq("user_id", userId);
+
+        if (userNFTsError) throw userNFTsError;
+
+        setNfts(nftsData || []);
+        setOwnedNFTs(new Set((userNFTsData || []).map((un) => un.nft_id)));
+      } catch (error) {
+        console.error("Error fetching NFTs:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchNFTs();
+  }, [userId]);
 
   const handlePurchaseNFT = async (nft: NFT) => {
+    if (!userId || playerBB < nft.price_bb) return;
+
     try {
-      if (nft.owned || !nft.requirementMet) return;
-      
-      // Use context method which handles both balance deduction and DB sync
-      purchaseNFT(nft.key, nft.price);
-      
-      // Update local UI state
-      const updated = [...ownedNFTs, nft.key];
-      setOwnedNFTs(updated);
-      localStorage.setItem("ownedNFTs", JSON.stringify(updated));
+      const { error } = await supabase.from("user_nfts").insert({
+        user_id: userId,
+        nft_id: nft.id,
+        telegram_id: telegramId || 0
+      });
+
+      if (error) throw error;
+
+      addBB(-nft.price_bb);
+      setOwnedNFTs((prev) => new Set([...prev, nft.id]));
     } catch (error) {
-      console.error("❌ [Rewards] Error purchasing NFT:", error);
+      console.error("Error purchasing NFT:", error);
     }
   };
 
-  const canClaimDaily = !isClaimedToday();
-  const currentDayReward = dailyRewards[(streak % 7)];
+  const canPurchaseNFT = (nft: NFT): boolean => {
+    if (ownedNFTs.has(nft.id)) return false;
+    if (playerBB < nft.price_bb) return false;
 
-  const getProgressText = (nft: NFT): string => {
-    if (nft.owned) return "";
-    switch (nft.key) {
-      case "NFT_EARLY": return "Always Available";
-      case "NFT_SOCIAL": return `${referralCount || 0} / 20 referrals`;
-      case "NFT_BUILDER": return isStage2Complete() ? "Stage 2 Complete ✓" : "Stage 2 Incomplete";
-      case "NFT_TAPPER": return `${((totalTapIncome || 0) / 1000000).toFixed(1)}M / 10M BZ`;
-      case "NFT_ENERGY": return areBoostersMaxed() ? "All Boosters Maxed ✓" : "Boosters Not Maxed";
-      case "NFT_GOLDEN": return `${((totalTaps || 0) / 1000000).toFixed(1)}M / 5M taps`;
-      case "NFT_DIAMOND": return `${((xp || 0) / 1000).toFixed(0)}k / 500k XP`;
-      default: return "";
+    switch (nft.requirement_type) {
+      case "xp":
+        return xp >= nft.requirement_value;
+      case "referrals":
+        return referralCount >= nft.requirement_value;
+      case "upgrades":
+        return totalUpgrades >= nft.requirement_value;
+      case "taps":
+        return totalTaps >= nft.requirement_value;
+      default:
+        return true;
     }
   };
 
-  const getProgressPercent = (nft: NFT): number => {
-    if (nft.owned || nft.requirementMet) return 100;
-    switch (nft.key) {
-      case "NFT_EARLY": return 100;
-      case "NFT_SOCIAL": return Math.min(((referralCount || 0) / 20) * 100, 100);
-      case "NFT_BUILDER": return isStage2Complete() ? 100 : 0;
-      case "NFT_TAPPER": return Math.min(((totalTapIncome || 0) / 10000000) * 100, 100);
-      case "NFT_ENERGY": return areBoostersMaxed() ? 100 : 0;
-      case "NFT_GOLDEN": return Math.min(((totalTaps || 0) / 5000000) * 100, 100);
-      case "NFT_DIAMOND": return Math.min(((xp || 0) / 500000) * 100, 100);
-      default: return 0;
+  const getRequirementText = (nft: NFT): string => {
+    switch (nft.requirement_type) {
+      case "xp":
+        return `${nft.requirement_value.toLocaleString()} XP`;
+      case "referrals":
+        return `${nft.requirement_value} referrals`;
+      case "upgrades":
+        return `${nft.requirement_value} upgrades`;
+      case "taps":
+        return `${nft.requirement_value.toLocaleString()} taps`;
+      default:
+        return "None";
     }
   };
-
-  const shouldShowProgressBar = (nft: NFT): boolean => {
-    if (nft.owned) return false;
-    return ["NFT_SOCIAL", "NFT_TAPPER", "NFT_GOLDEN", "NFT_DIAMOND"].includes(nft.key);
-  };
-
-  if (loading) {
-    return (
-      <div className="p-6 flex items-center justify-center min-h-[400px]">
-        <p className="text-muted-foreground">Loading rewards...</p>
-      </div>
-    );
-  }
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl mx-auto pb-24">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-bold">Rewards & NFTs</h1>
-        <p className="text-sm text-muted-foreground">
-          Claim daily rewards, complete challenges, and collect exclusive NFTs
-        </p>
+    <div className="h-full flex flex-col bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900">
+      <div className="flex gap-2 p-4 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-b border-purple-200 dark:border-purple-800">
+        <Button
+          variant={selectedTab === "challenges" ? "default" : "outline"}
+          className="flex-1"
+          onClick={() => setSelectedTab("challenges")}
+        >
+          <Trophy className="w-4 h-4 mr-2" />
+          Weekly Challenges
+        </Button>
+        <Button
+          variant={selectedTab === "nfts" ? "default" : "outline"}
+          className="flex-1"
+          onClick={() => setSelectedTab("nfts")}
+        >
+          <Sparkles className="w-4 h-4 mr-2" />
+          NFT Collection
+        </Button>
       </div>
 
-      <Card className="p-4">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Daily Rewards</h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="text-xs">
-                Week {currentWeek}
-              </Badge>
-              <Badge variant="outline">
-                Day {(streak % 7) + 1}/7
-              </Badge>
-            </div>
-          </div>
+      <ScrollArea className="flex-1">
+        <div className="p-4 space-y-4">
+          {selectedTab === "challenges" && (
+            <>
+              <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg p-6 text-white shadow-lg">
+                <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
+                  <Trophy className="w-6 h-6" />
+                  Weekly Challenges
+                </h2>
+                <p className="text-purple-100">Complete challenges to earn XP and BB rewards!</p>
+              </div>
 
-          <div className="grid grid-cols-7 gap-2">
-            {dailyRewards.map((reward, index) => {
-              const dayNum = index + 1;
-              const isClaimed = streak >= dayNum;
-              const isCurrent = (streak % 7) + 1 === dayNum;
+              {uiChallenges.length === 0 ? (
+                <Card className="p-6">
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <AlertCircle className="w-8 h-8" />
+                    <p>Loading challenges...</p>
+                  </div>
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {uiChallenges.map((challenge) => {
+                    const Icon = iconMap[challenge.icon] || Trophy;
+                    const progress = Math.min(challenge.progress, challenge.target);
+                    const percentage = (progress / challenge.target) * 100;
+                    const isCompleted = progress >= challenge.target;
 
-              return (
-                <div
-                  key={dayNum}
-                  className={`p-2 rounded-lg border-2 text-center ${
-                    isCurrent
-                      ? "border-primary bg-primary/10"
-                      : isClaimed
-                      ? "border-green-500 bg-green-50 dark:bg-green-950"
-                      : "border-muted bg-muted/50"
-                  }`}
-                >
-                  <p className="text-xs font-medium mb-1">D{dayNum}</p>
-                  <p className="text-[10px] font-bold leading-tight">
-                    {reward.type === "BB" 
-                      ? `${reward.amount.toFixed(3)} BB` 
-                      : `${reward.amount.toLocaleString()} ${reward.type}`
-                    }
-                  </p>
-                  {isClaimed && !isCurrent && (
-                    <Check className="h-3 w-3 mx-auto mt-1 text-green-600" />
-                  )}
+                    return (
+                      <Card key={challenge.key} className="p-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur-sm border-2 border-purple-200 dark:border-purple-700 hover:border-purple-400 dark:hover:border-purple-500 transition-all">
+                        <div className="flex items-start gap-4">
+                          <div className="p-3 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 text-white">
+                            <Icon className="w-6 h-6" />
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <h3 className="font-bold text-lg">{challenge.name}</h3>
+                              {isCompleted && !challenge.claimed && (
+                                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+                              )}
+                              {challenge.claimed && (
+                                <Award className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                              )}
+                            </div>
+                            
+                            <p className="text-sm text-muted-foreground mb-3">{challenge.description}</p>
+                            
+                            <div className="mb-3">
+                              <div className="flex justify-between text-sm mb-1">
+                                <span className="font-medium">{progress.toLocaleString()} / {challenge.target.toLocaleString()}</span>
+                                <span className="text-muted-foreground">{percentage.toFixed(0)}%</span>
+                              </div>
+                              <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
+                                  style={{ width: `${Math.min(percentage, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-sm">
+                                <Gift className="w-4 h-4 text-purple-500" />
+                                <span className="font-medium">
+                                  {challenge.reward.amount.toLocaleString()} {challenge.reward.type}
+                                </span>
+                              </div>
+
+                              {challenge.claimed ? (
+                                <Button size="sm" variant="outline" disabled>
+                                  <Award className="w-4 h-4 mr-2" />
+                                  Claimed
+                                </Button>
+                              ) : isCompleted ? (
+                                <Button
+                                  size="sm"
+                                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                                  onClick={() => handleClaimChallenge(challenge.key, challenge.reward)}
+                                >
+                                  <Gift className="w-4 h-4 mr-2" />
+                                  Claim
+                                </Button>
+                              ) : (
+                                <Button size="sm" variant="outline" disabled>
+                                  <Lock className="w-4 h-4 mr-2" />
+                                  Locked
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </>
+          )}
 
-          <Button
-            onClick={handleDailyClaim}
-            disabled={!canClaimDaily}
-            className="w-full"
-            size="lg"
-          >
-            {canClaimDaily ? (
-              <>
-                <Gift className="mr-2 h-5 w-5" />
-                Claim {currentDayReward.type === "BB" ? currentDayReward.amount.toFixed(3) : currentDayReward.amount.toLocaleString()} {currentDayReward.type}
-              </>
-            ) : (
-              "Come back tomorrow!"
-            )}
-          </Button>
-        </div>
-      </Card>
-
-      <Card className="p-4">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Target className="h-5 w-5 text-primary" />
-            <h3 className="font-semibold">Weekly Challenges</h3>
-          </div>
-
-          <div className="space-y-3">
-            {weeklyChallenges.map((challenge) => {
-              const Icon = getIconComponent(challenge.icon);
-              const progressPercent = (challenge.progress / challenge.target) * 100;
-              const isComplete = challenge.progress >= challenge.target;
-
-              return (
-                <div key={challenge.key} className="p-3 bg-muted rounded-lg">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className={`p-2 rounded-lg flex-shrink-0 ${challenge.claimed ? "bg-green-500/10" : "bg-primary/10"}`}>
-                      <Icon className={`h-5 w-5 ${challenge.claimed ? "text-green-500" : "text-primary"}`} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h4 className="font-semibold">{challenge.name}</h4>
-                        {challenge.claimed && (
-                          <Badge variant="default" className="bg-green-600 flex-shrink-0">
-                            <Check className="h-3 w-3 mr-1" />
-                            Claimed
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground mb-2">
-                        {challenge.description}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="h-3 w-3 text-green-600 flex-shrink-0" />
-                        <span className="text-xs font-medium">
-                          +{challenge.reward.type === "BB" ? challenge.reward.amount.toFixed(3) : challenge.reward.amount.toLocaleString()} {challenge.reward.type}
-                        </span>
-                      </div>
-                    </div>
+          {selectedTab === "nfts" && (
+            <>
+              <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg p-6 text-white shadow-lg">
+                <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
+                  <Sparkles className="w-6 h-6" />
+                  NFT Collection
+                </h2>
+                <p className="text-blue-100">Collect exclusive NFTs to boost your stats!</p>
+                <div className="mt-4 flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <Coins className="w-5 h-5" />
+                    <span className="font-bold">{playerBB.toLocaleString()} BB</span>
                   </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Progress</span>
-                      <span className="font-medium">
-                        {challenge.progress.toLocaleString()} / {challenge.target.toLocaleString()}
-                      </span>
-                    </div>
-                    <Progress value={progressPercent} className="h-2" />
-                  </div>
-
-                  <Button
-                    onClick={() => handleClaimChallenge(challenge.key)}
-                    disabled={!isComplete || challenge.claimed}
-                    className="w-full mt-3"
-                    size="sm"
-                    variant={isComplete && !challenge.claimed ? "default" : "secondary"}
-                  >
-                    {challenge.claimed ? (
-                      <>
-                        <Check className="mr-2 h-4 w-4" />
-                        Claimed
-                      </>
-                    ) : isComplete ? (
-                      <>
-                        <Check className="mr-2 h-4 w-4" />
-                        Claim Reward
-                      </>
-                    ) : (
-                      "In Progress"
-                    )}
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </Card>
-
-      <Card className="p-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Trophy className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Exclusive NFTs</h3>
-            </div>
-            <Badge variant="outline">
-              {ownedNFTs.length}/{nfts.length} Owned
-            </Badge>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {nfts.map((nft) => {
-            const Icon = getIconComponent(nft.icon);
-            const progressText = getProgressText(nft);
-            const progressPercent = getProgressPercent(nft);
-            const showProgressBar = shouldShowProgressBar(nft);
-
-            return (
-              <Card
-                key={nft.key}
-                className={`p-6 ${
-                  nft.owned
-                    ? "border-green-500 bg-green-50 dark:bg-green-950"
-                    : !nft.requirementMet
-                    ? "opacity-60"
-                    : ""
-                }`}
-              >
-                <div className="flex items-start gap-4 mb-4">
-                  <div className={`p-3 rounded-lg flex-shrink-0 ${nft.owned ? "bg-green-500/20" : "bg-primary/10"}`}>
-                    <Icon className={`h-6 w-6 ${nft.owned ? "text-green-600" : "text-primary"}`} />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h4 className="font-semibold text-lg">{nft.name}</h4>
-                      {nft.owned && (
-                        <Badge variant="default" className="bg-green-600 flex-shrink-0">
-                          <Check className="h-3 w-3 mr-1" />
-                          Owned
-                        </Badge>
-                      )}
-                    </div>
-
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {nft.description}
-                    </p>
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5" />
+                    <span className="font-bold">{ownedNFTs.size} / {nfts.length} Owned</span>
                   </div>
                 </div>
+              </div>
 
-                {!nft.owned && progressText && (
-                  <div className="mb-4 space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Progress</span>
-                      <span className={nft.requirementMet ? "text-green-600 font-semibold" : "font-medium"}>
-                        {progressText}
-                      </span>
-                    </div>
-                    {showProgressBar && (
-                      <Progress value={progressPercent} className="h-2" />
-                    )}
+              {loading ? (
+                <Card className="p-6">
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <AlertCircle className="w-8 h-8 animate-spin" />
+                    <p>Loading NFTs...</p>
                   </div>
-                )}
+                </Card>
+              ) : (
+                <div className="grid gap-4">
+                  {nfts.map((nft) => {
+                    const owned = ownedNFTs.has(nft.id);
+                    const canBuy = canPurchaseNFT(nft);
 
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2 text-sm">
-                    {nft.requirementMet ? (
-                      <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
-                    ) : (
-                      <Lock className="h-4 w-4 text-orange-600 flex-shrink-0" />
-                    )}
-                    <span className={nft.requirementMet ? "text-green-600 font-medium" : "text-orange-600"}>
-                      {nft.requirement}
-                    </span>
-                  </div>
-                  <Badge variant="outline" className="flex-shrink-0">
-                    {nft.price === 0 ? "Free" : `${nft.price.toFixed(3)} BB`}
-                  </Badge>
+                    return (
+                      <Card key={nft.id} className={`p-4 ${owned ? "bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border-green-500" : "bg-white/90 dark:bg-gray-800/90"} backdrop-blur-sm border-2 transition-all`}>
+                        <div className="flex items-start gap-4">
+                          <div className={`p-3 rounded-lg ${owned ? "bg-green-500" : "bg-gradient-to-br from-blue-500 to-purple-500"} text-white`}>
+                            <Sparkles className="w-8 h-8" />
+                          </div>
+
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between mb-2">
+                              <h3 className="font-bold text-lg">{nft.name}</h3>
+                              {owned && <Award className="w-5 h-5 text-green-500" />}
+                            </div>
+
+                            <p className="text-sm text-muted-foreground mb-3">{nft.description}</p>
+
+                            <div className="space-y-2 mb-4">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Price:</span>
+                                <span className="font-bold flex items-center gap-1">
+                                  <Coins className="w-4 h-4" />
+                                  {nft.price_bb.toLocaleString()} BB
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">Requirement:</span>
+                                <span className="font-medium">{getRequirementText(nft)}</span>
+                              </div>
+                            </div>
+
+                            {owned ? (
+                              <Button className="w-full bg-green-500 hover:bg-green-600" disabled>
+                                <CheckCircle2 className="w-4 h-4 mr-2" />
+                                Owned
+                              </Button>
+                            ) : (
+                              <Button
+                                className="w-full"
+                                onClick={() => handlePurchaseNFT(nft)}
+                                disabled={!canBuy}
+                              >
+                                {canBuy ? (
+                                  <>
+                                    <Coins className="w-4 h-4 mr-2" />
+                                    Purchase
+                                  </>
+                                ) : (
+                                  <>
+                                    <Lock className="w-4 h-4 mr-2" />
+                                    Locked
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
-
-                <Button
-                  onClick={() => handlePurchaseNFT(nft)}
-                  disabled={nft.owned || !nft.requirementMet}
-                  className="w-full"
-                  size="sm"
-                  variant={nft.requirementMet && !nft.owned ? "default" : "secondary"}
-                >
-                  {nft.owned ? (
-                    "Already Owned"
-                  ) : !nft.requirementMet ? (
-                    <>
-                      <Lock className="mr-2 h-4 w-4" />
-                      Locked
-                    </>
-                  ) : nft.price === 0 ? (
-                    <>
-                      <Gift className="mr-2 h-4 w-4" />
-                      Claim Free NFT
-                    </>
-                  ) : (
-                    <>
-                      Purchase for {nft.price.toFixed(3)} BB
-                    </>
-                  )}
-                </Button>
-              </Card>
-            );
-          })}
+              )}
+            </>
+          )}
         </div>
-      </Card>
+      </ScrollArea>
     </div>
   );
 }
