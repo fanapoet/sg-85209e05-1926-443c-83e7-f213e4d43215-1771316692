@@ -77,7 +77,6 @@ interface GameState {
   totalTapIncome: number;
   totalUpgrades: number;
   totalConversions: number;
-  totalConversionEvents: number;
   hasClaimedIdleToday: boolean;
   lastClaimTimestamp: number;
   
@@ -110,7 +109,6 @@ interface GameState {
   incrementTaps: (count: number, income: number) => void;
   incrementUpgrades: () => void;
   incrementConversions: (amount: number) => void;
-  incrementConversionEvents: () => void;
   markIdleClaimed: () => void;
   subtractEnergy: (amount: number) => void;
   useQuickCharge: () => void;
@@ -224,7 +222,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [totalTapIncome, setTotalTapIncome] = useState(() => safeGetItem("bunergy_totalTapIncome", 0));
   const [totalUpgrades, setTotalUpgrades] = useState(() => safeGetItem("bunergy_totalUpgrades", 0));
   const [totalConversions, setTotalConversions] = useState(() => safeGetItem("bunergy_totalConversions", 0));
-  const [totalConversionEvents, setTotalConversionEvents] = useState(() => safeGetItem("bunergy_totalConversionEvents", 0));
   const [hasClaimedIdleToday, setHasClaimedIdleToday] = useState(() => safeGetItem("bunergy_hasClaimedIdleToday", false));
   const [lastResetDate, setLastResetDate] = useState(() => safeGetItem("bunergy_lastResetDate", new Date().toDateString()));
   const [lastClaimTimestamp, setLastClaimTimestamp] = useState(() => safeGetItem("bunergy_lastClaimTimestamp", Date.now()));
@@ -280,7 +277,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => { safeSetItem("bunergy_totalTapIncome", totalTapIncome); }, [totalTapIncome]);
   useEffect(() => { safeSetItem("bunergy_totalUpgrades", totalUpgrades); }, [totalUpgrades]);
   useEffect(() => { safeSetItem("bunergy_totalConversions", totalConversions); }, [totalConversions]);
-  useEffect(() => { safeSetItem("bunergy_totalConversionEvents", totalConversionEvents); }, [totalConversionEvents]);
   useEffect(() => { safeSetItem("bunergy_hasClaimedIdleToday", hasClaimedIdleToday); }, [hasClaimedIdleToday]);
   useEffect(() => { safeSetItem("bunergy_lastResetDate", lastResetDate); }, [lastResetDate]);
   useEffect(() => { safeSetItem("bunergy_lastClaimTimestamp", lastClaimTimestamp); }, [lastClaimTimestamp]);
@@ -704,7 +700,6 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
 
   const incrementUpgrades = () => setTotalUpgrades(p => p + 1);
   const incrementConversions = (amount: number) => setTotalConversions(p => p + amount);
-  const incrementConversionEvents = () => setTotalConversionEvents(p => p + 1);
   const markIdleClaimed = () => {
     console.log("💰 [Idle] Marking idle as claimed, updating state...");
     setHasClaimedIdleToday(true);
@@ -1149,14 +1144,14 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       bz, bb, energy, maxEnergy, bzPerHour, tier, xp, referralCount,
       dailyStreak, currentRewardWeek, lastDailyClaimDate, currentWeeklyPeriodStart, lastWeeklyReset, lastDailyReset,
       claimedDailyRewards, ownedNFTs,
-      totalTaps, todayTaps, totalTapIncome, totalUpgrades, totalConversions, totalConversionEvents,
+      totalTaps, todayTaps, totalTapIncome, totalUpgrades, totalConversions,
       hasClaimedIdleToday, lastClaimTimestamp,
       boosters, upgradeBooster,
       quickChargeUsesRemaining, quickChargeCooldownUntil,
       isSyncing, lastSyncTime, isOnline, syncErrorCount, manualSync,
       addBZ, subtractBZ, addBB, subtractBB, addXP,
       setEnergy, setMaxEnergy, setBzPerHour, addReferral,
-      incrementTotalTaps, incrementTaps, incrementUpgrades, incrementConversions, incrementConversionEvents,
+      incrementTotalTaps, incrementTaps, incrementUpgrades, incrementConversions,
       markIdleClaimed, subtractEnergy, useQuickCharge,
       checkAndResetQuickCharge,
       addReward,

@@ -30,9 +30,7 @@ if (typeof window !== "undefined" && !isInterceptionSetup) {
         message.includes("[TASKS-SYNC]") || 
         message.includes("[Tasks]") ||
         message.includes("[Daily Reset]") ||
-        message.includes("[Weekly Reset]") ||
-        message.includes("[Exchange Guru Debug]") ||
-        message.includes("[RewardsNFTs]")) {
+        message.includes("[Weekly Reset]")) {
       
       globalLogs.push({
         timestamp: new Date().toLocaleTimeString(),
@@ -152,42 +150,6 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
               {Math.floor((Date.now() - new Date(gameState.currentWeeklyPeriodStart).getTime()) / (1000 * 60 * 60 * 24))}
             </span></div>
           )}
-        </div>
-      </div>
-
-      {/* Exchange Guru Debug */}
-      <div className="bg-orange-900 p-4 rounded-lg mb-4">
-        <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
-          <span>🔍</span>
-          Exchange Guru Challenge Debug
-        </h3>
-        <div className="space-y-2 text-sm font-mono">
-          <div>
-            <strong>Challenge Definition:</strong>
-            <div className="pl-4">
-              <div>Challenge Key: converter</div>
-              <div className="text-cyan-300">Target Value: 10 conversions</div>
-            </div>
-          </div>
-          <div>
-            <strong>Current State:</strong>
-            <div className="pl-4">
-              <div>Total Conversion Events: {gameState.totalConversionEvents || 0}</div>
-              <div className="text-yellow-300">
-                💡 Check logs below for baseline, progress, and completion status
-              </div>
-            </div>
-          </div>
-          <div>
-            <strong>Loading State:</strong>
-            <div className="pl-4">
-              <div>Challenges Loaded: {String(gameState.challengesLoaded)}</div>
-              <div>Weekly Challenges Count: {gameState.weeklyChallenges?.length || 0}</div>
-              <div className="text-yellow-300">
-                💡 Check "🔄 [RewardsNFTs]" logs below for initialization details
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 
