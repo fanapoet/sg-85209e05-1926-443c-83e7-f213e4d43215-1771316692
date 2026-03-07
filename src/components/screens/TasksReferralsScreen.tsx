@@ -15,13 +15,6 @@ import {
   type ReferralStats
 } from "@/services/referralService";
 import { getCurrentTelegramUser } from "@/services/authService";
-import {
-  initializeTask,
-  getTaskProgress,
-  updateTaskProgress,
-  claimTaskReward,
-  type TaskProgressData
-} from "@/services/tasksService";
 import type React from "react";
 
 interface Task {
@@ -38,6 +31,13 @@ interface Task {
 }
 
 export function TasksReferralsScreen() {
+  console.log("🔵 [Tasks] TasksReferralsScreen: Component render START");
+  
+  // ✅ FIX: Hooks at top level, NO try/catch around hooks!
+  const gameStateHook = useGameState();
+  const { toast } = useToast();
+  
+  // Destructure values from hook
   const { 
     addBZ, 
     addBB, 
@@ -48,17 +48,26 @@ export function TasksReferralsScreen() {
     totalUpgrades, 
     totalConversions, 
     totalTaps,
-    performTaskClaim,
-    lastDailyReset,
-    telegramId,
-  } = useGameState();
-  const { toast } = useToast();
-  
+    currentWeeklyPeriodStart,
+    resetWeeklyPeriod
+  } = gameStateHook;
+
+  // Log values for debugging (after hooks are called)
+  useEffect(() => {
+    console.log("✅ [Tasks] GameState values loaded:", {
+      referralCount,
+      todayTaps,
+      totalUpgrades,
+      totalConversions,
+      currentWeeklyPeriodStart,
+      hasResetFunction: !!resetWeeklyPeriod
+    });
+  }, [referralCount, todayTaps, totalUpgrades, totalConversions, currentWeeklyPeriodStart, resetWeeklyPeriod]);
+
   // State
   const [dailyTasks, setDailyTasks] = useState<Task[]>([]);
   const [weeklyTasks, setWeeklyTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
-  const [initialized, setInitialized] = useState(false);
   
   // Referral state
   const [referralCode, setReferralCode] = useState<string>("");
@@ -68,7 +77,7 @@ export function TasksReferralsScreen() {
   const [referralErrorMessage, setReferralErrorMessage] = useState<string>("");
   const [userId, setUserId] = useState<number | null>(null);
 
-  // Task Definitions with IDs
+  // Task Definitions
   const taskDefinitions = {
     daily: [
       {
@@ -150,23 +159,6 @@ export function TasksReferralsScreen() {
     ]
   };
 
-  // Initialize tasks on first load
-  useEffect(() => {
-    if (initialized) return;
-    
-    console.log("🎬 [Tasks-Init] Initializing tasks...");
-    
-    // Initialize all tasks in tasksService
-    [...taskDefinitions.daily, ...taskDefinitions.weekly, ...taskDefinitions.progressive].forEach(def => {
-      initializeTask(def.id, def.type);
-    });
-    
-    setInitialized(true);
-    setLoading(false);
-    
-    console.log("✅ [Tasks-Init] All tasks initialized");
-  }, [initialized]);
-
   // Load referral data
   useEffect(() => {
     const loadReferralData = async () => {
@@ -198,102 +190,207 @@ export function TasksReferralsScreen() {
     loadReferralData();
   }, []);
 
-  // Function to get current value for a task based on context
-  const getCurrentValueForTask = (taskId: string): number => {
-    switch (taskId) {
-      case "daily_check_in":
-        return 1; // Always completed on load
-      case "daily_tap_100":
-        console.log(`🎯 [Tasks-Value] daily_tap_100: todayTaps=${todayTaps}`);
-        return todayTaps;
-      case "daily_idle":
-        console.log(`🎯 [Tasks-Value] daily_idle: hasClaimedIdleToday=${hasClaimedIdleToday}`);
-        return hasClaimedIdleToday ? 1 : 0;
-      case "weekly_upgrade":
-        console.log(`🎯 [Tasks-Value] weekly_upgrade: totalUpgrades=${totalUpgrades}`);
-        return totalUpgrades;
-      case "weekly_convert":
-        console.log(`🎯 [Tasks-Value] weekly_convert: totalConversions=${totalConversions}`);
-        return totalConversions;
-      case "weekly_invite":
-        console.log(`🎯 [Tasks-Value] weekly_invite: referralCount=${referralCount}`);
-        return referralCount;
-      case "milestone_taps":
-        return totalTaps;
-      case "milestone_invite":
-        return referralCount;
-      default:
-        return 0;
-    }
-  };
+  // Initialize Tasks & Weekly Baselines (SAME AS REWARDS SCREEN)
+  useEffect(() => {
+    console.log("[Tasks] 🎬 Initializing tasks with weekly baseline system");
+    
+    try {
+      // Load Daily Tasks from localStorage
+      const savedDailyTasks = localStorage.getItem("dailyTasks");
+      if (savedDailyTasks) {
+        setDailyTasks(JSON.parse(savedDailyTasks));
+      } else {
+        // Initialize Daily Tasks with 0 progress
+        const initialDaily = taskDefinitions.daily.map(def => ({
+          ...def,
+          current: 0,
+          completed: false,
+          claimed: false
+        }));
+        setDailyTasks(initialDaily);
+        localStorage.setItem("dailyTasks", JSON.stringify(initialDaily));
+      }
 
-  // Build task list from definitions + progress data
-  const buildTaskList = (definitions: {
-    id: string;
-    title: string;
-    description: string;
-    reward: { type: "BZ" | "BB" | "XP"; amount: number };
-    type: "daily" | "weekly" | "progressive";
-    target: number;
-    icon: React.ReactNode;
-  }[]): Task[] => {
-    return definitions.map(def => {
-      const progress = getTaskProgress(def.id);
-      const currentValue = getCurrentValueForTask(def.id);
+      // Load/Init Weekly Tasks & Baselines (SAME AS REWARDS)
+      const savedWeeklyTasks = localStorage.getItem("weeklyTasks");
+      const savedBaselines = localStorage.getItem("weeklyTaskBaselines");
       
-      // Update progress in service if value changed
-      if (progress && progress.currentProgress !== currentValue) {
-        const isCompleted = currentValue >= def.target;
-        console.log(`🔄 [Tasks-Update] ${def.id}: ${progress.currentProgress} → ${currentValue} (completed: ${isCompleted})`);
-        updateTaskProgress(def.id, {
-          currentProgress: currentValue,
-          completed: isCompleted
-        });
+      // Check if baselines need initialization
+      let shouldInitializeFresh = false;
+      
+      if (currentWeeklyPeriodStart && savedBaselines) {
+        try {
+          const baselines = JSON.parse(savedBaselines);
+          const baselineTimestamp = baselines.timestamp || 0;
+          const periodStart = new Date(currentWeeklyPeriodStart).getTime();
+          
+          // If baselines are from before current period, they're stale
+          if (baselineTimestamp < periodStart) {
+            console.log("🧹 [Tasks] Baselines are stale, initializing fresh");
+            shouldInitializeFresh = true;
+            localStorage.removeItem("weeklyTasks");
+            localStorage.removeItem("weeklyTaskBaselines");
+          }
+        } catch (e) {
+          console.error("Error validating baselines:", e);
+          shouldInitializeFresh = true;
+        }
       }
       
-      return {
-        id: def.id,
-        title: def.title,
-        description: def.description,
-        reward: def.reward,
-        type: def.type,
-        target: def.target,
-        current: currentValue,
-        completed: progress?.completed || currentValue >= def.target,
-        claimed: progress?.claimed || false,
-        icon: def.icon
-      };
-    });
-  };
-
-  // Update task lists whenever context values change
-  useEffect(() => {
-    if (!initialized) return;
+      if (savedWeeklyTasks && !shouldInitializeFresh) {
+        setWeeklyTasks(JSON.parse(savedWeeklyTasks));
+      } else {
+        // Initialize fresh baselines & tasks
+        const initialBaselines = {
+          upgrades: totalUpgrades || 0,
+          referrals: referralCount || 0,
+          conversions: totalConversions || 0,
+          timestamp: Date.now()
+        };
+        localStorage.setItem("weeklyTaskBaselines", JSON.stringify(initialBaselines));
+        
+        // Initialize Weekly Tasks with 0 progress
+        const initialWeekly = taskDefinitions.weekly.map(def => ({
+          ...def,
+          current: 0,
+          completed: false,
+          claimed: false
+        }));
+        setWeeklyTasks(initialWeekly);
+        localStorage.setItem("weeklyTasks", JSON.stringify(initialWeekly));
+      }
+      
+      // Initialize Progressive Tasks
+      const savedProgressiveTasks = localStorage.getItem("progressiveTasks");
+      if (!savedProgressiveTasks) {
+        const initialProgressive = taskDefinitions.progressive.map(def => ({
+          ...def,
+          current: 0,
+          completed: false,
+          claimed: false
+        }));
+        localStorage.setItem("progressiveTasks", JSON.stringify(initialProgressive));
+      }
+      
+    } catch (e) {
+      console.error("Failed to load tasks", e);
+    }
     
-    console.log("🔄 [Tasks-Rebuild] Rebuilding task lists...");
-    console.log("🔄 [Tasks-Rebuild] Context values:", {
-      todayTaps,
-      hasClaimedIdleToday,
+    setLoading(false);
+  }, [currentWeeklyPeriodStart]);
+
+  // Update Daily Task Progress (based on context values)
+  useEffect(() => {
+    if (loading) return;
+    
+    setDailyTasks(prev => {
+      const updated = prev.map(task => {
+        let newCurrent = task.current;
+        
+        if (task.id === "daily_check_in") newCurrent = 1; // Always completed on load
+        if (task.id === "daily_tap_100") newCurrent = todayTaps;
+        if (task.id === "daily_idle") newCurrent = hasClaimedIdleToday ? 1 : 0;
+        
+        const newCompleted = newCurrent >= task.target;
+        
+        return {
+          ...task,
+          current: newCurrent,
+          completed: newCompleted
+        };
+      });
+      
+      return updated;
+    });
+  }, [todayTaps, hasClaimedIdleToday, loading]);
+
+  // Update Weekly Task Progress (SAME AS REWARDS - DELTA FROM BASELINE)
+  useEffect(() => {
+    if (loading) return;
+    
+    // Get weekly baselines (values at start of current week)
+    const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyTaskBaselines") || "{}");
+    const baseUpgrades = weeklyBaselines.upgrades || 0;
+    const baseReferrals = weeklyBaselines.referrals || 0;
+    const baseConversions = weeklyBaselines.conversions || 0;
+    
+    console.log("🎯 [Weekly-Tasks] Updating progress with game state:", {
       totalUpgrades,
-      totalConversions,
       referralCount,
-      totalTaps
+      totalConversions,
+      baseUpgrades,
+      baseReferrals,
+      baseConversions
     });
     
-    setDailyTasks(buildTaskList(taskDefinitions.daily));
-    setWeeklyTasks(buildTaskList(taskDefinitions.weekly));
-  }, [initialized, todayTaps, hasClaimedIdleToday, totalUpgrades, totalConversions, referralCount, totalTaps]);
+    setWeeklyTasks(prev => {
+      const updated = prev.map(task => {
+        let newProgress = task.current;
+        
+        // Calculate progress as DELTA from weekly baseline (SAME AS REWARDS!)
+        if (task.id === "weekly_upgrade") newProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
+        if (task.id === "weekly_invite") newProgress = Math.max(0, (referralCount || 0) - baseReferrals);
+        if (task.id === "weekly_convert") newProgress = Math.max(0, (totalConversions || 0) - baseConversions);
+        
+        const newCompleted = newProgress >= task.target;
+        
+        // Only log if changed
+        if (newProgress !== task.current) {
+          console.log(`🎯 [Weekly-Tasks] ${task.id}: ${task.current} → ${newProgress}`);
+        }
+        
+        return {
+          ...task,
+          current: Math.min(newProgress, task.target),
+          completed: newCompleted
+        };
+      });
+      
+      return updated;
+    });
+  }, [totalUpgrades, referralCount, totalConversions, loading]);
 
-  // Reload tasks when daily reset occurs
+  // Persist Daily Tasks to localStorage
   useEffect(() => {
-    if (!initialized || !lastDailyReset) return;
+    if (!loading && dailyTasks.length > 0) {
+      localStorage.setItem("dailyTasks", JSON.stringify(dailyTasks));
+    }
+  }, [dailyTasks, loading]);
+
+  // Persist Weekly Tasks to localStorage
+  useEffect(() => {
+    if (!loading && weeklyTasks.length > 0) {
+      localStorage.setItem("weeklyTasks", JSON.stringify(weeklyTasks));
+    }
+  }, [weeklyTasks, loading]);
+
+  // Reset weekly tasks if period has changed (align with RewardsNFTsScreen pattern)
+  useEffect(() => {
+    const checkAndReset = async () => {
+      if (loading || !currentWeeklyPeriodStart) return;
+
+      const localStoredPeriod = localStorage.getItem("weeklyTasksResetDate");
+      const dbPeriodStart = new Date(currentWeeklyPeriodStart).getTime();
+      const now = Date.now();
+
+      if (!localStoredPeriod) {
+        console.log("🔄 [Weekly Reset] No local period found, setting to DB value");
+        localStorage.setItem("weeklyTasksResetDate", currentWeeklyPeriodStart);
+        console.log("🔄 [Weekly Reset] Calling resetWeeklyPeriod...");
+        if (resetWeeklyPeriod) await resetWeeklyPeriod();
+        return;
+      }
+
+      const localPeriodStart = new Date(localStoredPeriod).getTime();
+      if (localPeriodStart !== dbPeriodStart) {
+        console.log("🔄 [Weekly Reset] Period mismatch detected, resetting tasks");
+        localStorage.setItem("weeklyTasksResetDate", currentWeeklyPeriodStart);
+        if (resetWeeklyPeriod) await resetWeeklyPeriod();
+      }
+    };
     
-    console.log("🔄 [Tasks-Reset] Daily reset detected, reloading tasks...");
-    
-    // Force rebuild of task lists
-    setDailyTasks(buildTaskList(taskDefinitions.daily));
-    setWeeklyTasks(buildTaskList(taskDefinitions.weekly));
-  }, [lastDailyReset, initialized]);
+    checkAndReset();
+  }, [currentWeeklyPeriodStart, loading, resetWeeklyPeriod]);
 
   const handleClaim = async (task: Task) => {
     if (task.claimed || !task.completed) return;
@@ -301,13 +398,6 @@ export function TasksReferralsScreen() {
     console.log(`🎁 [Tasks-Claim] Claiming reward for ${task.id}`);
 
     try {
-      // Claim in tasksService
-      const success = await claimTaskReward(task.id);
-      
-      if (!success) {
-        throw new Error("Failed to claim reward");
-      }
-
       // Add rewards to context
       if (task.reward.type === "BZ") {
         addBZ(task.reward.amount);
@@ -316,18 +406,22 @@ export function TasksReferralsScreen() {
       } else if (task.reward.type === "XP") {
         addXP(task.reward.amount);
       }
-
-      // Also use performTaskClaim to sync with DB
-      await performTaskClaim(task.id, task.type, task.reward.type, task.reward.amount);
+      
+      // Mark as claimed in state
+      if (task.type === "daily") {
+        setDailyTasks(prev => 
+          prev.map(t => t.id === task.id ? { ...t, claimed: true } : t)
+        );
+      } else if (task.type === "weekly") {
+        setWeeklyTasks(prev => 
+          prev.map(t => t.id === task.id ? { ...t, claimed: true } : t)
+        );
+      }
       
       toast({
         title: "Reward Claimed!",
         description: `You earned ${task.reward.amount} ${task.reward.type}`,
       });
-      
-      // Rebuild task lists to reflect claimed state
-      setDailyTasks(buildTaskList(taskDefinitions.daily));
-      setWeeklyTasks(buildTaskList(taskDefinitions.weekly));
       
       console.log(`✅ [Tasks-Claim] Claimed ${task.id} successfully`);
     } catch (err) {
@@ -461,6 +555,22 @@ export function TasksReferralsScreen() {
     );
   };
 
+  // Get progressive tasks from localStorage
+  const getProgressiveTasks = (): Task[] => {
+    const saved = localStorage.getItem("progressiveTasks");
+    if (saved) {
+      return JSON.parse(saved);
+    }
+    return taskDefinitions.progressive.map(def => ({
+      ...def,
+      current: 0,
+      completed: false,
+      claimed: false
+    }));
+  };
+
+  const progressiveTasks = getProgressiveTasks();
+
   const milestones = [
     { count: 5, xp: 5000, claimed: claimedMilestones.includes(5) },
     { count: 10, xp: 15000, claimed: claimedMilestones.includes(10) },
@@ -514,7 +624,7 @@ export function TasksReferralsScreen() {
               <Award className="h-5 w-5 text-orange-500" />
               <h3 className="font-semibold text-lg">Challenges & Milestones</h3>
             </div>
-            {buildTaskList(taskDefinitions.progressive).map(task => renderTaskCard(task))}
+            {progressiveTasks.map(task => renderTaskCard(task))}
           </div>
         </TabsContent>
 
