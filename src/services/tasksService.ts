@@ -212,6 +212,16 @@ export async function claimTaskReward(taskId: string): Promise<boolean> {
   task.claimedAt = now;
   task.lastUpdated = Date.now();
 
+  // CRITICAL FIX: Reset weekly task progress immediately after claiming
+  // This ensures the task starts fresh for the next week instead of accumulating progress
+  if (task.taskType === "weekly") {
+    const today = new Date().toISOString().split("T")[0];
+    task.currentProgress = 0;
+    task.completed = false;
+    task.resetAt = today;
+    console.log(`✅ [Tasks-Claim] Weekly task ${taskId} progress reset to 0, resetAt updated to ${today}`);
+  }
+
   tasks.set(taskId, task);
   saveLocalTaskProgress(tasks);
   
