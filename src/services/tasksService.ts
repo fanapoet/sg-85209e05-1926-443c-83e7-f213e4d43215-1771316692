@@ -231,7 +231,7 @@ export function checkAndResetTasks(): void {
   
   const tasks = getLocalTaskProgress();
   const now = new Date();
-  const today = now.toISOString().split("T")[0];
+  const today = now.toISOString().split("T")[0]; // YYYY-MM-DD format
   let resetCount = 0;
 
   tasks.forEach((task, taskId) => {
@@ -241,22 +241,31 @@ export function checkAndResetTasks(): void {
 
     // Daily tasks: reset if resetAt date is not today
     if (task.taskType === "daily") {
-      shouldReset = task.resetAt !== today;
+      const taskResetDate = task.resetAt || today;
+      shouldReset = taskResetDate !== today;
+      if (shouldReset) {
+        console.log(`🔄 [Tasks-Reset] Daily task ${taskId}: resetAt=${taskResetDate} vs today=${today}`);
+      }
     }
 
     // Weekly tasks: reset if 7 days have passed since resetAt
     if (task.taskType === "weekly" && task.resetAt) {
-      // Parse dates at midnight UTC to avoid timezone issues
-      const resetDate = new Date(task.resetAt + "T00:00:00Z");
-      const todayDate = new Date(today + "T00:00:00Z");
-      const daysSinceReset = Math.floor((todayDate.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
+      // Normalize dates to YYYY-MM-DD format for comparison
+      const taskResetDate = normalizeDate(task.resetAt);
+      const todayDate = normalizeDate(today);
+      
+      // Parse as UTC midnight to avoid timezone issues
+      const resetDate = new Date(taskResetDate + "T00:00:00Z");
+      const currentDate = new Date(todayDate + "T00:00:00Z");
+      const daysSinceReset = Math.floor((currentDate.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
+      
       shouldReset = daysSinceReset >= 7;
       
-      console.log(`📋 [Tasks-Reset] Weekly task ${taskId}: resetAt=${task.resetAt}, today=${today}, daysSinceReset=${daysSinceReset}, shouldReset=${shouldReset}`);
+      console.log(`📋 [Tasks-Reset] Weekly task ${taskId}: resetAt=${taskResetDate}, today=${todayDate}, daysSinceReset=${daysSinceReset}, claimed=${task.claimed}, shouldReset=${shouldReset}`);
       
-      // CRITICAL FIX: If the task shows as claimed but enough time has passed, force reset
+      // CRITICAL: If task shows as claimed and enough time has passed, FORCE reset
       if (task.claimed && daysSinceReset >= 7) {
-        console.log(`🔧 [Tasks-Reset] FORCE RESET: ${taskId} is claimed but ${daysSinceReset} days have passed`);
+        console.log(`🔧 [Tasks-Reset] FORCE RESET: ${taskId} is claimed but ${daysSinceReset} days have passed since ${taskResetDate}`);
         shouldReset = true;
       }
     }
@@ -264,7 +273,7 @@ export function checkAndResetTasks(): void {
     if (shouldReset) {
       console.log(`🔄 [Tasks-Reset] Resetting ${taskId} (${task.taskType})`);
       
-      // Reset progress but keep task structure
+      // Reset ALL progress flags and dates
       task.currentProgress = 0;
       task.completed = false;
       task.claimed = false; // CRITICAL: Reset claimed flag
@@ -272,7 +281,7 @@ export function checkAndResetTasks(): void {
       task.claimedAt = undefined;
       task.lastUpdated = Date.now();
 
-      // Update reset dates
+      // Update reset dates based on task type
       if (task.taskType === "daily") {
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
@@ -285,7 +294,7 @@ export function checkAndResetTasks(): void {
         nextWeek.setHours(0, 0, 0, 0);
         task.resetAt = today; // Update to today's date
         task.expiresAt = nextWeek.toISOString();
-        console.log(`✅ [Tasks-Reset] ${taskId} reset: claimed=false, resetAt=${today}`);
+        console.log(`✅ [Tasks-Reset] ${taskId} reset complete: claimed=false, resetAt=${today}, nextReset=${nextWeek.toISOString().split('T')[0]}`);
       }
 
       tasks.set(taskId, task);
@@ -295,7 +304,7 @@ export function checkAndResetTasks(): void {
 
   if (resetCount > 0) {
     saveLocalTaskProgress(tasks);
-    console.log(`✅ [Tasks-Reset] Reset ${resetCount} tasks, localStorage updated`);
+    console.log(`✅ [Tasks-Reset] Reset ${resetCount} tasks, localStorage saved`);
     scheduleSyncToServer();
   } else {
     console.log("ℹ️ [Tasks-Reset] No tasks need reset");
