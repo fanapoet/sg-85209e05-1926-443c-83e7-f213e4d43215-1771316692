@@ -248,7 +248,32 @@ export function TasksReferralsScreen() {
       
       // CRITICAL FIX: Always check if task should be completed based on current value
       const isCompleted = currentValue >= def.target;
-      const isClaimed = progress?.claimed || false;
+      
+      // CRITICAL FIX: For weekly tasks, check if claimed flag is stale
+      let isClaimed = progress?.claimed || false;
+      
+      if (def.type === "weekly" && progress) {
+        const today = new Date().toISOString().split("T")[0];
+        const resetAt = progress.resetAt || today;
+        
+        // Calculate days since reset
+        const resetDate = new Date(resetAt + "T00:00:00Z");
+        const todayDate = new Date(today + "T00:00:00Z");
+        const daysSinceReset = Math.floor((todayDate.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // If claimed but 7+ days have passed, force reset the claimed flag
+        if (isClaimed && daysSinceReset >= 7) {
+          console.log(`🔧 [Tasks-Build] STALE CLAIM DETECTED: ${def.id} claimed ${daysSinceReset} days ago, forcing reset`);
+          updateTaskProgress(def.id, {
+            currentProgress: currentValue,
+            completed: isCompleted,
+            claimed: false, // Force reset
+            claimedAt: undefined,
+            resetAt: today
+          });
+          isClaimed = false; // Update local value
+        }
+      }
       
       // Debug log for weekly tasks
       if (def.type === "weekly") {
@@ -282,7 +307,7 @@ export function TasksReferralsScreen() {
         target: def.target,
         current: currentValue,
         completed: isCompleted, // Use calculated value, not stored value
-        claimed: isClaimed,
+        claimed: isClaimed, // Use checked value (may be force-reset)
         icon: def.icon
       };
     });
@@ -306,15 +331,22 @@ export function TasksReferralsScreen() {
     setWeeklyTasks(buildTaskList(taskDefinitions.weekly));
   }, [initialized, todayTaps, hasClaimedIdleToday, totalUpgrades, totalConversions, referralCount, totalTaps]);
 
-  // Reload tasks when daily reset occurs
+  // CRITICAL: Force rebuild when weekly reset date changes
   useEffect(() => {
     if (!initialized || !lastDailyReset) return;
     
-    console.log("🔄 [Tasks-Reset] Daily reset detected, reloading tasks...");
+    console.log("🔄 [Tasks-Reset] Reset date changed, checking for stale weekly tasks...");
+    
+    // Force check and reset
+    const { checkAndResetTasks } = require("@/services/tasksService");
+    checkAndResetTasks();
     
     // Force rebuild of task lists
-    setDailyTasks(buildTaskList(taskDefinitions.daily));
-    setWeeklyTasks(buildTaskList(taskDefinitions.weekly));
+    setTimeout(() => {
+      console.log("🔄 [Tasks-Reset] Rebuilding task lists after reset check...");
+      setDailyTasks(buildTaskList(taskDefinitions.daily));
+      setWeeklyTasks(buildTaskList(taskDefinitions.weekly));
+    }, 100);
   }, [lastDailyReset, initialized]);
 
   const handleClaim = async (task: Task) => {

@@ -253,6 +253,12 @@ export function checkAndResetTasks(): void {
       shouldReset = daysSinceReset >= 7;
       
       console.log(`📋 [Tasks-Reset] Weekly task ${taskId}: resetAt=${task.resetAt}, today=${today}, daysSinceReset=${daysSinceReset}, shouldReset=${shouldReset}`);
+      
+      // CRITICAL FIX: If the task shows as claimed but enough time has passed, force reset
+      if (task.claimed && daysSinceReset >= 7) {
+        console.log(`🔧 [Tasks-Reset] FORCE RESET: ${taskId} is claimed but ${daysSinceReset} days have passed`);
+        shouldReset = true;
+      }
     }
 
     if (shouldReset) {
@@ -261,7 +267,7 @@ export function checkAndResetTasks(): void {
       // Reset progress but keep task structure
       task.currentProgress = 0;
       task.completed = false;
-      task.claimed = false;
+      task.claimed = false; // CRITICAL: Reset claimed flag
       task.completedAt = undefined;
       task.claimedAt = undefined;
       task.lastUpdated = Date.now();
@@ -277,8 +283,9 @@ export function checkAndResetTasks(): void {
         const nextWeek = new Date();
         nextWeek.setDate(nextWeek.getDate() + 7);
         nextWeek.setHours(0, 0, 0, 0);
-        task.resetAt = today;
+        task.resetAt = today; // Update to today's date
         task.expiresAt = nextWeek.toISOString();
+        console.log(`✅ [Tasks-Reset] ${taskId} reset: claimed=false, resetAt=${today}`);
       }
 
       tasks.set(taskId, task);
@@ -288,7 +295,7 @@ export function checkAndResetTasks(): void {
 
   if (resetCount > 0) {
     saveLocalTaskProgress(tasks);
-    console.log(`✅ [Tasks-Reset] Reset ${resetCount} tasks`);
+    console.log(`✅ [Tasks-Reset] Reset ${resetCount} tasks, localStorage updated`);
     scheduleSyncToServer();
   } else {
     console.log("ℹ️ [Tasks-Reset] No tasks need reset");
