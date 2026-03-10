@@ -249,8 +249,26 @@ export function TasksReferralsScreen() {
       // Check if task should be completed based on current value
       const isCompleted = currentValue >= def.target;
       
-      // Get claimed status from progress
-      const isClaimed = progress?.claimed || false;
+      // Get claimed status from progress - USE LET INSTEAD OF CONST
+      let isClaimed = progress?.claimed || false;
+      
+      // Detect stale weekly task claims
+      if (def.type === "weekly" && progress?.claimed && progress?.resetAt) {
+        const resetDate = new Date(progress.resetAt + "T00:00:00Z");
+        const todayDate = new Date(new Date().toISOString().split("T")[0] + "T00:00:00Z");
+        const daysSinceReset = Math.floor((todayDate.getTime() - resetDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysSinceReset >= 7) {
+          console.log(`🔧 [Tasks-UI] Detected stale claim: ${def.id}, resetting claimed flag`);
+          updateTaskProgress(def.id, {
+            claimed: false,
+            completed: false,
+            currentProgress: 0,
+            resetAt: new Date().toISOString().split("T")[0]
+          });
+          isClaimed = false; // NOW THIS WILL WORK!
+        }
+      }
       
       // Debug log for weekly tasks
       if (def.type === "weekly") {
