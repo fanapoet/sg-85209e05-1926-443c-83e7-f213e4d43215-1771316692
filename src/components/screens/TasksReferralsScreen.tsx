@@ -20,6 +20,7 @@ import {
   getTaskProgress,
   updateTaskProgress,
   claimTaskReward,
+  checkAndResetTasks,
   type TaskProgressData
 } from "@/services/tasksService";
 import type React from "react";
@@ -163,7 +164,6 @@ export function TasksReferralsScreen() {
     
     // CRITICAL: Check and reset tasks immediately on mount
     console.log("🔍 [Tasks-Init] Checking for stale tasks that need reset...");
-    const { checkAndResetTasks } = require("@/services/tasksService");
     checkAndResetTasks();
     
     setInitialized(true);
@@ -338,7 +338,6 @@ export function TasksReferralsScreen() {
     console.log("🔄 [Tasks-Reset] Reset date changed, checking for stale weekly tasks...");
     
     // Force check and reset
-    const { checkAndResetTasks } = require("@/services/tasksService");
     checkAndResetTasks();
     
     // Force rebuild of task lists
