@@ -161,10 +161,15 @@ export function TasksReferralsScreen() {
       initializeTask(def.id, def.type);
     });
     
+    // CRITICAL: Check and reset tasks immediately on mount
+    console.log("🔍 [Tasks-Init] Checking for stale tasks that need reset...");
+    const { checkAndResetTasks } = require("@/services/tasksService");
+    checkAndResetTasks();
+    
     setInitialized(true);
     setLoading(false);
     
-    console.log("✅ [Tasks-Init] All tasks initialized");
+    console.log("✅ [Tasks-Init] All tasks initialized and reset check completed");
   }, [initialized]);
 
   // Load referral data
@@ -241,10 +246,27 @@ export function TasksReferralsScreen() {
       const progress = getTaskProgress(def.id);
       const currentValue = getCurrentValueForTask(def.id);
       
-      // Update progress in service if value changed
-      if (progress && progress.currentProgress !== currentValue) {
-        const isCompleted = currentValue >= def.target;
-        console.log(`🔄 [Tasks-Update] ${def.id}: ${progress.currentProgress} → ${currentValue} (completed: ${isCompleted})`);
+      // CRITICAL FIX: Always check if task should be completed based on current value
+      const isCompleted = currentValue >= def.target;
+      const isClaimed = progress?.claimed || false;
+      
+      // Debug log for weekly tasks
+      if (def.type === "weekly") {
+        console.log(`📊 [Tasks-Build] ${def.id}:`, {
+          current: currentValue,
+          target: def.target,
+          isCompleted,
+          isClaimed,
+          storedProgress: progress?.currentProgress,
+          storedCompleted: progress?.completed,
+          storedClaimed: progress?.claimed,
+          resetAt: progress?.resetAt
+        });
+      }
+      
+      // Update progress in service if value changed OR if completion status changed
+      if (progress && (progress.currentProgress !== currentValue || progress.completed !== isCompleted)) {
+        console.log(`🔄 [Tasks-Update] ${def.id}: ${progress.currentProgress} → ${currentValue} (completed: ${progress.completed} → ${isCompleted})`);
         updateTaskProgress(def.id, {
           currentProgress: currentValue,
           completed: isCompleted
@@ -259,8 +281,8 @@ export function TasksReferralsScreen() {
         type: def.type,
         target: def.target,
         current: currentValue,
-        completed: progress?.completed || currentValue >= def.target,
-        claimed: progress?.claimed || false,
+        completed: isCompleted, // Use calculated value, not stored value
+        claimed: isClaimed,
         icon: def.icon
       };
     });
