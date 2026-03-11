@@ -349,24 +349,12 @@ export function TasksReferralsScreen() {
     console.log(`🎁 [Tasks-Claim] Claiming reward for ${task.id}`);
 
     try {
-      // Claim in tasksService
-      const success = await claimTaskReward(task.id);
+      // Use performTaskClaim which handles everything: claim, rewards, and DB sync
+      const result = await performTaskClaim(task.id, task.type, task.reward.type, task.reward.amount);
       
-      if (!success) {
+      if (!result.success) {
         throw new Error("Failed to claim reward");
       }
-
-      // Add rewards to context
-      if (task.reward.type === "BZ") {
-        addBZ(task.reward.amount);
-      } else if (task.reward.type === "BB") {
-        addBB(task.reward.amount);
-      } else if (task.reward.type === "XP") {
-        addXP(task.reward.amount);
-      }
-
-      // Also use performTaskClaim to sync with DB
-      await performTaskClaim(task.id, task.type, task.reward.type, task.reward.amount);
       
       toast({
         title: "Reward Claimed!",
