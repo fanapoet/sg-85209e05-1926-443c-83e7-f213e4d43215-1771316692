@@ -92,7 +92,8 @@ function saveLocalTaskProgress(tasks: Map<string, TaskProgressData>): void {
  */
 export function initializeTask(
   taskId: string,
-  taskType: "daily" | "weekly" | "progressive"
+  taskType: "daily" | "weekly" | "progressive",
+  initialBaseline?: number // NEW: Optional baseline for weekly tasks
 ): void {
   console.log(`📋 [Tasks-Init] Initializing task: ${taskId} (${taskType})`);
   
@@ -111,7 +112,7 @@ export function initializeTask(
     completed: false,
     claimed: false,
     lastUpdated: now,
-    baselineValue: 0, // NEW: Initialize baseline to 0
+    baselineValue: initialBaseline || 0, // Use provided baseline or default to 0
   };
 
   // Set reset dates for daily/weekly tasks
@@ -132,7 +133,7 @@ export function initializeTask(
   tasks.set(taskId, newTask);
   saveLocalTaskProgress(tasks);
   
-  console.log(`✅ [Tasks-Init] Task ${taskId} initialized locally`);
+  console.log(`✅ [Tasks-Init] Task ${taskId} initialized locally with baseline=${newTask.baselineValue}`);
   
   // Schedule background sync
   scheduleSyncToServer();
