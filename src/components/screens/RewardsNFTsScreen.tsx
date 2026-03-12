@@ -171,14 +171,18 @@ export function RewardsNFTsScreen() {
       if (savedChallenges && !shouldInitializeFresh) {
         setWeeklyChallenges(JSON.parse(savedChallenges));
       } else {
-        // Initialize fresh challenges with current baselines
-        const initialBaselines = {
-          upgrades: totalUpgrades || 0,
-          referrals: referralCount || 0,
-          conversions: totalConversions || 0,
-          timestamp: Date.now()
-        };
-        localStorage.setItem("weeklyBaselines", JSON.stringify(initialBaselines));
+        // Initialize baselines if they don't exist
+        let weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
+        if (!weeklyBaselines.upgrades && !weeklyBaselines.referrals && !weeklyBaselines.conversions) {
+          console.log("📊 [Rewards] Initializing weekly baselines for first time");
+          weeklyBaselines = {
+            upgrades: totalUpgrades || 0,
+            referrals: referralCount || 0,
+            conversions: totalConversions || 0,
+            timestamp: Date.now()
+          };
+          localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
+        }
         
         // Default Challenges - Initialize with 0 progress
         setWeeklyChallenges([
@@ -225,8 +229,39 @@ export function RewardsNFTsScreen() {
   useEffect(() => {
     if (loading) return;
     
-    // Get weekly baselines (values at start of current week)
-    const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
+    // Get weekly baselines (auto-initialize if missing)
+    let weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
+    if (!weeklyBaselines.upgrades && !weeklyBaselines.referrals && !weeklyBaselines.conversions) {
+      weeklyBaselines = {
+        upgrades: totalUpgrades || 0,
+        referrals: referralCount || 0,
+        conversions: totalConversions || 0,
+        timestamp: Date.now()
+      };
+      localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
+    }
+    
+    // FORCE RESET if baselines are clearly wrong
+    // Check if any challenge shows 100% complete but lifetime value suggests it shouldn't be
+    const isBaselineWrong = 
+      (totalUpgrades - (weeklyBaselines.upgrades || 0)) >= 50 || // If showing 50+ upgrades this week, baseline is wrong
+      (totalConversions - (weeklyBaselines.conversions || 0)) >= 10; // If showing 10+ conversions this week, baseline is wrong
+
+    if (isBaselineWrong) {
+      console.log("🔥 [Rewards] FORCE RESET: Detected incorrect baselines, recalculating...");
+      console.log("🔥 [Rewards] Old baselines:", weeklyBaselines);
+      console.log("🔥 [Rewards] Current values:", { totalUpgrades, totalConversions, referralCount });
+      
+      weeklyBaselines = {
+        upgrades: totalUpgrades || 0,
+        referrals: referralCount || 0,
+        conversions: totalConversions || 0,
+        timestamp: Date.now()
+      };
+      localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
+      console.log("🔥 [Rewards] New baselines:", weeklyBaselines);
+    }
+    
     const baseUpgrades = weeklyBaselines.upgrades || 0;
     const baseReferrals = weeklyBaselines.referrals || 0;
     const baseConversions = weeklyBaselines.conversions || 0;
