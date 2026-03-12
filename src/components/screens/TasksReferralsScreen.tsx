@@ -159,7 +159,14 @@ export function TasksReferralsScreen() {
     
     // Initialize all tasks in tasksService
     [...taskDefinitions.daily, ...taskDefinitions.weekly, ...taskDefinitions.progressive].forEach(def => {
-      initializeTask(def.id, def.type);
+      // For weekly tasks, initialize with current lifetime totals as baseline
+      if (def.type === "weekly") {
+        const baselineValue = getCurrentValueForTask(def.id);
+        console.log(`🎬 [Tasks-Init] Initializing ${def.id} with baseline=${baselineValue}`);
+        initializeTask(def.id, def.type, baselineValue);
+      } else {
+        initializeTask(def.id, def.type);
+      }
     });
     
     // CRITICAL: Check and reset tasks immediately on mount
