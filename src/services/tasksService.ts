@@ -220,7 +220,9 @@ export async function claimTaskReward(taskId: string): Promise<boolean> {
     const today = new Date().toISOString().split("T")[0];
     task.currentProgress = 0;
     task.completed = false;
+    task.claimed = true; // Keep claimed status
     task.resetAt = today;
+    task.baselineValue = 0; // Reset baseline for next week
     console.log(`✅ [Tasks-Claim] Weekly task ${taskId} progress reset to 0, resetAt updated to ${today}`);
   }
 
@@ -292,6 +294,12 @@ export function checkAndResetTasks(): void {
       task.completedAt = undefined;
       task.claimedAt = undefined;
       task.lastUpdated = Date.now();
+      
+      // CRITICAL: Reset baseline for weekly tasks
+      // This will be set to current lifetime total when task is displayed
+      if (task.taskType === "weekly") {
+        task.baselineValue = 0; // Reset baseline - will be set by UI
+      }
 
       // Update reset dates based on task type
       if (task.taskType === "daily") {
