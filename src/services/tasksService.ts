@@ -50,6 +50,7 @@ export interface TaskProgressData {
   resetAt?: string;
   expiresAt?: string;
   lastUpdated: number;
+  baselineValue?: number; // NEW: Baseline value for weekly task tracking (lifetime total when week started)
 }
 
 const STORAGE_KEY = "bunergy_task_progress";
@@ -110,6 +111,7 @@ export function initializeTask(
     completed: false,
     claimed: false,
     lastUpdated: now,
+    baselineValue: 0, // NEW: Initialize baseline to 0
   };
 
   // Set reset dates for daily/weekly tasks
@@ -530,21 +532,27 @@ export async function loadTasksFromDB(): Promise<void> {
     const mergedProgress = mergeTaskProgress(localProgress, serverProgress);
 
     // Convert back to TaskProgressData and save
+    // CRITICAL FIX: Only keep the MOST RECENT reset_at for each task
     const mergedTasks = new Map<string, TaskProgressData>();
     
     mergedProgress.forEach(record => {
-      mergedTasks.set(record.taskId, {
-        taskId: record.taskId,
-        taskType: record.taskType as "daily" | "weekly" | "progressive",
-        currentProgress: record.currentProgress,
-        completed: record.completed,
-        claimed: record.claimed,
-        completedAt: record.completedAt,
-        claimedAt: record.claimedAt,
-        resetAt: record.resetAt,
-        expiresAt: record.expiresAt,
-        lastUpdated: Date.now()
-      });
+      const existing = mergedTasks.get(record.taskId);
+      
+      // If no existing record OR this record has a more recent reset_at, use it
+      if (!existing || record.resetAt > existing.resetAt!) {
+        mergedTasks.set(record.taskId, {
+          taskId: record.taskId,
+          taskType: record.taskType as "daily" | "weekly" | "progressive",
+          currentProgress: record.currentProgress,
+          completed: record.completed,
+          claimed: record.claimed,
+          completedAt: record.completedAt,
+          claimedAt: record.claimedAt,
+          resetAt: record.resetAt,
+          expiresAt: record.expiresAt,
+          lastUpdated: Date.now()
+        });
+      }
     });
 
     saveLocalTaskProgress(mergedTasks);
