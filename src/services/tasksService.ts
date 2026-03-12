@@ -223,8 +223,8 @@ export async function claimTaskReward(taskId: string): Promise<boolean> {
     task.completed = false;
     task.claimed = true; // Keep claimed status
     task.resetAt = today;
-    task.baselineValue = 0; // Reset baseline for next week
-    console.log(`✅ [Tasks-Claim] Weekly task ${taskId} progress reset to 0, resetAt updated to ${today}`);
+    task.baselineValue = 0; // Reset baseline - UI will set it to current lifetime total when rendering
+    console.log(`✅ [Tasks-Claim] Weekly task ${taskId} progress reset to 0, resetAt updated to ${today}, baseline reset to 0`);
   }
 
   tasks.set(taskId, task);

@@ -214,7 +214,7 @@ export function TasksReferralsScreen() {
   const getCurrentValueForTask = (taskId: string): number => {
     switch (taskId) {
       case "daily_check_in":
-        return 1; // Always completed on load
+        return 1;
       case "daily_tap_100":
         console.log(`🎯 [Tasks-Value] daily_tap_100: todayTaps=${todayTaps}`);
         return todayTaps;
@@ -222,14 +222,50 @@ export function TasksReferralsScreen() {
         console.log(`🎯 [Tasks-Value] daily_idle: hasClaimedIdleToday=${hasClaimedIdleToday}`);
         return hasClaimedIdleToday ? 1 : 0;
       case "weekly_upgrade":
-        console.log(`🎯 [Tasks-Value] weekly_upgrade: totalUpgrades=${totalUpgrades}`);
-        return totalUpgrades;
+        const upgradeProgress = getTaskProgress("weekly_upgrade");
+        let upgradeBaseline = upgradeProgress?.baselineValue || 0;
+        
+        // If baseline is 0 (just reset), set it to current lifetime total
+        if (upgradeBaseline === 0 && upgradeProgress) {
+          upgradeBaseline = totalUpgrades;
+          console.log(`🔧 [Tasks-Value] Setting upgrade baseline to ${upgradeBaseline}`);
+          updateTaskProgress("weekly_upgrade", { baselineValue: upgradeBaseline });
+        }
+        
+        const upgradeWeekly = Math.max(0, totalUpgrades - upgradeBaseline);
+        console.log(`🎯 [Tasks-Value] weekly_upgrade: lifetime=${totalUpgrades}, baseline=${upgradeBaseline}, weekly=${upgradeWeekly}`);
+        return upgradeWeekly;
+        
       case "weekly_convert":
-        console.log(`🎯 [Tasks-Value] weekly_convert: totalConversions=${totalConversions}`);
-        return totalConversions;
+        const convertProgress = getTaskProgress("weekly_convert");
+        let convertBaseline = convertProgress?.baselineValue || 0;
+        
+        // If baseline is 0 (just reset), set it to current lifetime total
+        if (convertBaseline === 0 && convertProgress) {
+          convertBaseline = totalConversions;
+          console.log(`🔧 [Tasks-Value] Setting convert baseline to ${convertBaseline}`);
+          updateTaskProgress("weekly_convert", { baselineValue: convertBaseline });
+        }
+        
+        const convertWeekly = Math.max(0, totalConversions - convertBaseline);
+        console.log(`🎯 [Tasks-Value] weekly_convert: lifetime=${totalConversions}, baseline=${convertBaseline}, weekly=${convertWeekly}`);
+        return convertWeekly;
+        
       case "weekly_invite":
-        console.log(`🎯 [Tasks-Value] weekly_invite: referralCount=${referralCount}`);
-        return referralCount;
+        const inviteProgress = getTaskProgress("weekly_invite");
+        let inviteBaseline = inviteProgress?.baselineValue || 0;
+        
+        // If baseline is 0 (just reset), set it to current lifetime total
+        if (inviteBaseline === 0 && inviteProgress) {
+          inviteBaseline = referralCount;
+          console.log(`🔧 [Tasks-Value] Setting invite baseline to ${inviteBaseline}`);
+          updateTaskProgress("weekly_invite", { baselineValue: inviteBaseline });
+        }
+        
+        const inviteWeekly = Math.max(0, referralCount - inviteBaseline);
+        console.log(`🎯 [Tasks-Value] weekly_invite: lifetime=${referralCount}, baseline=${inviteBaseline}, weekly=${inviteWeekly}`);
+        return inviteWeekly;
+        
       case "milestone_taps":
         return totalTaps;
       case "milestone_invite":
@@ -272,19 +308,10 @@ export function TasksReferralsScreen() {
             completed: false,
             currentProgress: 0,
             resetAt: new Date().toISOString().split("T")[0],
-            baselineValue: currentValue // ← SET BASELINE TO CURRENT LIFETIME TOTAL
+            baselineValue: 0 // Reset baseline to 0, will be set by getCurrentValueForTask
           });
           isClaimed = false;
         }
-      }
-      
-      // CRITICAL: For weekly tasks, ensure baseline is set if it's 0 or undefined
-      // This handles the case where task was reset but baseline wasn't updated
-      if (def.type === "weekly" && (!progress?.baselineValue || progress.baselineValue === 0)) {
-        console.log(`🔧 [Tasks-UI] Setting baseline for ${def.id} to current value: ${currentValue}`);
-        updateTaskProgress(def.id, {
-          baselineValue: currentValue
-        });
       }
       
       // Debug log for weekly tasks
