@@ -271,10 +271,20 @@ export function TasksReferralsScreen() {
             claimed: false,
             completed: false,
             currentProgress: 0,
-            resetAt: new Date().toISOString().split("T")[0]
+            resetAt: new Date().toISOString().split("T")[0],
+            baselineValue: currentValue // ← SET BASELINE TO CURRENT LIFETIME TOTAL
           });
-          isClaimed = false; // NOW THIS WILL WORK!
+          isClaimed = false;
         }
+      }
+      
+      // CRITICAL: For weekly tasks, ensure baseline is set if it's 0 or undefined
+      // This handles the case where task was reset but baseline wasn't updated
+      if (def.type === "weekly" && (!progress?.baselineValue || progress.baselineValue === 0)) {
+        console.log(`🔧 [Tasks-UI] Setting baseline for ${def.id} to current value: ${currentValue}`);
+        updateTaskProgress(def.id, {
+          baselineValue: currentValue
+        });
       }
       
       // Debug log for weekly tasks
