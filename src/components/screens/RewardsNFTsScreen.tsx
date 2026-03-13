@@ -190,6 +190,68 @@ export function RewardsNFTsScreen() {
     setLoading(false);
   }, []); // ← Empty deps, runs ONCE
 
+  // Mount Effect - Load/Init Challenges & NFTs
+  useEffect(() => {
+    // Load/Init Challenges & NFTs
+    try {
+      const savedChallenges = localStorage.getItem("weeklyChallenges");
+      const savedBaselines = localStorage.getItem("weeklyBaselines");
+
+      if (!savedBaselines) {
+        // First time - initialize baselines with current totals
+        console.log("📊 [Rewards] Initializing weekly baselines for the first time");
+        const initialBaselines = {
+          upgrades: totalUpgrades || 0,
+          referrals: referralCount || 0,
+          conversions: totalConversions || 0,
+          timestamp: Date.now()
+        };
+        localStorage.setItem("weeklyBaselines", JSON.stringify(initialBaselines));
+        console.log("📊 [Rewards] Initial baselines set:", initialBaselines);
+      }
+
+      if (savedChallenges) {
+        setWeeklyChallenges(JSON.parse(savedChallenges));
+      } else {
+        // Default Challenges - Initialize with 0 progress
+        setWeeklyChallenges([
+          {
+            key: "builder",
+            name: "Master Builder",
+            icon: "Hammer",
+            description: "Perform 50 upgrades",
+            target: 50,
+            progress: 0,
+            reward: { type: "BZ", amount: 10000 },
+            claimed: false
+          },
+          {
+            key: "recruiter",
+            name: "Top Recruiter",
+            icon: "Users",
+            description: "Invite 5 friends",
+            target: 5,
+            progress: 0,
+            reward: { type: "BB", amount: 0.005 },
+            claimed: false
+          },
+          {
+            key: "converter",
+            name: "Exchange Guru",
+            icon: "ArrowLeftRight",
+            description: "Convert 10 times",
+            target: 10,
+            progress: 0,
+            reward: { type: "XP", amount: 5000 },
+            claimed: false
+          }
+        ]);
+      }
+    } catch (e) {
+      console.error("Failed to load challenges", e);
+    }
+  }, []);
+
   // CRITICAL: Initialize baselines ONCE on first render to prevent infinite loops
   useEffect(() => {
     if (hasInitialized.current || loading) return;
