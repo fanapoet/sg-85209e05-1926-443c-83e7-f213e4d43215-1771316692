@@ -1,5 +1,5 @@
 import { useGameState } from "@/contexts/GameStateContext";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -105,7 +105,9 @@ export function RewardsNFTsScreen() {
   
   const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
   const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallenge[]>([]);
+  const [nftCollection, setNFTCollection] = useState<NFT[]>([]);
   const [loading, setLoading] = useState(true);
+  const hasInitialized = useRef(false);
 
   // Use context values for rewards
   const currentWeek = currentRewardWeek || 1;
@@ -225,32 +227,71 @@ export function RewardsNFTsScreen() {
     setLoading(false);
   }, [currentWeeklyPeriodStart]);
 
-  // Update Challenge Progress based on Context Stats
+  // Mount Effect - Load/Init Challenges & NFTs
   useEffect(() => {
-    if (loading) return;
-    
-    // Get weekly baselines (auto-initialize if missing)
-    let weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
-    if (!weeklyBaselines.upgrades && !weeklyBaselines.referrals && !weeklyBaselines.conversions) {
-      weeklyBaselines = {
-        upgrades: totalUpgrades || 0,
-        referrals: referralCount || 0,
-        conversions: totalConversions || 0,
-        timestamp: Date.now()
-      };
-      localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
+    // Load/Init Challenges with validation
+    try {
+      // Initialize baselines if they don't exist
+      let weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
+      
+      console.log("🔍 [Rewards-DEBUG] Current weeklyBaselines:", weeklyBaselines);
+      console.log("🔍 [Rewards-DEBUG] Current stats:", { totalUpgrades, totalConversions, referralCount });
+      
+      // Check if baselines need initialization
+      // Condition: timestamp is missing OR suspiciously old (>30 days)
+      const needsInit = !weeklyBaselines.timestamp || 
+        (Date.now() - weeklyBaselines.timestamp > 30 * 24 * 60 * 60 * 1000);
+      
+      console.log("🔍 [Rewards-DEBUG] needsInit:", needsInit);
+      
+      if (needsInit) {
+        console.log("📊 [Rewards] Initializing/resetting weekly baselines");
+        console.log("📊 [Rewards] Old baselines:", weeklyBaselines);
+        weeklyBaselines = {
+          upgrades: totalUpgrades || 0,
+          referrals: referralCount || 0,
+          conversions: totalConversions || 0,
+          timestamp: Date.now()
+        };
+        localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
+        console.log("📊 [Rewards] New baselines:", weeklyBaselines);
+      }
+      
+      // Default Challenges - Initialize with 0 progress
+    } catch (e) {
+      console.error("Failed to load challenges", e);
     }
-    
-    // FORCE RESET if baselines are clearly wrong
-    // Check if any challenge shows 100% complete but lifetime value suggests it shouldn't be
-    const isBaselineWrong = 
-      (totalUpgrades - (weeklyBaselines.upgrades || 0)) >= 50 || // If showing 50+ upgrades this week, baseline is wrong
-      (totalConversions - (weeklyBaselines.conversions || 0)) >= 10; // If showing 10+ conversions this week, baseline is wrong
+  }, []);
 
-    if (isBaselineWrong) {
-      console.log("🔥 [Rewards] FORCE RESET: Detected incorrect baselines, recalculating...");
+  // CRITICAL: Initialize baselines ONCE on first render to prevent infinite loops
+  useEffect(() => {
+    if (hasInitialized.current || loading) return;
+    
+    console.log("🔍 [Rewards-INIT] Running one-time baseline check");
+    
+    // Get baselines and check if they need reset
+    let weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
+    
+    console.log("🔍 [Rewards-INIT] Current baselines:", weeklyBaselines);
+    console.log("🔍 [Rewards-INIT] Current stats:", { totalUpgrades, totalConversions, referralCount });
+    
+    // Calculate deltas
+    const upgradeDelta = (totalUpgrades || 0) - (weeklyBaselines.upgrades || 0);
+    const conversionDelta = (totalConversions || 0) - (weeklyBaselines.conversions || 0);
+    
+    console.log("🔍 [Rewards-INIT] Deltas:", { upgradeDelta, conversionDelta });
+    
+    // Force reset if timestamp is missing or suspicious progress detected
+    const needsReset = !weeklyBaselines.timestamp ||
+      upgradeDelta > 50 || // More than target (50 parts)
+      conversionDelta > 100000; // Way more than target (100K conversions)
+    
+    console.log("🔍 [Rewards-INIT] needsReset:", needsReset);
+    
+    if (needsReset) {
+      console.log("🔥 [Rewards] FORCE RESET: Resetting baselines");
       console.log("🔥 [Rewards] Old baselines:", weeklyBaselines);
-      console.log("🔥 [Rewards] Current values:", { totalUpgrades, totalConversions, referralCount });
+      console.log("🔥 [Rewards] Reason: timestamp missing OR deltas too large");
       
       weeklyBaselines = {
         upgrades: totalUpgrades || 0,
@@ -259,32 +300,44 @@ export function RewardsNFTsScreen() {
         timestamp: Date.now()
       };
       localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
+      
       console.log("🔥 [Rewards] New baselines:", weeklyBaselines);
     }
     
+    hasInitialized.current = true;
+  }, [loading, totalUpgrades, totalConversions, referralCount]);
+
+  // Update Challenge Progress based on Context Stats
+  useEffect(() => {
+    if (loading) return;
+    
+    // Get weekly baselines (values at start of current week)
+    const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
     const baseUpgrades = weeklyBaselines.upgrades || 0;
     const baseReferrals = weeklyBaselines.referrals || 0;
     const baseConversions = weeklyBaselines.conversions || 0;
     
-    console.log("🎯 [Weekly-Challenge] Updating progress with game state:", {
-      totalUpgrades,
-      referralCount,
-      totalConversions,
-      baseUpgrades,
-      baseReferrals,
-      baseConversions
-    });
+    console.log("📈 [Rewards-PROGRESS] Calculating progress");
+    console.log("📈 [Rewards-PROGRESS] Baselines:", { baseUpgrades, baseReferrals, baseConversions });
+    console.log("📈 [Rewards-PROGRESS] Current:", { totalUpgrades, referralCount, totalConversions });
     
     setWeeklyChallenges(prev => {
       const updated = prev.map(c => {
         let newProgress = c.progress;
         
         // Calculate progress as DELTA from weekly baseline
-        if (c.key === "builder") newProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
-        if (c.key === "recruiter") newProgress = Math.max(0, (referralCount || 0) - baseReferrals);
-        if (c.key === "converter") newProgress = Math.max(0, (totalConversions || 0) - baseConversions);
-        
-        console.log(`🎯 [Weekly-Challenge] ${c.key}: ${c.progress} → ${newProgress}`);
+        if (c.key === "builder") {
+          newProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
+          console.log(`📈 [Rewards-PROGRESS] Builder: ${totalUpgrades} - ${baseUpgrades} = ${newProgress}`);
+        }
+        if (c.key === "recruiter") {
+          newProgress = Math.max(0, (referralCount || 0) - baseReferrals);
+          console.log(`📈 [Rewards-PROGRESS] Recruiter: ${referralCount} - ${baseReferrals} = ${newProgress}`);
+        }
+        if (c.key === "converter") {
+          newProgress = Math.max(0, (totalConversions || 0) - baseConversions);
+          console.log(`📈 [Rewards-PROGRESS] Converter: ${totalConversions} - ${baseConversions} = ${newProgress}`);
+        }
         
         return { ...c, progress: Math.min(newProgress, c.target) };
       });
