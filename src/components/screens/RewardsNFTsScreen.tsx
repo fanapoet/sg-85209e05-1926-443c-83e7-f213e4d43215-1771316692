@@ -190,42 +190,6 @@ export function RewardsNFTsScreen() {
     setLoading(false);
   }, []); // ← Empty deps, runs ONCE
 
-  // Mount Effect - Load/Init Challenges & NFTs
-  useEffect(() => {
-    // Load/Init Challenges with validation
-    try {
-      // Initialize baselines if they don't exist
-      let weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
-      
-      console.log("🔍 [Rewards-DEBUG] Current weeklyBaselines:", weeklyBaselines);
-      console.log("🔍 [Rewards-DEBUG] Current stats:", { totalUpgrades, totalConversions, referralCount });
-      
-      // Check if baselines need initialization
-      // Condition: timestamp is missing OR suspiciously old (>30 days)
-      const needsInit = !weeklyBaselines.timestamp || 
-        (Date.now() - weeklyBaselines.timestamp > 30 * 24 * 60 * 60 * 1000);
-      
-      console.log("🔍 [Rewards-DEBUG] needsInit:", needsInit);
-      
-      if (needsInit) {
-        console.log("📊 [Rewards] Initializing/resetting weekly baselines");
-        console.log("📊 [Rewards] Old baselines:", weeklyBaselines);
-        weeklyBaselines = {
-          upgrades: totalUpgrades || 0,
-          referrals: referralCount || 0,
-          conversions: totalConversions || 0,
-          timestamp: Date.now()
-        };
-        localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
-        console.log("📊 [Rewards] New baselines:", weeklyBaselines);
-      }
-      
-      // Default Challenges - Initialize with 0 progress
-    } catch (e) {
-      console.error("Failed to load challenges", e);
-    }
-  }, []);
-
   // CRITICAL: Initialize baselines ONCE on first render to prevent infinite loops
   useEffect(() => {
     if (hasInitialized.current || loading) return;
