@@ -100,9 +100,6 @@ export function RewardsNFTsScreen() {
     resetWeeklyPeriod
   } = useGameState();
   
-  console.log("[Weekly Reset] 🎬 RewardsNFTsScreen mounted/rendered");
-  console.log("[Weekly Reset] 📊 currentWeeklyPeriodStart from context:", currentWeeklyPeriodStart);
-  
   const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
   const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallenge[]>([]);
   const [nftCollection, setNFTCollection] = useState<NFT[]>([]);
@@ -199,7 +196,6 @@ export function RewardsNFTsScreen() {
 
       if (!savedBaselines) {
         // First time - initialize baselines with current totals
-        console.log("📊 [Rewards] Initializing weekly baselines for the first time");
         const initialBaselines = {
           upgrades: totalUpgrades || 0,
           referrals: referralCount || 0,
@@ -207,7 +203,6 @@ export function RewardsNFTsScreen() {
           timestamp: Date.now()
         };
         localStorage.setItem("weeklyBaselines", JSON.stringify(initialBaselines));
-        console.log("📊 [Rewards] Initial baselines set:", initialBaselines);
       }
 
       if (savedChallenges) {
@@ -256,41 +251,17 @@ export function RewardsNFTsScreen() {
   useEffect(() => {
     if (hasInitialized.current || loading) return;
     
-    console.log("🔍 [Rewards-INIT] Running one-time baseline check");
+    // Only initialize baselines if they don't exist
+    const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
     
-    // Get baselines and check if they need reset
-    let weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
-    
-    console.log("🔍 [Rewards-INIT] Current baselines:", weeklyBaselines);
-    console.log("🔍 [Rewards-INIT] Current stats:", { totalUpgrades, totalConversions, referralCount });
-    
-    // Calculate deltas
-    const upgradeDelta = (totalUpgrades || 0) - (weeklyBaselines.upgrades || 0);
-    const conversionDelta = (totalConversions || 0) - (weeklyBaselines.conversions || 0);
-    
-    console.log("🔍 [Rewards-INIT] Deltas:", { upgradeDelta, conversionDelta });
-    
-    // Force reset if timestamp is missing or suspicious progress detected
-    const needsReset = !weeklyBaselines.timestamp ||
-      upgradeDelta > 50 || // More than target (50 parts)
-      conversionDelta > 100000; // Way more than target (100K conversions)
-    
-    console.log("🔍 [Rewards-INIT] needsReset:", needsReset);
-    
-    if (needsReset) {
-      console.log("🔥 [Rewards] FORCE RESET: Resetting baselines");
-      console.log("🔥 [Rewards] Old baselines:", weeklyBaselines);
-      console.log("🔥 [Rewards] Reason: timestamp missing OR deltas too large");
-      
-      weeklyBaselines = {
+    if (!weeklyBaselines.timestamp) {
+      const initialBaselines = {
         upgrades: totalUpgrades || 0,
         referrals: referralCount || 0,
         conversions: totalConversions || 0,
         timestamp: Date.now()
       };
-      localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
-      
-      console.log("🔥 [Rewards] New baselines:", weeklyBaselines);
+      localStorage.setItem("weeklyBaselines", JSON.stringify(initialBaselines));
     }
     
     hasInitialized.current = true;
@@ -306,10 +277,6 @@ export function RewardsNFTsScreen() {
     const baseReferrals = weeklyBaselines.referrals || 0;
     const baseConversions = weeklyBaselines.conversions || 0;
     
-    console.log("📈 [Rewards-PROGRESS] Calculating progress");
-    console.log("📈 [Rewards-PROGRESS] Baselines:", { baseUpgrades, baseReferrals, baseConversions });
-    console.log("📈 [Rewards-PROGRESS] Current:", { totalUpgrades, referralCount, totalConversions });
-    
     setWeeklyChallenges(prev => {
       const updated = prev.map(c => {
         let newProgress = c.progress;
@@ -317,15 +284,12 @@ export function RewardsNFTsScreen() {
         // Calculate progress as DELTA from weekly baseline
         if (c.key === "builder") {
           newProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
-          console.log(`📈 [Rewards-PROGRESS] Builder: ${totalUpgrades} - ${baseUpgrades} = ${newProgress}`);
         }
         if (c.key === "recruiter") {
           newProgress = Math.max(0, (referralCount || 0) - baseReferrals);
-          console.log(`📈 [Rewards-PROGRESS] Recruiter: ${referralCount} - ${baseReferrals} = ${newProgress}`);
         }
         if (c.key === "converter") {
           newProgress = Math.max(0, (totalConversions || 0) - baseConversions);
-          console.log(`📈 [Rewards-PROGRESS] Converter: ${totalConversions} - ${baseConversions} = ${newProgress}`);
         }
         
         return { ...c, progress: Math.min(newProgress, c.target) };
@@ -344,10 +308,6 @@ export function RewardsNFTsScreen() {
 
   // Check for weekly reset after challenges are loaded and context is available
   useEffect(() => {
-    console.log("🔍 [Weekly Reset Check] Effect triggered");
-    console.log("🔍 [Weekly Reset Check] loading:", loading);
-    console.log("🔍 [Weekly Reset Check] currentWeeklyPeriodStart:", currentWeeklyPeriodStart);
-    
     if (!loading && currentWeeklyPeriodStart) {
       const now = new Date();
       const periodStart = new Date(currentWeeklyPeriodStart);
@@ -355,14 +315,8 @@ export function RewardsNFTsScreen() {
       // Calculate difference in days
       const diffTime = Math.abs(now.getTime() - periodStart.getTime());
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      
-      console.log("📅 [Weekly Reset Check] Current time:", now.toISOString());
-      console.log("📅 [Weekly Reset Check] Period start:", periodStart.toISOString());
-      console.log("📅 [Weekly Reset Check] Days passed:", diffDays);
 
       if (diffDays >= 7) {
-        console.log("🔄 [Weekly Reset] 7+ days detected! Resetting challenges...");
-        
         // 0. Store current values as weekly baselines for delta calculation
         const weeklyBaselines = {
           upgrades: totalUpgrades || 0,
@@ -371,7 +325,6 @@ export function RewardsNFTsScreen() {
           timestamp: Date.now()
         };
         localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
-        console.log("📊 [Weekly Reset] Stored baselines:", weeklyBaselines);
         
         // 1. Clear old localStorage to prevent stale data
         localStorage.removeItem("weeklyChallenges");
@@ -411,16 +364,10 @@ export function RewardsNFTsScreen() {
         ]);
         
         // 3. Update Database & Context with NEW period start date
-        console.log("🔄 [Weekly Reset] Calling resetWeeklyPeriod...");
         resetWeeklyPeriod();
-      } else {
-        console.log("✅ [Weekly Reset Check] Still within 7-day period, no reset needed");
       }
     } else if (!loading && !currentWeeklyPeriodStart) {
-      console.log("⚠️ [Weekly Reset Check] Missing currentWeeklyPeriodStart - initializing");
       resetWeeklyPeriod();
-    } else {
-      console.log("⏳ [Weekly Reset Check] Still loading or waiting for data");
     }
   }, [currentWeeklyPeriodStart, loading, resetWeeklyPeriod]);
 
@@ -546,8 +493,6 @@ export function RewardsNFTsScreen() {
       if (nextDay === 7) {
         nextWeek = currentWeek + 1;
       }
-
-      console.log(`🎁 [Rewards] Claiming Day ${nextDay}, Week ${nextWeek}`);
       
       // Use Context Method to update state & sync to DB
       await performDailyClaim(nextDay, nextWeek, reward.type, reward.amount);
@@ -562,8 +507,6 @@ export function RewardsNFTsScreen() {
       setWeeklyChallenges(prev => 
         prev.map(c => {
           if (c.key === challengeKey && c.progress >= c.target && !c.claimed) {
-            console.log(`🎯 [Rewards] Claiming challenge: ${c.name}`);
-            
             // Update Balances via Context
             if (c.reward.type === "BZ") addBZ(c.reward.amount);
             if (c.reward.type === "BB") addBB(c.reward.amount);
