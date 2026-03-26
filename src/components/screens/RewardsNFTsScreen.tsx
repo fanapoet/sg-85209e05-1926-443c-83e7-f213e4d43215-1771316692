@@ -19,6 +19,12 @@ import {
   Target,
   TrendingUp
 } from "lucide-react";
+import { 
+  getWeeklyChallenges, 
+  updateChallengeProgress, 
+  claimWeeklyChallenge,
+  type ChallengeKey 
+} from "@/services/weeklyChallengeService";
 
 interface DailyReward {
   day: number;
@@ -187,66 +193,6 @@ export function RewardsNFTsScreen() {
     setLoading(false);
   }, []); // ← Empty deps, runs ONCE
 
-  // Mount Effect - Load/Init Challenges & NFTs
-  useEffect(() => {
-    // Load/Init Challenges & NFTs
-    try {
-      const savedChallenges = localStorage.getItem("weeklyChallenges");
-      const savedBaselines = localStorage.getItem("weeklyBaselines");
-
-      if (!savedBaselines) {
-        // First time - initialize baselines with current totals
-        const initialBaselines = {
-          upgrades: totalUpgrades || 0,
-          referrals: referralCount || 0,
-          conversions: totalConversions || 0,
-          timestamp: Date.now()
-        };
-        localStorage.setItem("weeklyBaselines", JSON.stringify(initialBaselines));
-      }
-
-      if (savedChallenges) {
-        setWeeklyChallenges(JSON.parse(savedChallenges));
-      } else {
-        // Default Challenges - Initialize with 0 progress
-        setWeeklyChallenges([
-          {
-            key: "builder",
-            name: "Master Builder",
-            icon: "Hammer",
-            description: "Perform 50 upgrades",
-            target: 50,
-            progress: 0,
-            reward: { type: "BZ", amount: 10000 },
-            claimed: false
-          },
-          {
-            key: "recruiter",
-            name: "Top Recruiter",
-            icon: "Users",
-            description: "Invite 5 friends",
-            target: 5,
-            progress: 0,
-            reward: { type: "BB", amount: 0.005 },
-            claimed: false
-          },
-          {
-            key: "converter",
-            name: "Exchange Guru",
-            icon: "ArrowLeftRight",
-            description: "Convert 10 times",
-            target: 10,
-            progress: 0,
-            reward: { type: "XP", amount: 5000 },
-            claimed: false
-          }
-        ]);
-      }
-    } catch (e) {
-      console.error("Failed to load challenges", e);
-    }
-  }, []);
-
   // CRITICAL: Initialize baselines ONCE on first render to prevent infinite loops
   useEffect(() => {
     if (hasInitialized.current || loading) return;
@@ -267,37 +213,51 @@ export function RewardsNFTsScreen() {
     hasInitialized.current = true;
   }, [loading, totalUpgrades, totalConversions, referralCount]);
 
-  // Update Challenge Progress based on Context Stats
+  // Update Challenge Progress - Sync to Database
   useEffect(() => {
-    if (loading) return;
-    
-    // Get weekly baselines (values at start of current week)
-    const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
-    const baseUpgrades = weeklyBaselines.upgrades || 0;
-    const baseReferrals = weeklyBaselines.referrals || 0;
-    const baseConversions = weeklyBaselines.conversions || 0;
-    
-    setWeeklyChallenges(prev => {
-      const updated = prev.map(c => {
-        let newProgress = c.progress;
-        
-        // Calculate progress as DELTA from weekly baseline
-        if (c.key === "builder") {
-          newProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
-        }
-        if (c.key === "recruiter") {
-          newProgress = Math.max(0, (referralCount || 0) - baseReferrals);
-        }
-        if (c.key === "converter") {
-          newProgress = Math.max(0, (totalConversions || 0) - baseConversions);
-        }
-        
-        return { ...c, progress: Math.min(newProgress, c.target) };
-      });
+    const syncProgress = async () => {
+      if (loading || !userId || !currentWeeklyPeriodStart) return;
       
-      return updated;
-    });
-  }, [totalUpgrades, referralCount, totalConversions, loading]);
+      const year = new Date(currentWeeklyPeriodStart).getFullYear();
+      const weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+      
+      // Get baselines from localStorage (fallback for display)
+      const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
+      const baseUpgrades = weeklyBaselines.upgrades || 0;
+      const baseReferrals = weeklyBaselines.referrals || 0;
+      const baseConversions = weeklyBaselines.conversions || 0;
+      
+      // Update database with current progress
+      const updates = [
+        updateChallengeProgress(userId, "builder", totalUpgrades || 0, 50, year, weekNumber),
+        updateChallengeProgress(userId, "recruiter", referralCount || 0, 5, year, weekNumber),
+        updateChallengeProgress(userId, "converter", totalConversions || 0, 10, year, weekNumber)
+      ];
+      
+      await Promise.all(updates);
+      
+      // Update local UI state
+      setWeeklyChallenges(prev => 
+        prev.map(c => {
+          let newProgress = c.progress;
+          
+          if (c.key === "builder") {
+            newProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
+          }
+          if (c.key === "recruiter") {
+            newProgress = Math.max(0, (referralCount || 0) - baseReferrals);
+          }
+          if (c.key === "converter") {
+            newProgress = Math.max(0, (totalConversions || 0) - baseConversions);
+          }
+          
+          return { ...c, progress: Math.min(newProgress, c.target) };
+        })
+      );
+    };
+    
+    syncProgress();
+  }, [totalUpgrades, referralCount, totalConversions, loading, userId, currentWeeklyPeriodStart]);
 
   // Persist Challenges to LocalStorage
   useEffect(() => {
@@ -317,53 +277,7 @@ export function RewardsNFTsScreen() {
       const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
       if (diffDays >= 7) {
-        // 0. Store current values as weekly baselines for delta calculation
-        const weeklyBaselines = {
-          upgrades: totalUpgrades || 0,
-          referrals: referralCount || 0,
-          conversions: totalConversions || 0,
-          timestamp: Date.now()
-        };
-        localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
-        
-        // 1. Clear old localStorage to prevent stale data
-        localStorage.removeItem("weeklyChallenges");
-        
-        // 2. Reset Local Challenges to 0 progress
-        setWeeklyChallenges([
-          {
-            key: "builder",
-            name: "Master Builder",
-            icon: "Hammer",
-            description: "Perform 50 upgrades",
-            target: 50,
-            progress: 0,
-            reward: { type: "BZ", amount: 10000 },
-            claimed: false
-          },
-          {
-            key: "recruiter",
-            name: "Top Recruiter",
-            icon: "Users",
-            description: "Invite 5 friends",
-            target: 5,
-            progress: 0,
-            reward: { type: "BB", amount: 0.005 },
-            claimed: false
-          },
-          {
-            key: "converter",
-            name: "Exchange Guru",
-            icon: "ArrowLeftRight",
-            description: "Convert 10 times",
-            target: 10,
-            progress: 0,
-            reward: { type: "XP", amount: 5000 },
-            claimed: false
-          }
-        ]);
-        
-        // 3. Update Database & Context with NEW period start date
+        // Reset is handled by GameStateContext
         resetWeeklyPeriod();
       }
     } else if (!loading && !currentWeeklyPeriodStart) {
@@ -502,20 +416,29 @@ export function RewardsNFTsScreen() {
     }
   };
 
-  const handleClaimChallenge = (challengeKey: string) => {
+  const handleClaimChallenge = async (challengeKey: string) => {
+    if (!userId || !currentWeeklyPeriodStart) return;
+    
     try {
+      const challenge = weeklyChallenges.find(c => c.key === challengeKey);
+      if (!challenge || challenge.progress < challenge.target || challenge.claimed) return;
+      
+      const year = new Date(currentWeeklyPeriodStart).getFullYear();
+      const weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+      
+      // Mark as claimed in database
+      await claimWeeklyChallenge(userId, challengeKey as ChallengeKey, year, weekNumber);
+      
+      // Update balances
+      if (challenge.reward.type === "BZ") addBZ(challenge.reward.amount);
+      if (challenge.reward.type === "BB") addBB(challenge.reward.amount);
+      if (challenge.reward.type === "XP") addXP(challenge.reward.amount);
+      
+      // Update UI
       setWeeklyChallenges(prev => 
-        prev.map(c => {
-          if (c.key === challengeKey && c.progress >= c.target && !c.claimed) {
-            // Update Balances via Context
-            if (c.reward.type === "BZ") addBZ(c.reward.amount);
-            if (c.reward.type === "BB") addBB(c.reward.amount);
-            if (c.reward.type === "XP") addXP(c.reward.amount);
-            
-            return { ...c, claimed: true };
-          }
-          return c;
-        })
+        prev.map(c => 
+          c.key === challengeKey ? { ...c, claimed: true } : c
+        )
       );
     } catch (error) {
       console.error("❌ [Rewards] Error claiming challenge:", error);
