@@ -24,6 +24,7 @@ import {
   claimTaskReward
 } from "@/services/tasksService";
 import { upsertTaskState } from "@/services/taskStateService";
+import { syncWeeklyChallenges } from "@/services/weeklyChallengeService";
 import { useToast } from "@/hooks/use-toast";
 
 type Tier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
@@ -374,6 +375,35 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           console.log("✅ [REWARDS-SYNC] New user - initialized weekly period:", now);
         }
 
+        // Load Weekly Challenges
+        if (authResult.profile.telegram_id && authResult.profile.id) {
+          const { getWeeklyChallenges, resetWeeklyChallenges } = await import("@/services/weeklyChallengeService");
+          const challengesResult = await getWeeklyChallenges(authResult.profile.telegram_id);
+          
+          if (challengesResult.success && challengesResult.data && challengesResult.data.length > 0) {
+            console.log("✅ [WEEKLY-CHALLENGES] Loaded from DB:", challengesResult.data);
+            // Store in localStorage for RewardsScreen to use
+            const weeklyBaselines = {
+              upgrades: challengesResult.data.find(c => c.challenge_type === 'builder')?.baseline_value || 0,
+              referrals: challengesResult.data.find(c => c.challenge_type === 'recruiter')?.baseline_value || 0,
+              conversions: challengesResult.data.find(c => c.challenge_type === 'converter')?.baseline_value || 0,
+              timestamp: Date.now()
+            };
+            localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
+          } else if (currentWeeklyPeriodStart) {
+            // Initialize weekly challenges for new users or new week
+            console.log("🔧 [WEEKLY-CHALLENGES] Initializing new challenges");
+            const weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+            await resetWeeklyChallenges(
+              authResult.profile.telegram_id,
+              authResult.profile.id,
+              currentWeeklyPeriodStart,
+              weekNumber,
+              { totalUpgrades: serverData?.total_upgrades || 0, referralCount: 0, totalConversions: serverData?.total_conversions || 0 }
+            );
+          }
+        }
+        
         // Load Task State & Initialize reset tracking record
         // FIX: Use authResult directly instead of state variables (which are null in closure)
         if (authResult.profile.id && authResult.profile.telegram_id) {
@@ -535,6 +565,22 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           console.log("✅ [MANUAL SYNC] Task sync completed");
         } else {
           console.warn("⚠️ [MANUAL SYNC] Skipping task sync - missing auth:", { telegramId, userId });
+        }
+        
+        // Sync Weekly Challenges
+        if (telegramId && userId && currentWeeklyPeriodStart) {
+          console.log("🏆 [MANUAL SYNC] Syncing weekly challenges...");
+          const weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+          await syncWeeklyChallenges(
+            telegramId,
+            userId,
+            currentWeeklyPeriodStart,
+            weekNumber,
+            { totalUpgrades, referralCount, totalConversions }
+          );
+          console.log("✅ [MANUAL SYNC] Weekly challenges synced");
+        } else {
+          console.warn("⚠️ [MANUAL SYNC] Skipping weekly challenges sync - missing auth:", { telegramId, userId });
         }
         
         toast({ 
@@ -892,7 +938,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   };
 
   const resetWeeklyPeriod = async () => {
-    if (!telegramId) return;
+    if (!telegramId || !userId) return;
     const now = new Date().toISOString();
     
     console.log("🔄 [Weekly Reset] Resetting weekly rewards period");
@@ -905,6 +951,28 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     try {
       await startNewWeeklyPeriod(telegramId, now);
       console.log("✅ [Weekly Reset] Database updated with new period start:", now);
+      
+      // 3. Reset weekly challenges with current stats as new baselines
+      const { resetWeeklyChallenges } = await import("@/services/weeklyChallengeService");
+      const weekNumber = 1; // New week starts at 1
+      await resetWeeklyChallenges(
+        telegramId,
+        userId,
+        now,
+        weekNumber,
+        { totalUpgrades, referralCount, totalConversions }
+      );
+      console.log("✅ [Weekly Reset] Weekly challenges reset in database");
+      
+      // 4. Update localStorage baselines
+      const weeklyBaselines = {
+        upgrades: totalUpgrades || 0,
+        referrals: referralCount || 0,
+        conversions: totalConversions || 0,
+        timestamp: Date.now()
+      };
+      localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
+      console.log("✅ [Weekly Reset] localStorage baselines updated");
     } catch (error) {
       console.error("❌ [Weekly Reset] Failed to update database:", error);
     }
