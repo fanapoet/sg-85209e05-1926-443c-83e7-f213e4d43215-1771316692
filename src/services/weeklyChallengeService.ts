@@ -1,24 +1,27 @@
 import { supabase } from "@/integrations/supabase/client";
 
-export type ChallengeType = "builder" | "recruiter" | "converter";
+export type ChallengeKey = "builder" | "recruiter" | "converter";
 
 export interface WeeklyChallengeData {
-  challengeType: ChallengeType;
+  challengeKey: ChallengeKey;
   baselineValue: number;
   currentProgress: number;
+  targetValue: number;
   completed: boolean;
   claimed: boolean;
-  weekStartDate: string;
   weekNumber: number;
+  year: number;
 }
 
 // Get all weekly challenges for a user
-export async function getWeeklyChallenges(telegramId: number) {
+export async function getWeeklyChallenges(userId: string, year: number, weekNumber: number) {
   try {
     const { data, error } = await supabase
       .from("user_weekly_challenges")
       .select("*")
-      .eq("telegram_id", telegramId);
+      .eq("user_id", userId)
+      .eq("year", year)
+      .eq("week_number", weekNumber);
 
     if (error) {
       console.error("❌ [WeeklyChallenge] Failed to fetch challenges:", error);
@@ -34,27 +37,39 @@ export async function getWeeklyChallenges(telegramId: number) {
 
 // Initialize or update a weekly challenge
 export async function upsertWeeklyChallenge(
-  telegramId: number,
   userId: string,
   challengeData: WeeklyChallengeData
 ) {
   try {
+    // Find existing record to get its ID, bypassing the need for a named constraint in upsert
+    const { data: existing } = await supabase
+      .from("user_weekly_challenges")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("challenge_key", challengeData.challengeKey)
+      .eq("year", challengeData.year)
+      .eq("week_number", challengeData.weekNumber)
+      .maybeSingle();
+
+    const payload: any = {
+      user_id: userId,
+      challenge_key: challengeData.challengeKey,
+      baseline_value: challengeData.baselineValue,
+      current_progress: challengeData.currentProgress,
+      target_value: challengeData.targetValue,
+      completed: challengeData.completed,
+      claimed: challengeData.claimed,
+      year: challengeData.year,
+      week_number: challengeData.weekNumber
+    };
+
+    if (existing?.id) {
+      payload.id = existing.id;
+    }
+
     const { data, error } = await supabase
       .from("user_weekly_challenges")
-      .upsert({
-        telegram_id: telegramId,
-        user_id: userId,
-        challenge_type: challengeData.challengeType,
-        baseline_value: challengeData.baselineValue,
-        current_progress: challengeData.currentProgress,
-        completed: challengeData.completed,
-        claimed: challengeData.claimed,
-        week_start_date: challengeData.weekStartDate,
-        week_number: challengeData.weekNumber,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: "telegram_id,challenge_type,week_start_date"
-      })
+      .upsert(payload)
       .select()
       .single();
 
@@ -72,46 +87,20 @@ export async function upsertWeeklyChallenge(
 
 // Reset all challenges for a new week
 export async function resetWeeklyChallenges(
-  telegramId: number,
   userId: string,
-  weekStartDate: string,
+  year: number,
   weekNumber: number,
   currentStats: { totalUpgrades: number; referralCount: number; totalConversions: number }
 ) {
   try {
-    // Create new baseline records for the new week
     const challenges: WeeklyChallengeData[] = [
-      {
-        challengeType: "builder",
-        baselineValue: currentStats.totalUpgrades,
-        currentProgress: 0,
-        completed: false,
-        claimed: false,
-        weekStartDate,
-        weekNumber
-      },
-      {
-        challengeType: "recruiter",
-        baselineValue: currentStats.referralCount,
-        currentProgress: 0,
-        completed: false,
-        claimed: false,
-        weekStartDate,
-        weekNumber
-      },
-      {
-        challengeType: "converter",
-        baselineValue: currentStats.totalConversions,
-        currentProgress: 0,
-        completed: false,
-        claimed: false,
-        weekStartDate,
-        weekNumber
-      }
+      { challengeKey: "builder", baselineValue: currentStats.totalUpgrades, currentProgress: 0, targetValue: 50, completed: false, claimed: false, weekNumber, year },
+      { challengeKey: "recruiter", baselineValue: currentStats.referralCount, currentProgress: 0, targetValue: 5, completed: false, claimed: false, weekNumber, year },
+      { challengeKey: "converter", baselineValue: currentStats.totalConversions, currentProgress: 0, targetValue: 10, completed: false, claimed: false, weekNumber, year }
     ];
 
     const results = await Promise.all(
-      challenges.map(c => upsertWeeklyChallenge(telegramId, userId, c))
+      challenges.map(c => upsertWeeklyChallenge(userId, c))
     );
 
     const allSuccess = results.every(r => r.success);
@@ -130,44 +119,46 @@ export async function resetWeeklyChallenges(
 
 // Update challenge progress
 export async function updateChallengeProgress(
-  telegramId: number,
   userId: string,
-  challengeType: ChallengeType,
+  challengeKey: ChallengeKey,
   currentProgress: number,
   targetValue: number,
-  weekStartDate: string,
+  year: number,
   weekNumber: number
 ) {
   try {
-    // Get current baseline
     const { data: existing } = await supabase
       .from("user_weekly_challenges")
-      .select("baseline_value")
-      .eq("telegram_id", telegramId)
-      .eq("challenge_type", challengeType)
-      .eq("week_start_date", weekStartDate)
+      .select("id, baseline_value, claimed")
+      .eq("user_id", userId)
+      .eq("challenge_key", challengeKey)
+      .eq("year", year)
+      .eq("week_number", weekNumber)
       .maybeSingle();
 
     const baselineValue = existing?.baseline_value || 0;
     const progress = Math.max(0, currentProgress - baselineValue);
     const completed = progress >= targetValue;
 
+    const payload: any = {
+      user_id: userId,
+      challenge_key: challengeKey,
+      baseline_value: baselineValue,
+      current_progress: progress,
+      target_value: targetValue,
+      completed,
+      claimed: existing ? existing.claimed : false,
+      year,
+      week_number: weekNumber
+    };
+
+    if (existing?.id) {
+      payload.id = existing.id;
+    }
+
     const { error } = await supabase
       .from("user_weekly_challenges")
-      .upsert({
-        telegram_id: telegramId,
-        user_id: userId,
-        challenge_type: challengeType,
-        baseline_value: baselineValue,
-        current_progress: progress,
-        completed,
-        claimed: existing ? undefined : false, // Don't overwrite claimed status
-        week_start_date: weekStartDate,
-        week_number: weekNumber,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: "telegram_id,challenge_type,week_start_date"
-      });
+      .upsert(payload);
 
     if (error) {
       console.error("❌ [WeeklyChallenge] Failed to update progress:", error);
@@ -183,20 +174,22 @@ export async function updateChallengeProgress(
 
 // Mark challenge as claimed
 export async function claimWeeklyChallenge(
-  telegramId: number,
-  challengeType: ChallengeType,
-  weekStartDate: string
+  userId: string,
+  challengeKey: ChallengeKey,
+  year: number,
+  weekNumber: number
 ) {
   try {
     const { error } = await supabase
       .from("user_weekly_challenges")
       .update({ 
         claimed: true,
-        updated_at: new Date().toISOString()
+        claimed_at: new Date().toISOString()
       })
-      .eq("telegram_id", telegramId)
-      .eq("challenge_type", challengeType)
-      .eq("week_start_date", weekStartDate);
+      .eq("user_id", userId)
+      .eq("challenge_key", challengeKey)
+      .eq("year", year)
+      .eq("week_number", weekNumber);
 
     if (error) {
       console.error("❌ [WeeklyChallenge] Failed to claim challenge:", error);
@@ -212,17 +205,16 @@ export async function claimWeeklyChallenge(
 
 // Sync all weekly challenges with current game stats
 export async function syncWeeklyChallenges(
-  telegramId: number,
   userId: string,
-  weekStartDate: string,
+  year: number,
   weekNumber: number,
   currentStats: { totalUpgrades: number; referralCount: number; totalConversions: number }
 ) {
   try {
     const updates = [
-      updateChallengeProgress(telegramId, userId, "builder", currentStats.totalUpgrades, 50, weekStartDate, weekNumber),
-      updateChallengeProgress(telegramId, userId, "recruiter", currentStats.referralCount, 5, weekStartDate, weekNumber),
-      updateChallengeProgress(telegramId, userId, "converter", currentStats.totalConversions, 10, weekStartDate, weekNumber)
+      updateChallengeProgress(userId, "builder", currentStats.totalUpgrades, 50, year, weekNumber),
+      updateChallengeProgress(userId, "recruiter", currentStats.referralCount, 5, year, weekNumber),
+      updateChallengeProgress(userId, "converter", currentStats.totalConversions, 10, year, weekNumber)
     ];
 
     const results = await Promise.all(updates);
