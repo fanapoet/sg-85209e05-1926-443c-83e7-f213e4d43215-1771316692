@@ -126,11 +126,14 @@ export function RewardsNFTsScreen() {
   useEffect(() => {
     const initChallenges = async () => {
       if (!telegramId || !currentWeeklyPeriodStart) {
+        console.log("⚠️ [Rewards] Missing telegramId or weeklyPeriodStart, setting loading=false");
         setLoading(false);
         return;
       }
 
       try {
+        console.log("🔄 [Rewards] Initializing weekly challenges...");
+        
         // Load Owned NFTs from localStorage
         const savedNFTs = localStorage.getItem("ownedNFTs");
         if (savedNFTs) {
@@ -152,9 +155,12 @@ export function RewardsNFTsScreen() {
         const year = new Date(currentWeeklyPeriodStart).getFullYear();
         const weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
         
+        console.log("📅 [Rewards] Loading challenges for year:", year, "week:", weekNumber);
         const result = await getWeeklyChallenges(telegramId, year, weekNumber);
         
         if (result.success && result.data && result.data.length > 0) {
+          console.log("✅ [Rewards] Loaded challenges from DB:", result.data);
+          
           // Convert database format to UI format
           const challenges = result.data.map(dbChallenge => ({
             key: dbChallenge.challengeKey,
@@ -184,16 +190,99 @@ export function RewardsNFTsScreen() {
             timestamp: Date.now()
           };
           localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
+        } else {
+          // Database returned empty or failed - initialize default challenges
+          console.log("⚠️ [Rewards] No challenges in DB, initializing defaults");
+          
+          const defaultChallenges = [
+            {
+              key: "builder",
+              name: "Master Builder",
+              icon: "Hammer",
+              description: "Perform 50 upgrades",
+              target: 50,
+              progress: 0,
+              reward: { type: "BZ" as const, amount: 10000 },
+              claimed: false
+            },
+            {
+              key: "recruiter",
+              name: "Top Recruiter",
+              icon: "Users",
+              description: "Invite 5 friends",
+              target: 5,
+              progress: 0,
+              reward: { type: "BB" as const, amount: 0.005 },
+              claimed: false
+            },
+            {
+              key: "converter",
+              name: "Exchange Guru",
+              icon: "ArrowLeftRight",
+              description: "Convert 10 times",
+              target: 10,
+              progress: 0,
+              reward: { type: "XP" as const, amount: 5000 },
+              claimed: false
+            }
+          ];
+          
+          setWeeklyChallenges(defaultChallenges);
+          
+          // Initialize baselines
+          const weeklyBaselines = {
+            upgrades: totalUpgrades || 0,
+            referrals: referralCount || 0,
+            conversions: totalConversions || 0,
+            timestamp: Date.now()
+          };
+          localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
         }
       } catch (e) {
-        console.error("Failed to load challenges from database", e);
+        console.error("❌ [Rewards] Failed to load challenges:", e);
+        
+        // Fallback to default challenges on error
+        const defaultChallenges = [
+          {
+            key: "builder",
+            name: "Master Builder",
+            icon: "Hammer",
+            description: "Perform 50 upgrades",
+            target: 50,
+            progress: 0,
+            reward: { type: "BZ" as const, amount: 10000 },
+            claimed: false
+          },
+          {
+            key: "recruiter",
+            name: "Top Recruiter",
+            icon: "Users",
+            description: "Invite 5 friends",
+            target: 5,
+            progress: 0,
+            reward: { type: "BB" as const, amount: 0.005 },
+            claimed: false
+          },
+          {
+            key: "converter",
+            name: "Exchange Guru",
+            icon: "ArrowLeftRight",
+            description: "Convert 10 times",
+            target: 10,
+            progress: 0,
+            reward: { type: "XP" as const, amount: 5000 },
+            claimed: false
+          }
+        ];
+        
+        setWeeklyChallenges(defaultChallenges);
       } finally {
         setLoading(false);
       }
     };
 
     initChallenges();
-  }, [telegramId, currentWeeklyPeriodStart]);
+  }, [telegramId, currentWeeklyPeriodStart, totalUpgrades, referralCount, totalConversions]);
 
   // CRITICAL: Initialize baselines ONCE on first render to prevent infinite loops
   useEffect(() => {

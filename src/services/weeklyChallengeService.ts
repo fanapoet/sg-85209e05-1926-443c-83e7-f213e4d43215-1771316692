@@ -15,7 +15,7 @@ export interface WeeklyChallengeData {
   targetValue: number;
   completed: boolean;
   claimed: boolean;
-  weekStartDate: string; // YYYY-MM-DD
+  weekStartDate: string;
   year: number;
   weekNumber: number;
 }
@@ -35,6 +35,8 @@ export async function getWeeklyChallenges(
   weekNumber?: number
 ): Promise<{ success: boolean; data?: WeeklyChallengeData[]; error?: string }> {
   try {
+    console.log("🔍 [WeeklyChallenge] Fetching challenges for telegramId:", telegramId, "year:", year, "week:", weekNumber);
+    
     // Get user_id from profiles table
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
@@ -67,7 +69,7 @@ export async function getWeeklyChallenges(
     }
 
     if (!data || data.length === 0) {
-      console.log("ℹ️ [WeeklyChallenge] No challenges found");
+      console.log("ℹ️ [WeeklyChallenge] No challenges found - returning empty array");
       return { success: true, data: [] };
     }
 
@@ -83,7 +85,7 @@ export async function getWeeklyChallenges(
       weekNumber: row.week_number
     }));
 
-    console.log(`✅ [WeeklyChallenge] Loaded ${challenges.length} challenges`);
+    console.log(`✅ [WeeklyChallenge] Loaded ${challenges.length} challenges:`, challenges);
     return { success: true, data: challenges };
   } catch (error) {
     console.error("❌ [WeeklyChallenge] Exception:", error);
@@ -305,7 +307,8 @@ export async function syncWeeklyChallenges(
   currentStats: WeeklyChallengeStats
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    console.log("🔄 [WeeklyChallenge-Sync] Starting sync for telegram_id:", telegramId);
+    console.log("🔄 [WeeklyChallenge-Sync] Starting sync for telegramId:", telegramId);
+    console.log("🔄 [WeeklyChallenge-Sync] Current stats:", currentStats);
 
     // Get user_id from profiles table
     const { data: profile, error: profileError } = await supabase
@@ -326,6 +329,8 @@ export async function syncWeeklyChallenges(
       .eq("telegram_id", telegramId)
       .eq("year", year)
       .eq("week_number", weekNumber);
+
+    console.log("📊 [WeeklyChallenge-Sync] Existing challenges:", existing);
 
     const weekStartDate = new Date().toISOString().split("T")[0];
 
@@ -371,6 +376,8 @@ export async function syncWeeklyChallenges(
       }
     ];
 
+    console.log("📝 [WeeklyChallenge-Sync] Upserting challenges:", challenges);
+
     const { error } = await supabase
       .from("user_weekly_challenges")
       .upsert(challenges, {
@@ -378,14 +385,14 @@ export async function syncWeeklyChallenges(
       });
 
     if (error) {
-      console.error("❌ [WeeklyChallenge-Sync] Some syncs failed:", error);
+      console.error("❌ [WeeklyChallenge-Sync] Upsert failed:", error);
       return { success: false, error: error.message };
     }
 
-    console.log(`✅ [WeeklyChallenge-Sync] Synced ${challenges.length} challenges`);
+    console.log(`✅ [WeeklyChallenge-Sync] Successfully synced ${challenges.length} challenges`);
     return { success: true };
   } catch (error) {
-    console.error("❌ [WeeklyChallenge-Sync] Exception syncing challenges:", error);
+    console.error("❌ [WeeklyChallenge-Sync] Exception:", error);
     return { success: false, error: String(error) };
   }
 }
