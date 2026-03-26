@@ -82,6 +82,9 @@ const getIconComponent = (iconName: string) => {
 
 export function RewardsNFTsScreen() {
   const { 
+    // Auth
+    userId,
+    
     // State
     dailyStreak, 
     currentRewardWeek, 
