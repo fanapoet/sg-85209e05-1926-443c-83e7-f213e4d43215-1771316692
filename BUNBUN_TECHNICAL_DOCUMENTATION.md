@@ -2,30 +2,31 @@
 ## Complete Product & Technical Specification
 
 **Version:** 1.0  
-**Document Type:** Product Requirements & System Design  
-**Audience:** Development teams building BunBun from scratch  
-**Purpose:** Complete understanding of game mechanics, business logic, and system architecture
+**Last Updated:** 2026-03-27  
+**Document Type:** Product Requirements & Technical Design Specification
 
 ---
 
 ## Table of Contents
 
 1. [Product Overview](#1-product-overview)
-2. [Game Mechanics - Core Loop](#2-game-mechanics---core-loop)
+2. [Game Mechanics](#2-game-mechanics)
 3. [Resource System](#3-resource-system)
-4. [Progression System - XP Tiers](#4-progression-system---xp-tiers)
-5. [Hardware Upgrade System](#5-hardware-upgrade-system)
+4. [Progression & XP Tiers](#4-progression--xp-tiers)
+5. [Hardware Upgrade System (Build)](#5-hardware-upgrade-system-build)
 6. [Conversion System](#6-conversion-system)
-7. [Task System](#7-task-system)
-8. [Weekly Challenges System](#8-weekly-challenges-system)
-9. [Referral System](#9-referral-system)
-10. [NFT Collection System](#10-nft-collection-system)
-11. [Data Architecture](#11-data-architecture)
-12. [Sync Strategy](#12-sync-strategy)
-13. [Telegram Integration](#13-telegram-integration)
-14. [User Interface Structure](#14-user-interface-structure)
-15. [Business Rules & Validation](#15-business-rules--validation)
-16. [Appendix: Quick Reference](#16-appendix-quick-reference)
+7. [Energy & Booster System](#7-energy--booster-system)
+8. [Task System](#8-task-system)
+9. [Weekly Challenge System](#9-weekly-challenge-system)
+10. [Daily Rewards System](#10-daily-rewards-system)
+11. [Referral System](#11-referral-system)
+12. [NFT Collection System](#12-nft-collection-system)
+13. [Data Architecture](#13-data-architecture)
+14. [Sync Strategy](#14-sync-strategy)
+15. [Telegram Integration](#15-telegram-integration)
+16. [User Interface Structure](#16-user-interface-structure)
+17. [Business Rules & Validation](#17-business-rules--validation)
+18. [Appendix: Quick Reference](#18-appendix-quick-reference)
 
 ---
 
@@ -33,115 +34,134 @@
 
 ### 1.1 What is BunBun?
 
-**BunBun** is a Telegram Mini App (TMA) that combines:
-- **Idle/Clicker Game Mechanics** - Players tap to earn resources and build passive income
-- **Social Features** - Referral system for viral growth
-- **Progression System** - XP tiers unlock new features
-- **Collection Mechanics** - NFTs as achievement badges
-- **Challenge System** - Weekly goals with rewards
+BunBun is a **Telegram Mini App (TMA)** that combines idle clicker mechanics with resource management and social features. Players tap a bunny character to earn resources, build passive income generators, complete tasks, and collect NFTs—all within Telegram's ecosystem.
 
-### 1.2 Core Gameplay Loop
+**Core Concept:** Build an energy empire by tapping, upgrading hardware, and optimizing resource conversion.
+
+### 1.2 Target Audience
+
+- Telegram users interested in casual gaming
+- Players who enjoy idle/clicker games
+- Crypto-curious users (BB token represents potential future blockchain integration)
+- Social gamers who benefit from referral systems
+
+### 1.3 Core Gameplay Loop
 
 ```
-Tap → Earn BZ → Buy Upgrades → Passive Income → Level Up → Unlock Features → Complete Challenges → Repeat
+TAP BUNNY → Earn BZ → Upgrade Build Parts → Earn Passive BZ 
+    ↓                        ↓                      ↓
+Gain XP → Unlock Tiers → Convert BZ to BB → Purchase NFTs
+    ↓                        ↓                      ↓
+Complete Tasks → Invite Friends → Earn More Rewards
 ```
 
-**Primary Resources:**
-- **BunnyZap (BZ)** - Primary currency earned through tapping and passive income
-- **BunnyBucks (BB)** - Premium currency earned through conversion and challenges
-- **Experience Points (XP)** - Progression metric that determines player tier
+### 1.4 Key Features
 
-### 1.3 Key Features
-
-| Feature | Description |
-|---------|-------------|
-| **Manual Tapping** | Click bunny to earn +1 BZ and +1 XP per tap |
-| **Passive Income** | Automated BZ generation based on owned hardware upgrades |
-| **Hardware Upgrades** | Purchase items that generate passive income |
-| **BZ → BB Conversion** | Exchange BunnyZap for premium BunnyBucks currency |
-| **XP Tier System** | 8 progression tiers from Newbie to Legend |
-| **Task System** | Complete objectives for BZ, BB, and XP rewards |
-| **Weekly Challenges** | Time-limited goals that reset weekly |
-| **Referral System** | Invite friends for rewards |
-| **NFT Collection** | Collectible badges with future utility |
-| **QuickCharge** | Limited-use instant energy boost |
+1. **Manual Tapping System** - Active gameplay for immediate rewards
+2. **Passive Income System** - Build hardware that generates BZ while offline
+3. **Multi-Currency Economy** - BZ (in-game), BB (premium), XP (progression)
+4. **Energy Management** - Strategic tap timing and booster upgrades
+5. **XP-Based Progression** - 5 tiers with increasing benefits
+6. **Conversion Mechanism** - Exchange BZ for BB with tier bonuses
+7. **Task Completion** - Daily, weekly, and progressive challenges
+8. **Referral Rewards** - Earn from friends' gameplay forever
+9. **NFT Collection** - Unlockable digital collectibles with requirements
+10. **Telegram Integration** - Native TMA with seamless authentication
 
 ---
 
-## 2. Game Mechanics - Core Loop
+## 2. Game Mechanics
 
-### 2.1 Manual Tapping System
+### 2.1 Manual Tapping
 
-**Mechanic:**
-- User taps on bunny character
-- Each tap generates:
-  - **+1 BunnyZap (BZ)**
-  - **+1 Experience Point (XP)**
-- Taps are tracked in `totalTaps` counter
+**How It Works:**
+- Player taps the bunny character on the Tap screen
+- Each tap consumes energy and produces BZ + XP
+- Tap rewards are modified by booster levels and XP tier
 
-**Properties:**
-- Unlimited taps (no energy/stamina system)
-- Instant feedback (visual animation + counter update)
-- Works offline (syncs when connection restored)
+**Tap Reward Calculation:**
+```
+Base BZ Reward = 10 × incomePerTap level
+Tier Bonus = Base × (Tier Percentage ÷ 100)
+Total BZ = Base + Tier Bonus
+XP per Tap = 1 (always)
+```
 
-**Use Cases:**
-- Early game primary resource generation
-- Continuous XP farming
-- Active engagement mechanic
-- Progress towards "Tap Master" weekly challenge
+**Tier Bonuses:**
+- Bronze: 0% (no bonus)
+- Silver: +5%
+- Gold: +15%
+- Platinum: +25%
+- Diamond: +40%
 
----
+**Example:**
+- Player has incomePerTap level 5
+- Player is Gold tier (15% bonus)
+- Base reward: 10 × 5 = 50 BZ
+- Tier bonus: 50 × 0.15 = 7.5 BZ
+- Total: 57.5 BZ per tap + 1 XP
+
+**Energy Consumption:**
+- Each tap costs energy equal to `energyPerTap` booster level (minimum 1)
+- Energy regenerates at `recoveryRate` per second
+- Max energy is determined by `energyCapacity` booster level
 
 ### 2.2 Passive Income System
 
-**Mechanic:**
-- Background income generation based on owned hardware upgrades
-- Calculated as: `Passive Income Rate = SUM(all owned upgrades' base_income)`
-- Income accumulates per hour: `BZ/h = Passive Income Rate`
+**How It Works:**
+- Players build and upgrade hardware parts (Stage 1-5, 10 parts each)
+- Each owned part generates BZ per hour automatically
+- Income accumulates while player is offline (up to 3 hours max)
+- Players must "claim" accumulated income periodically
 
-**Properties:**
-- Runs even when app is closed
-- Accumulation tracked via timestamps
-- On app open: calculates time elapsed × income rate
-- Maximum offline accumulation: unlimited (calculates full elapsed time)
-
-**Formula:**
+**Passive Income Calculation:**
 ```
-Passive BZ Earned = (Current Time - Last Sync Time) × (Total Passive Income Rate / 3600)
+Total Passive BZ/hour = SUM of all owned parts' yields
+
+Where each part's yield = baseYield × (1.15 ^ level) × (1 + 0.15 × stage)
 ```
 
 **Example:**
-- Player owns upgrades generating 1000 BZ/h total
-- Player closes app for 2 hours
-- On return: receives 2000 BZ automatically
+- Player owns Stage 2 Part 3 at Level 5
+- Base yield: 50 BZ/hour (hypothetical)
+- Yield = 50 × (1.15 ^ 5) × (1 + 0.15 × 2)
+- Yield = 50 × 2.011 × 1.30 = 130.7 BZ/hour
 
----
+**Idle Income Rules:**
+- Maximum offline accumulation: **3 hours**
+- Claim resets the accumulation timer
+- If player doesn't claim for >3 hours, they only receive 3 hours' worth
 
 ### 2.3 Resource Flow Diagram
 
 ```
-┌─────────────┐
-│   TAPPING   │ → +1 BZ, +1 XP per tap
-└─────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                     RESOURCE FLOW                           │
+└─────────────────────────────────────────────────────────────┘
 
-┌─────────────┐
-│  PASSIVE    │ → +X BZ/hour (based on upgrades)
-│   INCOME    │
-└─────────────┘
-       ↓
-┌─────────────┐
-│  BunnyZap   │ ──────→ Buy Upgrades (increases passive income)
-│    (BZ)     │ ──────→ Convert to BB (1000 BZ = 1 BB)
-└─────────────┘
+TAPPING                          BUILDING
+   ↓                                ↓
+  BZ ←────────────────────────── BZ/hour (passive)
+   ↓                                
+   ├─→ Upgrade Build Parts
+   ├─→ Upgrade Boosters
+   ├─→ Convert to BB (1,000,000:1)
+   └─→ Complete Tasks
+   
+XP (from taps + upgrades)
+   ↓
+XP TIERS (Bronze → Diamond)
+   ↓
+Tier Bonuses (tap %, conversion %, BB→BZ unlock)
 
-┌─────────────┐
-│ BunnyBucks  │ ──────→ Buy NFTs (future: boosts)
-│    (BB)     │
-└─────────────┘
+BB (premium currency)
+   ↓
+   ├─→ Purchase NFTs
+   ├─→ Speed up builds
+   └─→ Convert back to BZ (with burn penalty)
 
-┌─────────────┐
-│     XP      │ ──────→ Unlock Tiers (Newbie → Legend)
-└─────────────┘
+TASKS → BZ/BB/XP rewards
+REFERRALS → BZ + XP + 20% lifetime share
 ```
 
 ---
@@ -150,2352 +170,2432 @@ Passive BZ Earned = (Current Time - Last Sync Time) × (Total Passive Income Rat
 
 ### 3.1 BunnyZap (BZ) - Primary Currency
 
+**Purpose:** Main in-game currency for progression and upgrades.
+
 **How to Earn:**
-| Method | Amount | Notes |
-|--------|--------|-------|
-| Manual Tap | +1 BZ per tap | Unlimited |
-| Passive Income | Variable (BZ/h) | Based on owned upgrades |
-| Task Rewards | 100-50,000 BZ | One-time or repeating |
-| Referral Rewards | 5,000 BZ | Per successful referral |
+1. **Manual Tapping** - 10 × incomePerTap level per tap (+ tier bonus)
+2. **Passive Income** - Automatic generation from owned build parts
+3. **Idle Claims** - Accumulated passive income (up to 3 hours)
+4. **Task Rewards** - Various tasks award BZ
+5. **Referral Earnings** - 20% of referrals' tap + idle income (lifetime)
+6. **BB Conversion** - Convert BB back to BZ (with burn penalty)
 
 **How to Spend:**
-| Use | Cost | Notes |
-|-----|------|-------|
-| Hardware Upgrades | Dynamic (see §5.2) | Exponential pricing |
-| BZ → BB Conversion | 1,000 BZ = 1 BB | Fixed exchange rate |
+1. **Build Part Upgrades** - Purchase and upgrade hardware (main sink)
+2. **Booster Upgrades** - Improve tapping efficiency
+3. **Convert to BB** - Exchange at 1,000,000:1 rate
 
 **Properties:**
 - Integer values only (no decimals)
-- No maximum cap
-- Cannot go negative
-- Displayed with comma separators (e.g., "1,234,567 BZ")
-
----
+- Can reach millions/billions
+- Primary progression metric
+- Displayed with comma separators (e.g., "1,234,567")
 
 ### 3.2 BunnyBucks (BB) - Premium Currency
 
+**Purpose:** Premium currency representing potential future token economics.
+
 **How to Earn:**
-| Method | Amount | Notes |
-|--------|--------|-------|
-| BZ Conversion | 1 BB per 1,000 BZ | Player-initiated |
-| Weekly Challenges | 1,000 BB | "Networker" challenge |
-| Task Rewards | 100-5,000 BB | Rare tasks |
-| Referral Rewards | 500 BB | Per successful referral |
+1. **BZ Conversion** - Convert 1,000,000 BZ → 1 BB (+ tier bonus)
+2. **Task/Challenge Rewards** - Some tasks award BB directly
+3. **Referral Milestones** - Milestone bonuses award BB
+4. **Weekly Challenges** - Challenge completions award BB
 
 **How to Spend:**
-| Use | Cost | Notes |
-|-----|------|-------|
-| NFT Purchases | 100-10,000 BB | Based on rarity |
-| Future: Boosts | TBD | Planned feature |
+1. **NFT Purchases** - Buy collectible NFTs (0 to 7 BB each)
+2. **Build Speed-Ups** - Pay 0.01 BB per hour to instant-complete builds
+3. **Convert to BZ** - Exchange back (requires Silver+ tier, has burn penalty)
 
 **Properties:**
-- Integer values only
-- More valuable than BZ (1000:1 ratio)
-- Limited earning methods (scarcity by design)
-- Displayed with comma separators (e.g., "12,345 BB")
-
----
+- Decimal values (precision: 6 decimal places)
+- Scarce resource (harder to obtain than BZ)
+- Not earned through tapping directly
+- Displayed as "X.XXXXXX BB"
 
 ### 3.3 Experience Points (XP)
 
-**How to Earn:**
-| Method | Amount | Notes |
-|--------|--------|-------|
-| Manual Tap | +1 XP per tap | Unlimited |
-| Hardware Purchase | 10% of upgrade cost | Rounded down |
-| Task Completion | 100-10,000 XP | Varies by task |
-| Challenge Completion | 5,000 XP | 3 of 4 weekly challenges |
+**Purpose:** Progression currency that unlocks tiers and benefits.
 
-**Purpose:**
-- Determines player's **XP Tier** (Newbie → Legend)
-- Unlocks features at tier thresholds
-- Status symbol / progression metric
-- No direct spending mechanism
+**How to Earn:**
+1. **Manual Tapping** - 1 XP per tap (always)
+2. **Build Upgrades** - XP = 50 × stage × (1 + level × 0.1)
+3. **Task Rewards** - Many tasks award XP
+4. **Referral Bonuses** - Initial signup + milestones award XP
+5. **Daily Rewards** - Some days award XP
+
+**How XP is Used:**
+- XP is **never spent** - it only accumulates
+- XP total determines your **Tier**
+- Tier determines bonuses and unlocks
 
 **Properties:**
-- Integer values only
-- Cannot decrease (only increases)
-- No maximum cap
-- Displayed with comma separators (e.g., "306,160 XP")
+- Integer values
+- Permanent (never decreases)
+- Visible progress bar shows current tier progress
+- Displayed with comma separators
 
 ---
 
-## 4. Progression System - XP Tiers
+## 4. Progression & XP Tiers
 
-### 4.1 Tier Structure
+### 4.1 Tier System Overview
 
-BunBun has **8 progression tiers** based on cumulative XP:
+BunBun uses a **5-tier progression system** based on total accumulated XP. Higher tiers unlock better bonuses and capabilities.
 
-| Tier # | Name | XP Threshold | Badge Color | Unlocks |
-|--------|------|--------------|-------------|---------|
-| 1 | Newbie | 0 | Gray | Basic features |
-| 2 | Bronze | 1,000 | Bronze | Conversion system |
-| 3 | Silver | 5,000 | Silver | More upgrades |
-| 4 | Gold | 25,000 | Gold | Weekly challenges |
-| 5 | Platinum | 100,000 | Platinum | All upgrades |
-| 6 | Diamond | 500,000 | Diamond | Exclusive NFTs |
-| 7 | Master | 2,000,000 | Purple | Prestige features (future) |
-| 8 | Legend | 10,000,000 | Rainbow | Max tier |
+### 4.2 XP Tier Table
 
-### 4.2 Tier Benefits
+| Tier | XP Required | Tap Bonus | BZ→BB Bonus | BB→BZ Max | Booster Unlock |
+|------|-------------|-----------|-------------|-----------|----------------|
+| **Bronze** | 0 - 9,999 | 0% | 0% | Locked | Level 1-2 |
+| **Silver** | 10,000 - 49,999 | +5% | +5% | 5% of BB balance | Level 3 (3 refs) |
+| **Gold** | 50,000 - 149,999 | +15% | +15% | 15% of BB balance | Level 4-5 (5 refs) |
+| **Platinum** | 150,000 - 499,999 | +25% | +25% | 25% of BB balance | Level 6+ (7 refs) |
+| **Diamond** | 500,000+ | +40% | +40% | 40% of BB balance | All levels unlocked |
 
-**Newbie (0 XP):**
-- Access to tapping
-- Basic upgrades available
-- Tutorial experience
+### 4.3 Tier Benefits Explained
 
-**Bronze (1,000 XP):**
-- **Unlocks Conversion System** - Can exchange BZ for BB
-- Social tasks unlocked
+**Tap Bonus:**
+- Increases BZ earned per tap
+- Applied multiplicatively to base tap reward
+- Example: Gold tier (+15%) with 50 BZ base = 57.5 BZ per tap
 
-**Silver (5,000 XP):**
-- More hardware upgrades available
-- Achievement tasks unlocked
+**BZ→BB Conversion Bonus:**
+- Extra BB received when converting BZ to BB
+- Applied to base conversion output
+- Example: Converting 1M BZ at Gold tier = 1.15 BB (instead of 1.0 BB)
 
-**Gold (25,000 XP):**
-- **Unlocks Weekly Challenges** - Access to challenge system
-- Daily tasks unlocked
+**BB→BZ Conversion Max:**
+- Percentage of your BB balance you can convert back to BZ per transaction
+- Bronze tier: Completely locked (cannot convert BB→BZ at all)
+- Higher tiers unlock larger conversion limits
+- Example: Gold tier with 10 BB balance can convert max 1.5 BB per transaction
 
-**Platinum (100,000 XP):**
-- All hardware upgrades unlocked
-- Full feature access
+**Booster Level Unlock:**
+- Higher tiers unlock higher booster upgrade levels
+- Some booster levels also require referrals (see Booster System section)
 
-**Diamond (500,000 XP):**
-- Rare NFTs unlocked for purchase
-- Status symbol
+### 4.4 Tier Progression Path
 
-**Master (2,000,000 XP):**
-- Future: Prestige system
-- Future: Special boosts
+Typical player progression timeline (approximate):
 
-**Legend (10,000,000 XP):**
-- Maximum tier achievement
-- Future: Exclusive rewards
+1. **Bronze (Day 1-2):** Learn tapping, start building, earn first referrals
+2. **Silver (Day 3-5):** Unlock conversions, optimize build strategy
+3. **Gold (Week 1-2):** Scale passive income, complete challenges
+4. **Platinum (Week 2-4):** Maximize builds, focus on tasks
+5. **Diamond (Month 1+):** Endgame content, NFT collection
 
-### 4.3 Tier Calculation
+---
 
+## 5. Hardware Upgrade System (Build)
+
+### 5.1 Build System Overview
+
+The Build screen is where players purchase and upgrade **hardware parts** that generate passive BZ income. The system is organized into **5 stages** with **10 parts each** (50 total parts).
+
+### 5.2 Stage Structure
+
+| Stage | Parts | Theme | Cost Multiplier | Yield Multiplier |
+|-------|-------|-------|-----------------|------------------|
+| Stage 1 | s1p1 - s1p10 | Basic Components | 1.0× | 1.0× |
+| Stage 2 | s2p1 - s2p10 | Power Systems | 1.1× | 1.15× |
+| Stage 3 | s3p1 - s3p10 | Advanced Tech | 1.2× | 1.30× |
+| Stage 4 | s4p1 - s4p10 | Energy Matrix | 1.3× | 1.45× |
+| Stage 5 | s5p1 - s5p10 | Quantum Core | 1.4× | 1.60× |
+
+**Stage Progression:**
+- All stages visible from start
+- Later stages are more expensive but yield more BZ/hour
+- Players can upgrade any part in any order (no forced sequence)
+
+### 5.3 Part Upgrade Mechanics
+
+**Level System:**
+- Each part starts at Level 0 (not owned)
+- Can be upgraded from Level 0 → Level 10+ (no hard cap)
+- Each level increases both cost and yield
+
+**Part Cost Formula:**
 ```
-Current Tier = Highest tier where (Player XP >= Tier Threshold)
+Cost = baseCost × (1.2 ^ level) × (1 + 0.10 × stage)
+```
+
+**Part Yield Formula:**
+```
+Yield (BZ/hour) = baseYield × (1.15 ^ level) × (1 + 0.15 × stage)
+```
+
+**Example Calculation (Stage 2, Part 3):**
+```
+Assume baseCost = 1000 BZ, baseYield = 50 BZ/hour
+
+Level 0 → 1:
+  Cost = 1000 × (1.2 ^ 0) × (1 + 0.10 × 2) = 1000 × 1 × 1.2 = 1,200 BZ
+  Yield = 50 × (1.15 ^ 1) × (1 + 0.15 × 2) = 50 × 1.15 × 1.3 = 74.75 BZ/hour
+
+Level 1 → 2:
+  Cost = 1000 × (1.2 ^ 1) × 1.2 = 1,440 BZ
+  Yield = 50 × (1.15 ^ 2) × 1.3 = 85.96 BZ/hour
+
+Level 5:
+  Cost = 1000 × (1.2 ^ 5) × 1.2 = 2,985 BZ
+  Yield = 50 × (1.15 ^ 5) × 1.3 = 130.7 BZ/hour
+```
+
+### 5.4 Build Time System
+
+**Build Time by Level:**
+- **Level 0-2:** Instant (0 seconds)
+- **Level 3:** 15 minutes
+- **Level 4:** 30 minutes
+- **Level 5:** 1 hour
+- **Level 6:** 4 hours
+- **Level 7:** 8 hours
+- **Level 8:** 16 hours
+- **Level 9:** 24 hours
+- **Level 10:** 36 hours
+- **Level 11+:** 48 hours
+
+**Build Queue:**
+- Only **1 part** can be building at a time
+- Other parts show "Locked" until current build finishes
+- Players must wait or speed up the current build
+
+**Speed-Up Options:**
+1. **BB Speed-Up:** 0.01 BB per hour remaining
+2. **Stars Speed-Up:** 1 Telegram Star per hour remaining (future feature)
+
+**Example:**
+- Part is building, 5 hours remaining
+- Speed-up cost: 0.05 BB or 5 Stars
+- Player pays → build completes instantly
+
+### 5.5 XP Rewards from Building
+
+**Formula:**
+```
+XP Reward = 50 × stage × (1 + level × 0.1)
 ```
 
 **Example:**
-- Player has 120,000 XP
-- Player is **Platinum** tier (100,000 ≤ 120,000 < 500,000)
+- Upgrading Stage 3 part to Level 5
+- XP = 50 × 3 × (1 + 5 × 0.1) = 150 × 1.5 = 225 XP
 
-### 4.4 Tier Display
+**Purpose:**
+- Incentivizes building higher stages and levels
+- Contributes to tier progression
+- Rewards strategic planning
 
-**Visual Elements:**
-- Tier badge with appropriate color
-- Current tier name
-- Progress bar to next tier
-- XP needed for next tier
+### 5.6 Total Passive Income Calculation
 
-**Progress Bar Formula:**
-```
-Progress % = (Current XP - Current Tier Threshold) / (Next Tier Threshold - Current Tier Threshold) × 100
-```
-
----
-
-## 5. Hardware Upgrade System
-
-### 5.1 Upgrade Categories
-
-Hardware upgrades are items the player purchases to generate passive income. Each upgrade has:
-
-**Properties:**
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | string | Unique identifier |
-| `name` | string | Display name (e.g., "Solar Panel") |
-| `description` | string | Flavor text |
-| `base_income` | integer | BZ generated per hour |
-| `base_price` | integer | Initial purchase cost in BZ |
-| `category` | string | Energy/Computing/Other |
-| `image` | string | Icon/image URL |
-| `required_xp` | integer | Minimum XP to unlock |
-
-**Example Upgrade:**
-```
-{
-  id: "solar-panel",
-  name: "Solar Panel",
-  description: "Harnesses renewable energy",
-  base_income: 10,
-  base_price: 100,
-  category: "Energy",
-  image: "solar-panel.png",
-  required_xp: 0
-}
-```
-
-### 5.2 Dynamic Pricing Formula
-
-Each upgrade's cost increases **exponentially** based on how many the player owns:
-
-```
-Cost = Base Price × (1.15 ^ Current Level)
-```
-
-**Where:**
-- `Base Price` = Upgrade's `base_price` property
-- `Current Level` = How many of this upgrade player owns
-- `1.15` = Price multiplier (15% increase per level)
-
-**Example Progression:**
-| Level | Calculation | Cost (BZ) |
-|-------|-------------|-----------|
-| 0 → 1 | 100 × 1.15^0 | 100 |
-| 1 → 2 | 100 × 1.15^1 | 115 |
-| 2 → 3 | 100 × 1.15^2 | 132 |
-| 3 → 4 | 100 × 1.15^3 | 152 |
-| 10 → 11 | 100 × 1.15^10 | 405 |
-| 20 → 21 | 100 × 1.15^20 | 1,637 |
-
-**Result:** Cost doubles approximately every 5 levels
-
-### 5.3 Passive Income Calculation
-
-**Total Passive Income Rate:**
-```
-Total BZ/h = SUM(upgrade.base_income × quantity owned)
-```
+**System Logic:**
+- Sum all owned parts' yields
+- Display total as "BZ/hour"
+- Accumulate while offline (max 3 hours)
 
 **Example:**
 ```
 Player owns:
-- 5× Solar Panel (10 BZ/h each) = 50 BZ/h
-- 3× Wind Turbine (25 BZ/h each) = 75 BZ/h
-- 1× Nuclear Reactor (500 BZ/h each) = 500 BZ/h
+- Stage 1 Part 1 (Level 5): 100 BZ/hour
+- Stage 1 Part 2 (Level 3): 70 BZ/hour
+- Stage 2 Part 1 (Level 4): 120 BZ/hour
 
-Total Passive Income = 50 + 75 + 500 = 625 BZ/h
-```
+Total Passive = 100 + 70 + 120 = 290 BZ/hour
 
-### 5.4 XP Reward on Purchase
-
-When purchasing an upgrade, player receives XP:
-
-```
-XP Gained = FLOOR(Purchase Cost × 0.10)
-```
-
-**Example:**
-- Upgrade costs 1,523 BZ
-- XP gained = FLOOR(1523 × 0.10) = 152 XP
-
-**Why 10%?**
-- Rewards active spending
-- Encourages progression
-- Makes expensive upgrades more rewarding
-
-### 5.5 Purchase Flow
-
-**Step-by-Step:**
-
-1. **Player selects upgrade** from Build screen
-2. **System checks:**
-   - Does player have enough BZ?
-   - Does player meet XP requirement?
-3. **If valid:**
-   - Deduct cost from player's BZ
-   - Increment upgrade quantity by 1
-   - Add XP reward to player's XP
-   - Increment `totalUpgrades` counter
-   - Update passive income rate
-   - Sync to database
-4. **If invalid:**
-   - Show error message (insufficient funds or locked)
-
-**Data Updates:**
-```
-player.bz -= upgrade_cost
-player.xp += FLOOR(upgrade_cost × 0.10)
-player.totalUpgrades += 1
-player.ownedUpgrades[upgrade_id] += 1
-player.passiveIncomeRate = recalculate_total_income()
+After 2 hours offline: 290 × 2 = 580 BZ claimable
+After 5 hours offline: 290 × 3 = 870 BZ claimable (capped at 3 hours)
 ```
 
 ---
 
 ## 6. Conversion System
 
-### 6.1 Exchange Rate
+### 6.1 Conversion Overview
 
-**Fixed Rate:**
+The Conversion system allows players to exchange between BZ (abundant) and BB (scarce). Two conversion types exist:
+
+1. **BZ → BB** (Primary direction, unlocked for all players)
+2. **BB → BZ** (Reverse direction, requires Silver+ tier, has burn penalty)
+
+### 6.2 BZ → BB Conversion
+
+**Anchor Rate:**
 ```
-1,000 BunnyZap (BZ) = 1 BunnyBuck (BB)
+1,000,000 BZ = 1.000000 BB (base rate, no bonuses)
 ```
 
-**Properties:**
-- Fixed rate (never changes)
-- One-way conversion (cannot convert BB back to BZ)
-- Integer conversion only (minimum 1,000 BZ)
+**Conversion Formula:**
+```
+Base Output = Input BZ ÷ 1,000,000
+Tier Bonus = Base Output × (Tier Percentage ÷ 100)
+Total Output = Base Output + Tier Bonus
+```
 
-### 6.2 Conversion Rules
+**Tier Bonuses:**
+- Bronze: 0% (no bonus, 1:1 anchor rate)
+- Silver: +5%
+- Gold: +15%
+- Platinum: +25%
+- Diamond: +40%
+
+**Example 1 (Bronze Tier):**
+```
+Input: 5,000,000 BZ
+Base Output: 5,000,000 ÷ 1,000,000 = 5.000000 BB
+Tier Bonus: 0 BB (Bronze has no bonus)
+Total: 5.000000 BB
+```
+
+**Example 2 (Gold Tier):**
+```
+Input: 5,000,000 BZ
+Base Output: 5,000,000 ÷ 1,000,000 = 5.000000 BB
+Tier Bonus: 5.000000 × 0.15 = 0.750000 BB
+Total: 5.750000 BB
+```
+
+**Validation Rules:**
+- Player must have sufficient BZ balance
+- Input must be positive
+- BZ is deducted, BB is added
+- Transaction is atomic (all-or-nothing)
+
+### 6.3 BB → BZ Conversion (Reverse)
+
+**Unlock Requirements:**
+- **Bronze Tier:** Completely locked (conversion disabled)
+- **Silver+ Tier:** Unlocked
+
+**Conversion Limits by Tier:**
+- Silver: Max 5% of BB balance per transaction
+- Gold: Max 15% of BB balance per transaction
+- Platinum: Max 25% of BB balance per transaction
+- Diamond: Max 40% of BB balance per transaction
+
+**Burn Penalty Formula:**
+```
+Burned Amount = Converted Amount ÷ (Tier Percentage × 2)
+
+Total BB Cost = Converted Amount + Burned Amount
+Output BZ = Converted Amount × 1,000,000
+```
+
+**Example (Gold Tier, 10 BB balance):**
+```
+Player wants to convert 1 BB to BZ
+
+1. Check limit: 10 × 0.15 = 1.5 BB max → 1 BB is allowed
+2. Calculate burn: 1 ÷ (0.15 × 2) = 1 ÷ 0.30 = 3.333 BB burned
+3. Total cost: 1 + 3.333 = 4.333 BB
+4. Check balance: 10 BB ≥ 4.333 BB → allowed
+5. Output: 1 × 1,000,000 = 1,000,000 BZ
+
+Result: -4.333 BB, +1,000,000 BZ
+```
+
+**Why the Burn Penalty?**
+- Prevents BB→BZ→BB arbitrage loops
+- Makes BB more valuable (harder to "undo" conversions)
+- Encourages thoughtful conversion decisions
+- Creates deflationary pressure on BB supply
+
+**Validation Rules:**
+- Must be Silver+ tier
+- Cannot convert more than tier percentage of balance
+- Must have sufficient BB for conversion + burn
+- Transaction is atomic
+
+### 6.4 Conversion History
+
+**What's Tracked:**
+Each conversion creates a history record with:
+- **Transaction ID** (unique)
+- **Timestamp** (when conversion occurred)
+- **Type** (bz-to-bb or bb-to-bz)
+- **Input Amount** (BZ or BB spent)
+- **Output Amount** (BB or BZ received)
+- **Bonus Amount** (tier bonus for BZ→BB, 0 for BB→BZ)
+- **Tier** (player's tier at conversion time)
+
+**Why Track Both?**
+- **Total BZ Converted (Lifetime):** Used for tasks/challenges that check "convert X total BZ"
+- **Conversion Event Count:** Used for tasks that check "perform X conversions" (e.g., "convert 10 times")
+
+**Display:**
+- Recent transactions shown in Convert screen
+- Shows type, amounts, tier, and time ago
+- Helps players track their conversion strategy
+
+---
+
+## 7. Energy & Booster System
+
+### 7.1 Energy System
+
+**Purpose:** Limits continuous tapping to prevent infinite resource generation.
+
+**Energy Mechanics:**
+- Each tap consumes energy
+- Energy regenerates over time
+- Players can upgrade boosters to improve energy management
+
+**Energy Properties:**
+- **Current Energy:** Real-time energy available (0 to max)
+- **Max Energy:** Determined by `energyCapacity` booster level
+- **Energy Cost per Tap:** Determined by `energyPerTap` booster level
+- **Recovery Rate:** Determined by `recoveryRate` booster level (energy/second)
+
+**Energy Flow:**
+```
+Tap → Consumes energyPerTap → Energy decreases
+Time passes → Recovers at recoveryRate/sec → Energy increases (up to max)
+```
+
+### 7.2 Booster System
+
+**Four Boosters:**
+1. **incomePerTap** - Increases BZ earned per tap
+2. **energyPerTap** - Increases energy cost per tap (higher = more energy needed)
+3. **energyCapacity** - Increases maximum energy storage
+4. **recoveryRate** - Increases energy regeneration speed
+
+**Booster Level System:**
+- Each booster starts at Level 1
+- Can be upgraded to Level 10+ (no hard cap)
+- Higher levels cost exponentially more
+
+**Booster Cost Formula:**
+```
+Cost (BZ) = baseCost × (1 + level)² + 1.2 × bzPerHour
+```
+
+Where:
+- `baseCost` = booster-specific base cost (varies per booster)
+- `level` = current level
+- `bzPerHour` = player's total passive income rate
+
+**Example:**
+```
+Player has 500 BZ/hour passive income
+Upgrading incomePerTap from Level 5 → Level 6
+Assume baseCost = 10,000 BZ
+
+Cost = 10,000 × (1 + 5)² + 1.2 × 500
+Cost = 10,000 × 36 + 600
+Cost = 360,600 BZ
+```
+
+**Why Include bzPerHour in Cost?**
+- Scales booster costs with player progression
+- Prevents early-game players from over-upgrading
+- Creates strategic decisions (build vs boost)
+
+### 7.3 Booster Unlock Requirements
+
+**Level Gates:**
+- **Level 1-2:** Always unlocked (no requirements)
+- **Level 3:** Requires Silver tier (10K XP) + 3 referrals
+- **Level 4-5:** Requires Gold tier (50K XP) + 5 referrals
+- **Level 6+:** Requires Platinum tier (150K XP) + 7 referrals
 
 **Validation:**
-- Player must have ≥ 1,000 BZ
-- Can only convert in multiples of 1,000 BZ
-- Must be Bronze tier or higher (XP ≥ 1,000)
+- System checks tier AND referral count
+- Both conditions must be met
+- If not met, upgrade button shows "Locked" with requirements
 
-**User Input:**
-- Player enters BZ amount to convert
-- System validates: amount % 1,000 === 0
-- Shows preview: "X BZ → Y BB"
+**Purpose:**
+- Encourages social engagement (referrals)
+- Ties booster progression to overall game progression
+- Creates natural pacing
 
-### 6.3 Dual Tracking System
+### 7.4 Booster Strategy
 
-**Why track TWO metrics?**
+**incomePerTap:**
+- Directly increases BZ per tap
+- Most impactful for active players
+- Synergizes with tier bonuses
 
-The system tracks:
-1. **Total BZ Converted** (`totalBzConverted`) - Cumulative lifetime BZ converted
-2. **Conversion Events** (`totalConversionEvents`) - Number of conversion transactions
+**energyPerTap:**
+- Counter-intuitive: Higher level = worse (more energy per tap)
+- Only upgrade if you have excess energy capacity/recovery
+- Advanced strategy: Keep low, upgrade capacity/recovery instead
 
-**Reason:**
-- **Total BZ Converted** = Shows scale of player economy (did they convert 10K or 10M BZ?)
-- **Conversion Events** = Tracks frequency of use (important for "Exchange Guru" weekly challenge)
+**energyCapacity:**
+- Allows longer tapping sessions
+- Good for players who tap in bursts
+- Synergizes with high recovery rate
 
-**Example:**
-```
-Player converts 5,000 BZ → receives 5 BB
-- totalBzConverted += 5,000
-- totalConversionEvents += 1
+**recoveryRate:**
+- Enables frequent tapping
+- Best for active players
+- Diminishing returns at very high levels
 
-Player converts 10,000 BZ → receives 10 BB
-- totalBzConverted += 10,000 (now 15,000 total)
-- totalConversionEvents += 1 (now 2 total)
-```
-
-**Weekly Challenge Impact:**
-- "Exchange Guru" challenge requires **10 conversion events** (not 10K BZ)
-- A player could convert 1,000 BZ ten times = challenge complete
-- A player could convert 100,000 BZ once = 1/10 progress
-
-### 6.4 Conversion Flow
-
-**Step-by-Step:**
-
-1. **Player enters BZ amount** (must be multiple of 1,000)
-2. **System validates:**
-   - Amount ≥ 1,000?
-   - Amount % 1,000 === 0?
-   - Player has sufficient BZ?
-   - Player is Bronze+ tier?
-3. **Preview shown:**
-   - "Convert X BZ → Y BB?"
-   - Confirmation button
-4. **On confirm:**
-   - Deduct BZ: `player.bz -= convertAmount`
-   - Add BB: `player.bb += (convertAmount / 1000)`
-   - Track conversion: `totalBzConverted += convertAmount`
-   - Increment events: `totalConversionEvents += 1`
-   - Sync to database
-   - Update weekly challenge progress (if applicable)
-5. **Success message:**
-   - "Converted X BZ → Y BB!"
+**Optimal Strategy (General):**
+1. Balance `incomePerTap` with `energyCapacity` early game
+2. Upgrade `recoveryRate` once capacity is sufficient
+3. Avoid upgrading `energyPerTap` unless energy is abundant
+4. Focus on whichever booster is cheapest relative to benefit
 
 ---
 
-## 7. Task System
+## 8. Task System
 
-### 7.1 Task Types
+### 8.1 Task Overview
 
-BunBun has **4 task types**:
+Tasks are objectives players complete for rewards (BZ, BB, or XP). Four task types exist:
 
-| Type | Description | Reset Logic | Examples |
-|------|-------------|-------------|----------|
-| **Social** | External platform actions | Never (one-time) | "Follow on Twitter", "Join Telegram" |
-| **Achievement** | In-game milestones | Never (one-time) | "Reach 10K taps", "Own 50 upgrades" |
-| **Daily** | Repeating daily goals | Every 24 hours | "Tap 1000 times today", "Convert once" |
-| **Weekly** | Repeating weekly goals | Every 7 days (Monday) | "Earn 100K BZ this week" |
+1. **Social Tasks** - External actions (follow channels, join groups)
+2. **Achievement Tasks** - In-game milestones (reach X taps, earn X BZ)
+3. **Daily Tasks** - Reset every 24 hours
+4. **Weekly Tasks** - Reset every 7 days
 
-### 7.2 Task Properties
+### 8.2 Task Properties
 
-Every task has:
+Each task has:
+- **ID** (unique identifier)
+- **Title** (display name)
+- **Description** (what to do)
+- **Type** (social, achievement, daily, weekly)
+- **Target** (numeric goal)
+- **Current Progress** (player's progress toward target)
+- **Reward Type** (BZ, BB, or XP)
+- **Reward Amount** (how much player receives)
+- **Completed** (boolean, true when progress ≥ target)
+- **Claimed** (boolean, true after player claims reward)
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | string | Unique identifier |
-| `title` | string | Display name |
-| `description` | string | What player must do |
-| `task_type` | enum | social/achievement/daily/weekly |
-| `reward_type` | enum | BZ/BB/XP |
-| `reward_amount` | integer | How much reward |
-| `action_url` | string? | External link (for social tasks) |
-| `verification_type` | enum | auto/manual/honor |
-| `required_value` | integer? | Threshold (e.g., "reach 10K taps") |
+### 8.3 Task Examples
 
-### 7.3 Task States
-
-**Player-Task Relationship:**
-
-Each player has a state for each task:
-
-| State | Description | Actions Available |
-|-------|-------------|-------------------|
-| **Available** | Not started, requirements met | "Start" or auto-tracking |
-| **Locked** | Requirements not met (XP/tier) | None (show lock icon) |
-| **In Progress** | Started but not completed | Continue working |
-| **Completed** | Requirements met, reward claimable | "Claim Reward" |
-| **Claimed** | Reward already claimed | None (checkmark shown) |
-
-**State Transitions:**
+**Daily Tasks:**
 ```
-Available → In Progress → Completed → Claimed
-     ↓            ↓            ↓
-  (Daily/Weekly reset) → Available
+1. Daily Check-in
+   - Description: "Log in to the game today"
+   - Target: 1
+   - Progress: Auto-sets to 1 on first login of the day
+   - Reward: 1,000 XP
+
+2. Tap 100 Times
+   - Description: "Tap the bunny 100 times in a day"
+   - Target: 100
+   - Progress: Tracks today's tap count
+   - Reward: 5,000 BZ
+
+3. Claim Idle Income
+   - Description: "Collect income from your build"
+   - Target: 1
+   - Progress: 0 or 1 (has claimed today or not)
+   - Reward: 1,000 XP
 ```
 
-### 7.4 Task Verification Methods
-
-**Auto Verification:**
-- System tracks progress automatically
-- Example: "Reach 10,000 taps" - system checks `totalTaps >= 10000`
-- When threshold met → automatically mark as "Completed"
-
-**Manual Verification:**
-- Player clicks "Verify" button
-- System checks current game state against requirement
-- Example: "Own 50 upgrades" - checks `totalUpgrades >= 50`
-
-**Honor System:**
-- Player manually marks as complete (for external tasks)
-- Example: "Follow on Twitter" - player clicks "Done" after following
-- No server-side verification (trust-based)
-
-### 7.5 Task Claiming Flow
-
-**Step-by-Step:**
-
-1. **Player clicks "Claim Reward"** on completed task
-2. **System validates:**
-   - Task is in "Completed" state?
-   - Not already claimed?
-   - Meets verification requirements?
-3. **If valid:**
-   - Add reward to player's balance (BZ, BB, or XP)
-   - Mark task as "Claimed"
-   - Update `user_tasks` table with `claimed: true`, `claimed_at: timestamp`
-   - Sync to database
-4. **Success feedback:**
-   - "+X BZ received!" or "+X BB received!"
-   - Confetti animation (optional)
-
-### 7.6 Reset Logic
-
-**Daily Tasks (24-hour cycle):**
+**Weekly Tasks:**
 ```
-Reset Time: 00:00 UTC every day
+1. Upgrade 10 Parts
+   - Description: "Perform 10 upgrades in Build screen"
+   - Target: 10
+   - Progress: Tracks upgrades this week only
+   - Reward: 2,000 XP
 
-On reset:
-- Mark all daily tasks as "Available" again
-- Clear progress counters (if tracking incremental progress)
-- Reset claimed status to false
+2. Convert 500K BZ
+   - Description: "Convert BZ to BB tokens"
+   - Target: 500,000
+   - Progress: Tracks total BZ converted this week
+   - Reward: 2,000 XP
+
+3. Invite 3 Friends
+   - Description: "Get 3 new referrals"
+   - Target: 3
+   - Progress: Tracks referrals gained this week
+   - Reward: 2,000 XP
 ```
 
-**Weekly Tasks (7-day cycle):**
+**Progressive/Achievement Tasks:**
 ```
-Reset Time: Monday 00:00 UTC
+1. Master Tapper
+   - Description: "Reach 10,000 lifetime taps"
+   - Target: 10,000
+   - Progress: Total taps ever
+   - Reward: 1.0 BB
 
-On reset:
-- Mark all weekly tasks as "Available" again
-- Clear progress counters
-- Reset claimed status to false
-```
-
-**Database Operation:**
-```sql
--- Reset daily tasks
-UPDATE user_tasks 
-SET claimed = false, progress = 0, claimed_at = NULL
-WHERE task_id IN (SELECT id FROM tasks WHERE task_type = 'daily')
-  AND last_reset_at < (NOW() - INTERVAL '1 day');
-
--- Reset weekly tasks
-UPDATE user_tasks
-SET claimed = false, progress = 0, claimed_at = NULL
-WHERE task_id IN (SELECT id FROM tasks WHERE task_type = 'weekly')
-  AND last_reset_at < (NOW() - INTERVAL '7 days');
+2. Network Master
+   - Description: "Reach 25 total referrals"
+   - Target: 25
+   - Progress: Total referrals ever
+   - Reward: 5.0 BB
 ```
 
----
-
-## 8. Weekly Challenges System
-
-### 8.1 Challenge Overview
-
-**What are Weekly Challenges?**
-- Time-limited goals that reset every Monday at 00:00 UTC
-- **4 challenges** tracking different play styles
-- Rewards: 5,000 XP or 1,000 BB per challenge
-- Challenges track **progress from the start of the week**, not lifetime
-
-### 8.2 The 4 Weekly Challenges
-
-| Challenge | Key | Icon | Description | Target | Reward |
-|-----------|-----|------|-------------|--------|--------|
-| **Tap Master** | `tapper` | ⚡ | Tap 100,000 times this week | 100,000 taps | 5,000 XP |
-| **Builder** | `builder` | 🔨 | Buy 10 upgrades this week | 10 upgrades | 5,000 XP |
-| **Exchange Guru** | `converter` | 🔄 | Convert 10 times this week | 10 conversions | 5,000 XP |
-| **Networker** | `recruiter` | 👥 | Invite 5 friends this week | 5 referrals | 1,000 BB |
-
-### 8.3 Baseline System (CRITICAL CONCEPT)
-
-**Problem to Solve:**
-- Player has 500,000 lifetime taps
-- Week starts Monday
-- Player taps 10,000 times during the week
-- How does system know progress is 10,000 (not 510,000)?
-
-**Solution: Baseline Tracking**
-
-Each challenge stores a **baseline value** = player's stat at week start:
-
-```
-Baseline = Player's stat value when week begins
-Progress = Current Value - Baseline
-```
-
-**Example:**
-
-```
-Monday 00:00 UTC (Week Start):
-- Player totalTaps = 500,000
-- Challenge baseline_value = 500,000
-- Challenge current_progress = 0
-
-Monday 12:00 (player taps 1,000 times):
-- Player totalTaps = 501,000
-- Challenge current_progress = 501,000 - 500,000 = 1,000
-
-Friday 18:00 (player taps 99,000 more times):
-- Player totalTaps = 600,000
-- Challenge current_progress = 600,000 - 500,000 = 100,000
-- Challenge completed! (progress >= target)
-```
-
-### 8.4 Challenge Properties
-
-Each challenge has:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | UUID | Unique challenge instance ID |
-| `user_id` | UUID | Player who owns this challenge |
-| `challenge_key` | enum | tapper/builder/converter/recruiter |
-| `target_value` | integer | Goal (100000, 10, 10, 5) |
-| `baseline_value` | integer | Player's stat at week start |
-| `current_progress` | integer | Current value - baseline |
-| `claimed` | boolean | Has reward been claimed? |
-| `week_start_date` | date | Monday of current week |
-| `created_at` | timestamp | When challenge was created |
-
-### 8.5 Challenge Initialization
-
-**When challenges are created:**
-
-1. **Trigger:** Player reaches Gold tier (25,000 XP) for first time
-2. **Or:** New week starts (Monday 00:00 UTC)
-
-**Initialization Logic:**
-
-```
-For each challenge_key in [tapper, builder, converter, recruiter]:
-  
-  1. Get player's current stat:
-     - tapper: totalTaps
-     - builder: totalUpgrades
-     - converter: totalConversionEvents
-     - recruiter: referralCount
-  
-  2. Create challenge record:
-     - challenge_key = key
-     - target_value = predefined (100000, 10, 10, 5)
-     - baseline_value = current stat value
-     - current_progress = 0
-     - claimed = false
-     - week_start_date = current Monday date
-```
-
-**Example Initialization:**
-
-```
-Player stats at Monday 00:00 UTC:
-- totalTaps: 500,000
-- totalUpgrades: 75
-- totalConversionEvents: 20
-- referralCount: 3
-
-Created challenges:
-1. Tap Master
-   - baseline_value: 500,000
-   - target_value: 100,000
-   - current_progress: 0
-
-2. Builder
-   - baseline_value: 75
-   - target_value: 10
-   - current_progress: 0
-
-3. Exchange Guru
-   - baseline_value: 20
-   - target_value: 10
-   - current_progress: 0
-
-4. Networker
-   - baseline_value: 3
-   - target_value: 5
-   - current_progress: 0
-```
-
-### 8.6 Progress Calculation (CRITICAL)
-
-**Formula:**
-```
-current_progress = MAX(0, current_stat_value - baseline_value)
-```
-
-**Why MAX(0, ...)?**
-- Prevents negative progress
-- Handles edge cases (e.g., database sync issues)
-
-**Update Triggers:**
-
-Challenges update when relevant actions occur:
-
-| Challenge | Update Trigger | Logic |
-|-----------|----------------|-------|
-| Tap Master | After any tap | `progress = totalTaps - baseline` |
-| Builder | After upgrade purchase | `progress = totalUpgrades - baseline` |
-| Exchange Guru | After BZ→BB conversion | `progress = totalConversionEvents - baseline` |
-| Networker | After referral confirmed | `progress = referralCount - baseline` |
-
-**Example Progression (Tap Master):**
-
-```
-Week Start (Monday):
-- totalTaps: 500,000
-- baseline: 500,000
-- progress: 0 / 100,000 (0%)
-
-After 10,000 taps:
-- totalTaps: 510,000
-- baseline: 500,000
-- progress: 10,000 / 100,000 (10%)
-
-After 100,000 taps:
-- totalTaps: 600,000
-- baseline: 500,000
-- progress: 100,000 / 100,000 (100%) ✓ COMPLETED
-```
-
-### 8.7 Challenge States
+### 8.4 Task States & Transitions
 
 **State Flow:**
 ```
-Not Started → In Progress → Completed → Claimed
-     ↓                                      ↓
-(Weekly reset) ← ← ← ← ← ← ← ← ← ← ← ← ← ← ←
+LOCKED → ACTIVE → COMPLETED → CLAIMED
 ```
 
-**State Definitions:**
+1. **LOCKED:** Not yet available (future feature, tier-gated, etc.)
+2. **ACTIVE:** Available to work on (progress < target)
+3. **COMPLETED:** Goal met (progress ≥ target), can claim
+4. **CLAIMED:** Reward received, task marked done
 
-| State | Condition | Display |
-|-------|-----------|---------|
-| **Not Started** | progress = 0 | "0 / 100,000" |
-| **In Progress** | 0 < progress < target | "45,000 / 100,000 (45%)" |
-| **Completed** | progress >= target, not claimed | "✓ Complete - Claim Reward" |
-| **Claimed** | claimed = true | "✓ Claimed" (checkmark) |
+### 8.5 Task Progress Tracking
 
-### 8.8 Claiming Rewards
+**Automatic Tracking:**
+- Most tasks track progress automatically
+- Examples: Tap count, upgrade count, conversion totals
+- No manual input required
 
-**Step-by-Step:**
+**Manual Verification (Social Tasks):**
+- Social tasks use "honor system"
+- Player clicks "Verify" → External action (opens Telegram channel)
+- Player returns → Marks task as complete
+- No server-side verification (trust-based)
 
-1. **Player clicks "Claim Reward"** on completed challenge
-2. **System validates:**
-   - progress >= target_value?
-   - claimed = false?
-   - Player owns this challenge?
-3. **If valid:**
-   - Add reward to player balance (XP or BB)
-   - Mark `claimed = true`
-   - Update `claimed_at = current timestamp`
-   - Sync to database
-4. **Success feedback:**
-   - "+5,000 XP!" or "+1,000 BB!"
-   - Confetti animation
-
-**Cannot claim if:**
-- Progress < target
-- Already claimed
-- Challenge expired/reset
-
-### 8.9 Weekly Reset Logic
-
-**Reset Timing:**
-```
-Every Monday at 00:00 UTC
-```
-
-**Reset Process:**
-
-```
-1. Archive old challenges (optional - for analytics)
-
-2. Delete current week's challenges:
-   DELETE FROM weekly_challenges 
-   WHERE user_id = X AND week_start_date < current_monday
-
-3. Create fresh challenges:
-   - Get player's current stats
-   - Set new baselines = current values
-   - Set progress = 0
-   - Set claimed = false
-   - Set week_start_date = current Monday
-```
-
-**Important:** The reset MUST happen **before** the player takes any actions on Monday, otherwise baseline values will be incorrect.
-
-**Example Reset:**
-
-```
-Sunday 23:59:59 UTC:
-- Player has Tap Master progress: 98,000 / 100,000 (not claimed)
-
-Monday 00:00:00 UTC (Reset):
-- Old challenge deleted/archived
-- New Tap Master created:
-  - baseline_value: 600,000 (current totalTaps)
-  - target_value: 100,000
-  - current_progress: 0
-  - claimed: false
-
-Result: Fresh challenge, player starts from 0 progress
-```
-
----
-
-## 9. Referral System
-
-### 9.1 Referral Flow Overview
-
-**Complete Flow:**
-```
-1. Player A generates referral link
-2. Player A shares link with Player B
-3. Player B clicks link → opens BunBun
-4. Player B completes signup (first login)
-5. System validates: B is new user, A is valid referrer
-6. Rewards distributed:
-   - Player A (referrer): 5,000 BZ + 500 BB
-   - Player B (referee): 2,000 BZ + 200 BB
-7. Player A's referralCount increments
-```
-
-### 9.2 Referral Link Format
-
-**Structure:**
-```
-https://t.me/BunBunBot?start=ref_TELEGRAM_ID
-```
+**Baseline System (Weekly Tasks):**
+- **Problem:** Weekly tasks need to track "progress this week" but player stats are lifetime totals
+- **Solution:** Store a "baseline" value at week start
+- **Formula:** `Weekly Progress = MAX(0, Current Total - Baseline)`
 
 **Example:**
 ```
-Player A's Telegram ID: 123456789
-Referral Link: https://t.me/BunBunBot?start=ref_123456789
+Monday (Week Start):
+- Player has 100 lifetime upgrades
+- Baseline stored: 100
+- Weekly progress: 0
+
+Wednesday:
+- Player has 107 lifetime upgrades
+- Weekly progress: MAX(0, 107 - 100) = 7
+
+Next Monday (Reset):
+- New baseline: 107
+- Weekly progress: 0 (reset)
 ```
 
-**Components:**
-- `https://t.me/BunBunBot` = Bot deeplink base
-- `?start=` = Telegram deeplink parameter
-- `ref_123456789` = Referral code (prefix + referrer's Telegram ID)
+### 8.6 Task Reset Logic
 
-### 9.3 Referral Link Generation
+**Daily Tasks:**
+- Reset at **00:00 UTC** every day
+- Progress set to 0
+- Claimed set to false
+- Completed recalculated based on new progress
 
-**When generated:**
-- Player opens "Tasks & Referrals" screen
-- System creates personalized link using player's Telegram ID
+**Weekly Tasks:**
+- Reset every **Monday at 00:00 UTC**
+- Baseline updated to current lifetime totals
+- Progress set to 0
+- Claimed set to false
 
-**Code Logic:**
+**Reset Timing Detection:**
 ```
-referralLink = `https://t.me/BunBunBot?start=ref_${player.telegramId}`
-```
-
-**Display:**
-- Show link in UI
-- "Copy Link" button
-- "Share" button (triggers Telegram share dialog)
-
-### 9.4 Referral Validation Rules
-
-**For referral to be valid:**
-
-1. **Referee (Player B) must be NEW:**
-   - First time opening BunBun
-   - No existing profile in database
-   - Arrived via referral link (has `start` parameter)
-
-2. **Referrer (Player A) must be VALID:**
-   - Telegram ID exists in database
-   - Has active profile
-   - Not the same as referee (cannot refer yourself)
-
-3. **No duplicates:**
-   - Each player can only be referred once
-   - Referee's `referred_by` field must be NULL
-
-4. **Link must be intact:**
-   - `start` parameter format: `ref_XXXXXXXX`
-   - Referrer ID must be numeric
-
-**Invalid Scenarios:**
-- Player B already has account → no rewards
-- Player A refers themselves → blocked
-- Player B clicks link but manually types different ID → no rewards
-- Malformed referral code → no rewards
-
-### 9.5 Reward Distribution
-
-**Reward Table:**
-
-| Recipient | BZ Reward | BB Reward | Notes |
-|-----------|-----------|-----------|-------|
-| **Referrer** (Player A) | 5,000 BZ | 500 BB | Person who shared link |
-| **Referee** (Player B) | 2,000 BZ | 200 BB | Person who used link |
-
-**When rewards are given:**
-- Immediately after successful validation
-- On referee's first login/profile creation
-- Atomic transaction (both get rewards or neither does)
-
-**Data Updates:**
-
-```
-For Referrer (Player A):
-- bz += 5,000
-- bb += 500
-- referralCount += 1
-
-For Referee (Player B):
-- bz += 2,000
-- bb += 200
-- referred_by = Player A's user_id
-- referral_source = "ref_123456789"
-
-Database:
-- Insert record in referrals table:
-  - referrer_id: Player A's user_id
-  - referee_id: Player B's user_id
-  - status: "confirmed"
-  - created_at: current timestamp
+If (currentDate - lastResetDate) ≥ resetPeriod:
+  - Update baselines
+  - Reset progress/claimed flags
+  - Update lastResetDate
 ```
 
-### 9.6 Referral Tracking
+### 8.7 Task Claiming Flow
 
-**Metrics tracked:**
-
-| Metric | Field | Description |
-|--------|-------|-------------|
-| Total Referrals | `referralCount` | How many people player has referred |
-| Who Referred This Player | `referred_by` | User ID of referrer (NULL if organic) |
-| Referral Source | `referral_source` | Original referral code used |
-
-**Analytics:**
-- Track referral success rate
-- Identify top referrers
-- Monitor referral chain depth
-- Detect fraud patterns
-
-### 9.7 Referral System Edge Cases
-
-**Scenario 1: Player clicks multiple referral links**
-- **Rule:** First click wins
-- If Player B clicks A's link, then C's link → A gets credit
-- Database: Check if `referred_by` already set
-
-**Scenario 2: Player tries to refer themselves**
-- **Rule:** Blocked
-- Validation: `referee_telegram_id !== referrer_telegram_id`
-
-**Scenario 3: Player reinstalls app**
-- **Rule:** Not counted as new referral
-- Validation: Check if Telegram ID exists in profiles table
-
-**Scenario 4: Link shared outside Telegram**
-- **Challenge:** Web version has no Telegram ID
-- **Solution:** Only works within Telegram Mini App environment
-
-**Scenario 5: Referral limit**
-- **Current:** No limit on referrals
-- **Future consideration:** Cap at X referrals per day (anti-fraud)
-
----
-
-## 10. NFT Collection System
-
-### 10.1 NFT Overview
-
-**What are NFTs in BunBun?**
-- **Collectible digital badges** representing achievements
-- Purchased with **BunnyBucks (BB)**
-- **Future utility:** Boost passive income or provide bonuses
-- **Status symbol:** Show off rare collections
-
-**Not actual blockchain NFTs** - they're in-game collectibles called "NFTs" for branding.
-
-### 10.2 NFT Properties
-
-Each NFT has:
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `id` | string | Unique identifier |
-| `name` | string | Display name (e.g., "Golden Bunny") |
-| `description` | string | Lore/flavor text |
-| `image_url` | string | NFT artwork URL |
-| `rarity` | enum | common/rare/epic/legendary/mythic |
-| `price_bb` | integer | Cost in BunnyBucks |
-| `requirement_type` | enum | xp/tier/referrals/none |
-| `requirement_value` | integer | Unlock threshold |
-
-### 10.3 Rarity Tiers
-
-**5 Rarity Levels:**
-
-| Rarity | Color | Price Range | Requirement Examples | Supply |
-|--------|-------|-------------|---------------------|--------|
-| **Common** | Gray | 100-500 BB | None | Unlimited |
-| **Rare** | Blue | 500-1,500 BB | 10K XP or Bronze tier | Unlimited |
-| **Epic** | Purple | 1,500-3,000 BB | 50K XP or Silver tier | Unlimited |
-| **Legendary** | Orange | 3,000-7,000 BB | 500K XP or Diamond tier | Unlimited |
-| **Mythic** | Rainbow | 7,000-10,000 BB | 2M XP or Master tier | Unlimited |
-
-**Visual Indicators:**
-- Border color matches rarity
-- Glow effect for Legendary+
-- Animated border for Mythic
-
-### 10.4 NFT States
-
-**From Player's Perspective:**
-
-| State | Description | Display | Actions |
-|-------|-------------|---------|---------|
-| **Locked** | Requirements not met | Lock icon, grayed out | None |
-| **Unlocked** | Requirements met, not owned | Normal colors, price shown | "Purchase" button |
-| **Owned** | Player purchased this NFT | "OWNED" badge, checkmark | None (already owned) |
-
-**State Transitions:**
-```
-Locked → Unlocked → Owned
-   ↑         ↑
-(Meet requirements) → (Purchase with BB)
-```
-
-### 10.5 Unlock Requirements
-
-**Requirement Types:**
-
-**1. XP Threshold:**
-```
-requirement_type: "xp"
-requirement_value: 100000
-
-Player must have >= 100,000 XP to purchase
-```
-
-**2. Tier Requirement:**
-```
-requirement_type: "tier"
-requirement_value: 5 (Platinum)
-
-Player must be Platinum tier or higher
-```
-
-**3. Referral Count:**
-```
-requirement_type: "referrals"
-requirement_value: 10
-
-Player must have referred >= 10 friends
-```
-
-**4. No Requirement:**
-```
-requirement_type: "none"
-requirement_value: 0
-
-Available to all players
-```
-
-### 10.6 Purchase Flow
-
-**Step-by-Step:**
-
-1. **Player clicks on NFT** in collection screen
-2. **System checks unlock status:**
-   - Requirements met?
-   - Not already owned?
-3. **If unlocked:**
-   - Show "Purchase" button with BB price
-   - Player clicks "Purchase"
+1. **Player completes task** (progress ≥ target)
+2. **Task shows "Claim Reward" button**
+3. **Player clicks button**
 4. **System validates:**
-   - Player has enough BB?
-   - NFT is unlocked?
-   - Not already owned?
-5. **If valid:**
-   - Deduct BB: `player.bb -= nft.price_bb`
-   - Add to owned: `player.ownedNFTs.push(nft.id)`
-   - Insert record: `user_nfts` table
+   - Task is completed
+   - Task not already claimed
+   - Player exists
+5. **System awards reward:**
+   - Add BZ/BB/XP to player balance
+   - Mark task as claimed
    - Sync to database
-6. **Success feedback:**
-   - NFT image animation
-   - "You now own [NFT Name]!"
-   - Confetti effect
-
-**Data Updates:**
-```
-player.bb -= nft_price
-player.ownedNFTs.push(nft_id)
-
-Database:
-INSERT INTO user_nfts (user_id, nft_id, purchased_at)
-VALUES (player_id, nft_id, NOW())
-```
-
-### 10.7 NFT Display
-
-**Collection Grid:**
-- 2-3 columns on mobile, 4-5 on desktop
-- Card shows:
-  - NFT image
-  - Name
-  - Rarity badge
-  - Price (if not owned)
-  - "OWNED" badge (if owned)
-  - Lock icon (if locked)
-
-**Filter Options:**
-- "All" / "Owned" / "Available" / "Locked"
-- Sort by: Rarity / Price / Name
-
-**Progress Indicator:**
-- "X / Y NFTs Collected"
-- Completion percentage
-
-### 10.8 Future: NFT Utility System
-
-**Planned Features:**
-
-**Passive Income Boosts:**
-```
-Each owned NFT provides a multiplier:
-- Common: +1% passive income
-- Rare: +2.5%
-- Epic: +5%
-- Legendary: +10%
-- Mythic: +25%
-
-Total Boost = SUM(owned NFT multipliers)
-
-Example:
-- Own 3 Common + 1 Rare = +5.5% total passive income
-- Base passive: 1,000 BZ/h
-- Boosted passive: 1,055 BZ/h
-```
-
-**Special Abilities:**
-```
-Certain NFTs unlock special features:
-- "Lucky Bunny" - 2× tap rewards for 1 hour daily
-- "Speed Demon" - Tap animation faster
-- "Wealthy Bunny" - 5% discount on all upgrades
-```
-
-**Collection Bonuses:**
-```
-Complete sets for extra rewards:
-- All Common tier: +1,000 BB
-- All Rare tier: +5,000 BB
-- Full collection: Exclusive "Collector" badge
-```
+6. **UI updates:**
+   - Button changes to "Claimed"
+   - Checkmark icon appears
+   - Task grayed out (if one-time)
 
 ---
 
-## 11. Data Architecture
+## 9. Weekly Challenge System
 
-### 11.1 Why Hybrid Architecture?
+### 9.1 Challenge Overview
 
-**Problem:**
-- **Telegram Mini Apps** must be fast and responsive
-- **Database queries** have latency (network requests)
-- **Offline play** should be possible
+Weekly Challenges are special competitive objectives that reset every Monday. Three challenges run simultaneously:
 
-**Solution: localStorage + Supabase Hybrid**
+1. **Master Builder** (Upgrade-focused)
+2. **Top Recruiter** (Referral-focused)
+3. **Exchange Guru** (Conversion-focused)
 
+**Key Difference from Tasks:**
+- Challenges are **always active** (no unlock conditions)
+- Challenges track **this week's activity only** (not lifetime)
+- Rewards are **more valuable** than regular tasks
+- Use a **baseline system** to calculate weekly progress
+
+### 9.2 Challenge Definitions
+
+**Master Builder:**
 ```
-┌─────────────────┐
-│  localStorage   │ ← Fast, instant access, client-side
-│  (User's Phone) │
-└────────┬────────┘
-         │
-         ├──→ Reads: Instant (no network)
-         ├──→ Writes: Instant (no network)
-         └──→ Sync: Background to Supabase
-                ↓
-         ┌─────────────────┐
-         │    Supabase     │ ← Persistent, server-side, synced across devices
-         │   (Database)    │
-         └─────────────────┘
-```
-
-**Benefits:**
-- **Speed:** localStorage reads/writes = 0ms latency
-- **Offline:** Game works without internet
-- **Persistence:** Data backed up to Supabase
-- **Cross-device:** Sync between devices
-- **Security:** Server validates critical operations
-
-### 11.2 Data Location Matrix
-
-**What goes where?**
-
-| Data Type | localStorage | Supabase | Sync Frequency | Why? |
-|-----------|--------------|----------|----------------|------|
-| **BunnyZap (BZ)** | ✅ | ✅ | Every 30s / on action | High-frequency updates |
-| **BunnyBucks (BB)** | ✅ | ✅ | Every 30s / on action | High-frequency updates |
-| **XP** | ✅ | ✅ | Every 30s / on action | High-frequency updates |
-| **Total Taps** | ✅ | ✅ | Every 30s | Increments rapidly |
-| **Passive Income Rate** | ✅ | ✅ | On upgrade purchase | Changes rarely |
-| **Owned Upgrades** | ✅ | ✅ | On purchase | Array, merge with Set union |
-| **Owned NFTs** | ✅ | ✅ | On purchase | Array, merge with Set union |
-| **Referral Count** | ✅ | ✅ | On new referral | Changes rarely |
-| **Weekly Challenges** | ❌ | ✅ | On load / on update | Source of truth: DB |
-| **Tasks** | ❌ | ✅ | On load / on claim | Source of truth: DB |
-| **User Profile** | ✅ (partial) | ✅ | On login / on change | Master data in DB |
-| **Task Definitions** | ❌ | ✅ | On app load (cached) | Static content |
-| **Upgrade Definitions** | ❌ | ✅ | On app load (cached) | Static content |
-| **NFT Definitions** | ❌ | ✅ | On app load (cached) | Static content |
-
-**Key Principles:**
-- **Hot data** (taps, BZ, XP) → localStorage primary, Supabase backup
-- **Cold data** (definitions, challenges) → Supabase only
-- **Transactional data** (purchases, claims) → Immediate Supabase write
-
-### 11.3 Database Schema
-
-**All 19 Tables:**
-
-#### **Table 1: `profiles`**
-Core user data and game state.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `telegram_id` | BIGINT | Unique Telegram user ID |
-| `username` | TEXT | Telegram username |
-| `first_name` | TEXT | User's first name |
-| `last_name` | TEXT | User's last name |
-| `language_code` | TEXT | Telegram language (e.g., "en") |
-| `bz` | INTEGER | Current BunnyZap balance |
-| `bb` | INTEGER | Current BunnyBucks balance |
-| `xp` | INTEGER | Total experience points |
-| `total_taps` | INTEGER | Lifetime tap count |
-| `total_upgrades` | INTEGER | Lifetime upgrade purchases |
-| `total_conversion_events` | INTEGER | Lifetime conversion count |
-| `total_bz_converted` | INTEGER | Total BZ converted to BB |
-| `passive_income_rate` | INTEGER | Current BZ/hour generation |
-| `referral_count` | INTEGER | Successful referrals |
-| `referred_by` | UUID | User ID of referrer (nullable) |
-| `referral_source` | TEXT | Original referral code |
-| `last_sync_at` | TIMESTAMP | Last database sync time |
-| `created_at` | TIMESTAMP | Account creation time |
-| `updated_at` | TIMESTAMP | Last profile update |
-
-**Indexes:**
-- `telegram_id` (unique)
-- `referred_by`
-- `created_at`
-
----
-
-#### **Table 2: `build_parts`**
-Hardware upgrade definitions.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `name` | TEXT | Upgrade name |
-| `description` | TEXT | Flavor text |
-| `base_income` | INTEGER | BZ per hour at level 1 |
-| `base_price` | INTEGER | Initial cost in BZ |
-| `category` | TEXT | Energy/Computing/Other |
-| `image` | TEXT | Icon/image filename |
-| `required_xp` | INTEGER | Minimum XP to unlock |
-| `created_at` | TIMESTAMP | Record creation time |
-
----
-
-#### **Table 3: `user_build_parts`**
-Player's owned upgrades (junction table).
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `user_id` | UUID | FK → profiles.id |
-| `build_part_id` | UUID | FK → build_parts.id |
-| `quantity` | INTEGER | How many owned |
-| `purchased_at` | TIMESTAMP | First purchase time |
-| `updated_at` | TIMESTAMP | Last update time |
-
-**Unique Constraint:** `(user_id, build_part_id)`
-
----
-
-#### **Table 4: `nfts`**
-NFT collectible definitions.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `name` | TEXT | NFT name |
-| `description` | TEXT | Lore/flavor text |
-| `image_url` | TEXT | Artwork URL |
-| `rarity` | TEXT | common/rare/epic/legendary/mythic |
-| `price_bb` | INTEGER | Cost in BunnyBucks |
-| `requirement_type` | TEXT | xp/tier/referrals/none |
-| `requirement_value` | INTEGER | Unlock threshold |
-| `created_at` | TIMESTAMP | Record creation time |
-
----
-
-#### **Table 5: `user_nfts`**
-Player's owned NFTs (junction table).
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `user_id` | UUID | FK → profiles.id |
-| `nft_id` | UUID | FK → nfts.id |
-| `purchased_at` | TIMESTAMP | Purchase time |
-
-**Unique Constraint:** `(user_id, nft_id)` - prevents duplicate ownership
-
----
-
-#### **Table 6: `tasks`**
-Task definitions.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `title` | TEXT | Task display name |
-| `description` | TEXT | What to do |
-| `task_type` | TEXT | social/achievement/daily/weekly |
-| `reward_type` | TEXT | BZ/BB/XP |
-| `reward_amount` | INTEGER | How much reward |
-| `action_url` | TEXT | External link (nullable) |
-| `verification_type` | TEXT | auto/manual/honor |
-| `required_value` | INTEGER | Threshold (nullable) |
-| `created_at` | TIMESTAMP | Record creation time |
-
----
-
-#### **Table 7: `user_tasks`**
-Player's task progress (junction table).
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `user_id` | UUID | FK → profiles.id |
-| `task_id` | UUID | FK → tasks.id |
-| `progress` | INTEGER | Current progress value |
-| `claimed` | BOOLEAN | Has reward been claimed? |
-| `claimed_at` | TIMESTAMP | When reward was claimed (nullable) |
-| `last_reset_at` | TIMESTAMP | Last daily/weekly reset (nullable) |
-| `created_at` | TIMESTAMP | Record creation time |
-
-**Unique Constraint:** `(user_id, task_id)`
-
----
-
-#### **Table 8: `weekly_challenges`**
-Player's weekly challenge instances.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `user_id` | UUID | FK → profiles.id |
-| `challenge_key` | TEXT | tapper/builder/converter/recruiter |
-| `target_value` | INTEGER | Goal to reach |
-| `baseline_value` | INTEGER | Stat value at week start |
-| `current_progress` | INTEGER | Current - baseline |
-| `claimed` | BOOLEAN | Has reward been claimed? |
-| `claimed_at` | TIMESTAMP | When reward was claimed (nullable) |
-| `week_start_date` | DATE | Monday of this week |
-| `created_at` | TIMESTAMP | Record creation time |
-
-**Unique Constraint:** `(user_id, challenge_key, week_start_date)`
-
----
-
-#### **Table 9: `referrals`**
-Referral relationships.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `referrer_id` | UUID | FK → profiles.id (who referred) |
-| `referee_id` | UUID | FK → profiles.id (who was referred) |
-| `status` | TEXT | pending/confirmed/invalid |
-| `referral_code` | TEXT | Original code used |
-| `created_at` | TIMESTAMP | Referral time |
-
----
-
-#### **Table 10: `conversion_history`**
-BZ→BB conversion logs.
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | UUID | Primary key |
-| `user_id` | UUID | FK → profiles.id |
-| `bz_amount` | INTEGER | BZ converted |
-| `bb_amount` | INTEGER | BB received |
-| `exchange_rate` | INTEGER | Rate at time (1000) |
-| `bz_balance_before` | INTEGER | BZ before conversion |
-| `bz_balance_after` | INTEGER | BZ after conversion |
-| `bb_balance_before` | INTEGER | BB before conversion |
-| `bb_balance_after` | INTEGER | BB after conversion |
-| `created_at` | TIMESTAMP | Conversion time |
-
-**Analytics table** - tracks conversion history for metrics.
-
----
-
-#### **Tables 11-19: Supporting Tables**
-
-**`quickcharge_state`** - QuickCharge feature state (uses remaining, cooldown)  
-**`sync_logs`** - Sync operation logs (debugging)  
-**`task_completions`** - Task completion history (analytics)  
-**`upgrade_purchases`** - Upgrade purchase history (analytics)  
-**`xp_tier_milestones`** - Tier unlock events (analytics)  
-**`daily_active_users`** - DAU tracking (analytics)  
-**`game_events`** - Generic event logging (analytics)  
-**`payment_transactions`** - Future: Telegram Stars payments  
-**`reward_claims`** - Task/challenge reward claim logs (analytics)
-
-### 11.4 Row Level Security (RLS)
-
-**What is RLS?**
-- Supabase feature that restricts database access at the row level
-- **Every table has RLS enabled**
-- Policies define who can SELECT/INSERT/UPDATE/DELETE which rows
-
-**Standard Policy Pattern:**
-
-```sql
--- Users can only access their own data
-CREATE POLICY "Users can view own records" 
-ON table_name FOR SELECT 
-USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own records" 
-ON table_name FOR INSERT 
-WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own records" 
-ON table_name FOR UPDATE 
-USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete own records" 
-ON table_name FOR DELETE 
-USING (auth.uid() = user_id);
+- Description: "Perform 50 upgrades this week"
+- Target: 50 upgrades
+- Progress Tracked: Build part upgrades (any stage, any level)
+- Reward: 10,000 BZ
+- Icon: Hammer
 ```
 
-**Public Read Tables:**
-- `build_parts` - upgrade definitions
-- `nfts` - NFT definitions
-- `tasks` - task definitions
-
-These have:
-```sql
-CREATE POLICY "Anyone can view" 
-ON table_name FOR SELECT 
-USING (true);
+**Top Recruiter:**
+```
+- Description: "Invite 5 friends this week"
+- Target: 5 new referrals
+- Progress Tracked: Referrals gained since Monday
+- Reward: 0.005 BB
+- Icon: Users
 ```
 
-**Why RLS?**
-- **Security:** Players can't access/modify other players' data
-- **Automatic:** Enforced at database level (can't be bypassed)
-- **Zero trust:** Even if client code is hacked, DB remains secure
+**Exchange Guru:**
+```
+- Description: "Convert 10 times this week"
+- Target: 10 conversion events
+- Progress Tracked: Number of BZ→BB or BB→BZ conversions
+- Reward: 5,000 XP
+- Icon: ArrowLeftRight
+```
 
----
+### 9.3 Baseline System (CRITICAL)
 
-## 12. Sync Strategy
+**The Problem:**
+- Player stats are **lifetime totals** (e.g., 1,000 total upgrades)
+- Challenges need **this week's activity only**
+- How do you calculate "upgrades this week" from "total upgrades"?
 
-### 12.1 The Math.max() Philosophy
+**The Solution: Baseline System**
 
-**Core Principle:**
-> When merging localStorage and Supabase data, always keep the **highest value** for numeric fields.
-
-**Why?**
-- **Prevents data loss:** Never decrease player progress
-- **Handles race conditions:** Multiple devices updating simultaneously
-- **Offline-friendly:** Offline progress merges safely
-- **Simple logic:** Easy to implement and debug
+**Baseline Definition:**
+- A stored value representing the player's stat at the **start of the week**
+- Used to calculate weekly progress
 
 **Formula:**
 ```
-Merged Value = MAX(localStorage value, Supabase value)
+Weekly Progress = MAX(0, Current Total - Baseline)
 ```
+
+**Example Walkthrough:**
+
+```
+=== Monday (Week Start) ===
+Player Lifetime Stats:
+- totalUpgrades: 200
+- referralCount: 10
+- totalConversions: 50
+
+System Creates Baselines:
+- upgradeBaseline: 200
+- referralBaseline: 10
+- conversionBaseline: 50
+
+Challenge Progress (All 0):
+- Master Builder: MAX(0, 200 - 200) = 0 / 50
+- Top Recruiter: MAX(0, 10 - 10) = 0 / 5
+- Exchange Guru: MAX(0, 50 - 50) = 0 / 10
+
+=== Wednesday (Mid-Week) ===
+Player Lifetime Stats:
+- totalUpgrades: 215 (+15 this week)
+- referralCount: 12 (+2 this week)
+- totalConversions: 53 (+3 this week)
+
+Baselines Unchanged:
+- upgradeBaseline: 200
+- referralBaseline: 10
+- conversionBaseline: 50
+
+Challenge Progress:
+- Master Builder: MAX(0, 215 - 200) = 15 / 50
+- Top Recruiter: MAX(0, 12 - 10) = 2 / 5
+- Exchange Guru: MAX(0, 53 - 50) = 3 / 10
+
+=== Next Monday (Reset) ===
+System Detects Week Change:
+- Store new baselines:
+  - upgradeBaseline: 215
+  - referralBaseline: 12
+  - conversionBaseline: 53
+- Reset claimed flags to false
+- Recalculate progress (now 0 for all)
+```
+
+**Why MAX(0, ...)?**
+- Prevents negative progress if baseline somehow becomes larger than current
+- Handles edge cases (data corruption, manual adjustments)
+- Ensures progress is always ≥ 0
+
+### 9.4 Challenge Update Triggers
+
+Challenges update in real-time when:
+- **Player performs relevant action** (upgrade, convert, referral joins)
+- **System recalculates progress** using formula
+- **UI refreshes** to show new progress bar percentage
+
+**Example (Master Builder):**
+```
+1. Player upgrades Stage 2 Part 3
+2. totalUpgrades increments: 215 → 216
+3. System recalculates: MAX(0, 216 - 200) = 16
+4. UI updates: Progress bar shows 16/50 (32%)
+```
+
+### 9.5 Challenge Claiming
+
+**Claiming Requirements:**
+- Progress ≥ Target
+- Not already claimed this week
+
+**Claiming Flow:**
+1. Player completes challenge (e.g., 50 upgrades)
+2. "Claim Reward" button appears
+3. Player clicks button
+4. System validates completion
+5. System awards reward (BZ/BB/XP added to balance)
+6. System marks challenge as claimed
+7. Challenge remains "completed" until reset
+8. Next Monday: Reset to 0, unclaimed
+
+**Multiple Claims:**
+- Cannot claim same challenge twice in one week
+- Can claim multiple different challenges in one week
+- Can claim same challenge every week if completed
+
+### 9.6 Weekly Reset Logic
+
+**Reset Timing:**
+- Every **Monday at 00:00 UTC**
+- Automated check on app load and periodic intervals
+
+**Reset Process:**
+```
+1. Detect reset needed:
+   - Calculate days since last reset
+   - If ≥ 7 days, trigger reset
+
+2. Update baselines:
+   - upgradeBaseline = currentTotalUpgrades
+   - referralBaseline = currentReferralCount
+   - conversionBaseline = currentTotalConversions
+
+3. Reset challenge state:
+   - claimed = false (all challenges)
+   - completed = false (all challenges)
+   - progress = 0 (all challenges, will recalculate)
+
+4. Update tracking:
+   - lastResetDate = today
+   - weekNumber = calculated from year
+
+5. Sync to database:
+   - Store new baselines
+   - Store reset date
+```
+
+**Edge Cases:**
+- **Player offline >7 days:** System backfills baselines to current values (assumes no activity)
+- **Week change during session:** System detects and resets mid-session
+- **Multiple resets needed:** System can skip weeks if player absent (updates baseline to current)
+
+### 9.7 Challenge Storage
+
+**Database Table: `user_weekly_challenges`**
+- Stores one row per player per challenge per week
+- Tracks baseline, progress, completed, claimed
+- Indexed by `(telegram_id, challenge_key, year, week_number)`
+
+**localStorage Backup:**
+- Also stored in localStorage for instant UI updates
+- Synced to database in background
+- Database is source of truth on conflicts
+
+---
+
+## 10. Daily Rewards System
+
+### 10.1 Daily Reward Overview
+
+Players can claim one reward per day by logging in. Rewards increase each day of the week (Day 1-7), then reset to Day 1 on week 8.
+
+**Reward Scaling:**
+- Rewards scale with the **reward week number**
+- Week 1 rewards are base amounts
+- Week 2+ rewards multiply base by week number
+
+### 10.2 Daily Reward Schedule
+
+**Week 1 Base Rewards:**
+
+| Day | Reward Type | Base Amount |
+|-----|-------------|-------------|
+| Day 1 | XP | 2,000 |
+| Day 2 | BZ | 5,000 |
+| Day 3 | XP | 3,000 |
+| Day 4 | BZ | 8,000 |
+| Day 5 | XP | 5,000 |
+| Day 6 | BB | 0.001 |
+| Day 7 | BZ | 15,000 |
+
+**Scaling Formula:**
+```
+Actual Reward = Base Amount × Reward Week Number
+```
+
+**Example (Week 3):**
+- Day 1: 2,000 × 3 = 6,000 XP
+- Day 2: 5,000 × 3 = 15,000 BZ
+- Day 6: 0.001 × 3 = 0.003 BB
+- Day 7: 15,000 × 3 = 45,000 BZ
+
+### 10.3 Streak System
+
+**Streak Tracking:**
+- **Daily Streak:** Number of consecutive days claimed
+- Streak increments when player claims today's reward
+- Streak resets to 0 if player misses a day
+
+**Current Day Calculation:**
+```
+Current Day = (Daily Streak % 7) + 1
+
+Examples:
+- Streak 0 → Day 1
+- Streak 3 → Day 4
+- Streak 6 → Day 7
+- Streak 7 → Day 1 (reset to week start)
+- Streak 14 → Day 1
+```
+
+**Reward Week Calculation:**
+```
+Reward Week = FLOOR(Daily Streak ÷ 7) + 1
+
+Examples:
+- Streak 0-6 → Week 1
+- Streak 7-13 → Week 2
+- Streak 14-20 → Week 3
+```
+
+### 10.4 Claiming Flow
+
+**Validation:**
+1. Check if player already claimed today (compare dates)
+2. If claimed today → show "Come back tomorrow"
+3. If not claimed → allow claim
+
+**Claim Process:**
+1. Player clicks "Claim" button
+2. System awards today's reward
+3. System increments daily streak
+4. System records claim date
+5. System syncs to database
+6. UI updates to show next day's reward
+
+**Example Session:**
+```
+Monday (Streak 0):
+- Shows Day 1 reward: 2,000 XP (Week 1)
+- Player claims → Streak becomes 1
+- UI now shows Day 2 reward preview
+
+Tuesday (Streak 1):
+- Shows Day 2 reward: 5,000 BZ (Week 1)
+- Player claims → Streak becomes 2
+
+[Player misses Wednesday]
+
+Thursday (Streak 2, but missed a day):
+- System detects gap
+- Streak resets to 0
+- Shows Day 1 reward: 2,000 XP (Week 1)
+```
+
+### 10.5 Reset & Recovery
+
+**Missed Day Handling:**
+- No partial credit for missed days
+- Streak resets to 0
+- Player starts over at Day 1, Week 1
+
+**Timezone Considerations:**
+- All resets at **00:00 UTC**
+- Player's local time doesn't affect reset
+- Date comparison uses UTC timestamps
+
+---
+
+## 11. Referral System
+
+### 11.1 Referral Overview
+
+Players can invite friends to join BunBun and earn rewards from their friends' gameplay. The referral system provides:
+1. **One-time signup bonuses** (for both referrer and referee)
+2. **Lifetime 20% share** of referrals' earnings
+3. **Milestone bonuses** for reaching referral count targets
+
+### 11.2 Referral Link Generation
+
+**Link Format:**
+```
+https://t.me/bunergy_bot/BunBun?startapp={REFERRAL_CODE}
+```
+
+**Referral Code Generation:**
+- Derived from Telegram User ID
+- 8-character alphanumeric code
+- Uses charset: "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" (no 0, O, 1, I to avoid confusion)
+
+**Algorithm:**
+```
+function generateCode(telegramUserId):
+  chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  hash = telegramUserId
+  code = ""
+  
+  for i = 0 to 7:
+    code += chars[hash % chars.length]
+    hash = floor(hash / chars.length)
+  
+  return code
+```
+
+**Properties:**
+- Deterministic (same user ID → same code always)
+- Reversible (code → user ID)
+- Short and shareable
+
+### 11.3 Referral Flow
+
+**Step 1: Referrer Shares Link**
+```
+1. Referrer opens "Referrals" tab
+2. System generates referral code from their Telegram ID
+3. Referrer copies link or shares via Telegram
+```
+
+**Step 2: Referee Joins**
+```
+1. Referee clicks referral link
+2. Opens BunBun TMA with ?startapp={CODE} parameter
+3. System decodes CODE → referrer's Telegram ID
+4. System creates profiles for both (if new)
+5. System links referee to referrer in database
+```
+
+**Step 3: Validation**
+```
+System checks:
+- Referee is new user (not already registered)
+- Referee is not the referrer (can't refer yourself)
+- Referral link is valid (code decodes to valid user ID)
+
+If valid:
+  - Create referral record
+  - Award signup bonuses
+  - Enable earnings sharing
+```
+
+**Step 4: Ongoing Earnings**
+```
+Every time referee earns BZ (tap or idle):
+  1. Calculate 20% of earnings
+  2. Add to referrer's pending earnings
+  3. Referrer can claim accumulated earnings anytime
+```
+
+### 11.4 Referral Rewards
+
+**Signup Bonuses (One-Time):**
+
+| Recipient | Reward |
+|-----------|--------|
+| **Referrer** (Inviter) | +2,500 XP, +1,000 BZ |
+| **Referee** (New Player) | +1,000 XP, +500 BZ |
+
+**Lifetime Earnings Share:**
+- **Referrer earns:** 20% of referee's tap income + idle income
+- **Tracked as:** Pending earnings (must be claimed)
+- **No time limit:** Lasts forever, as long as referee plays
 
 **Example:**
-
 ```
-Scenario: Player plays on 2 devices simultaneously
+Referee earns 10,000 BZ from tapping:
+- Referee keeps: 10,000 BZ
+- Referrer earns: 10,000 × 0.20 = 2,000 BZ (pending)
 
+Referee claims 50,000 BZ idle income:
+- Referee keeps: 50,000 BZ
+- Referrer earns: 50,000 × 0.20 = 10,000 BZ (pending)
+
+Referrer's total pending: 2,000 + 10,000 = 12,000 BZ
+Referrer clicks "Claim" → Receives 12,000 BZ
+```
+
+**Baseline System for Earnings:**
+- System tracks referee's baseline (total earnings at last claim)
+- On claim: Award referrer 20% of (current total - baseline)
+- Update baseline to current total
+- Prevents double-counting earnings
+
+### 11.5 Referral Milestones
+
+**Milestone Rewards:**
+
+| Referrals | XP Reward |
+|-----------|-----------|
+| 5 | 5,000 XP |
+| 10 | 15,000 XP |
+| 25 | 50,000 XP |
+| 50 | 150,000 XP |
+
+**Claiming:**
+- Automatically available when milestone reached
+- One-time claim per milestone
+- Cannot claim same milestone twice
+- Independent of weekly challenges (separate system)
+
+### 11.6 Referral Stats Display
+
+**Referrer Sees:**
+- Total referrals (count)
+- Pending earnings (BZ not yet claimed)
+- Total claimed (lifetime BZ claimed from referrals)
+- List of referrals with individual earnings
+
+**Referee Sees:**
+- Their referrer's name/ID (if applicable)
+- Confirmation they joined via referral link
+
+### 11.7 Referral Validation Rules
+
+**Cannot Refer:**
+- Self (own Telegram ID)
+- Users already registered
+- Users who already have a referrer
+
+**Anti-Abuse:**
+- One referrer per user (permanent, cannot change)
+- Referral link must be used during signup (cannot retroactively add referrer)
+- System logs referral timestamp for audit
+
+---
+
+## 12. NFT Collection System
+
+### 12.1 NFT Overview
+
+NFTs (Non-Fungible Tokens) are digital collectibles players can unlock and purchase. Each NFT has:
+- **Unique artwork/design**
+- **Unlock requirement** (achievement-based)
+- **Purchase price** (in BB)
+- **Potential future utility** (boosts, badges)
+
+### 12.2 NFT Collection
+
+**7 NFTs Total:**
+
+| NFT | Price (BB) | Requirement | Requirement Type |
+|-----|------------|-------------|------------------|
+| **Early Adopter** | 0 (Free) | Always unlocked | None |
+| **Social King** | 2.0 | 20 referrals | Referral count |
+| **Builder Pro** | 2.0 | Complete Stage 2 (10 parts at L5+) | Build progress |
+| **Tap Legend** | 4.0 | Earn 10M BZ from tapping | Tap income |
+| **Energy Master** | 3.0 | Max all energy boosters (L10+) | Booster levels |
+| **Golden Bunny** | 5.0 | 5M total taps | Tap count |
+| **Diamond Crystal** | 7.0 | 500K+ XP | XP total |
+
+### 12.3 NFT States
+
+**Three States:**
+
+1. **Locked** 🔒
+   - Requirement not met
+   - Shows requirement and progress
+   - Cannot purchase
+
+2. **Unlocked** 🔓
+   - Requirement met
+   - Can purchase with BB
+   - Shows "Purchase" button
+
+3. **Owned** ✅
+   - Already purchased
+   - Shows "Owned" badge
+   - Cannot purchase again
+
+### 12.4 Unlock Requirements Explained
+
+**Referral-Based (Social King):**
+```
+Check: referralCount ≥ 20
+Progress: "X / 20 referrals"
+```
+
+**Build-Based (Builder Pro):**
+```
+Check: Count Stage 2 parts at Level 5+
+Progress: "X / 10 parts at L5+"
+Requirement: 10 parts must be Level 5 or higher
+```
+
+**Income-Based (Tap Legend):**
+```
+Check: totalTapIncome ≥ 10,000,000
+Progress: "X.XM / 10M BZ"
+Note: totalTapIncome = sum of all BZ earned from tapping (not current balance)
+```
+
+**Booster-Based (Energy Master):**
+```
+Check: All 4 boosters at Level 10+
+Progress: "X / 4 boosters maxed"
+Requirement: incomePerTap, energyPerTap, energyCapacity, recoveryRate all ≥ L10
+```
+
+**Tap Count-Based (Golden Bunny):**
+```
+Check: totalTaps ≥ 5,000,000
+Progress: "X.XM / 5M taps"
+```
+
+**XP-Based (Diamond Crystal):**
+```
+Check: xp ≥ 500,000
+Progress: "XXXk / 500k XP"
+```
+
+### 12.5 Purchase Flow
+
+**Prerequisites:**
+1. NFT is unlocked (requirement met)
+2. NFT not already owned
+3. Player has sufficient BB balance
+
+**Purchase Steps:**
+1. Player clicks "Purchase" button
+2. System validates prerequisites
+3. System deducts BB from player balance
+4. System marks NFT as owned
+5. System syncs to database
+6. UI updates to show "Owned" state
+
+**Example:**
+```
+Player wants to buy "Tap Legend" (4.0 BB):
+- Check requirement: totalTapIncome = 12M ≥ 10M ✓
+- Check balance: bb = 5.5 ≥ 4.0 ✓
+- Check owned: owned = false ✓
+- Deduct: 5.5 - 4.0 = 1.5 BB remaining
+- Mark owned: ownedNFTs.push("NFT_TAPPER")
+- Sync to DB
+```
+
+### 12.6 NFT Display
+
+**NFT Card Shows:**
+- NFT name
+- NFT icon/artwork
+- Description
+- Requirement status (locked/unlocked)
+- Progress bar (if applicable)
+- Price (BB)
+- Purchase/Owned status
+
+**Progress Bars:**
+- Social King: Linear (0% to 100% based on 0-20 referrals)
+- Tap Legend: Linear (0% to 100% based on 0-10M BZ income)
+- Golden Bunny: Linear (0% to 100% based on 0-5M taps)
+- Diamond Crystal: Linear (0% to 100% based on 0-500K XP)
+- Builder Pro: Binary (0% or 100%, no partial progress shown)
+- Energy Master: Binary (0% or 100%, no partial progress shown)
+
+### 12.7 Future Utility (Planned)
+
+**Potential NFT Benefits:**
+- **Passive boosts:** +X% to specific stats
+- **Visual upgrades:** Custom bunny skins, animations
+- **Exclusive access:** Special tasks, events, early features
+- **Status symbols:** Leaderboard badges, profile flair
+- **Trading:** Player-to-player NFT marketplace
+
+*Note: These are planned features, not currently implemented.*
+
+---
+
+## 13. Data Architecture
+
+### 13.1 Why Hybrid Architecture?
+
+BunBun uses a **hybrid data storage model** combining:
+1. **localStorage** (client-side, instant access)
+2. **Supabase** (server-side, persistent database)
+
+**Why Both?**
+
+**localStorage Benefits:**
+- ⚡ Instant read/write (no network latency)
+- 🔄 Immediate UI updates
+- 📱 Works offline
+- 🎮 Smooth gameplay experience
+
+**localStorage Limitations:**
+- 🚫 Cleared if user changes devices
+- 🚫 Cleared if user clears browser data
+- 🚫 No cross-device sync
+- 🚫 Limited capacity (~5-10 MB)
+
+**Supabase Benefits:**
+- ☁️ Persistent across devices
+- 🔐 Secure and backed up
+- 🔄 Multi-device sync
+- 📊 Server-side analytics
+- 🛡️ Data recovery possible
+
+**Supabase Limitations:**
+- 🐌 Network latency (200-500ms per request)
+- 📶 Requires internet connection
+- 💰 API rate limits
+
+**Hybrid Solution:**
+- Use **localStorage for runtime state** (fast gameplay)
+- Use **Supabase as source of truth** (data persistence)
+- **Sync periodically** in background (best of both worlds)
+
+### 13.2 Data Location Map
+
+**What Goes Where:**
+
+| Data Type | localStorage | Supabase | Sync Strategy |
+|-----------|--------------|----------|---------------|
+| **User Profile** | ✅ Cache | ✅ Primary | On login, on change |
+| **Balances (BZ/BB/XP)** | ✅ Runtime | ✅ Backup | Every 30s, on major change |
+| **Tier** | ✅ Calculated | ✅ Stored | On XP change |
+| **Build Parts** | ✅ State | ✅ State | On purchase, on completion |
+| **Boosters** | ✅ Levels | ✅ Levels | On upgrade |
+| **Tasks** | ✅ Progress | ✅ Progress | On completion, on claim |
+| **Weekly Challenges** | ✅ Progress | ✅ Progress | Real-time, on claim |
+| **Daily Rewards** | ✅ Streak | ✅ Streak | On claim |
+| **Referrals** | ❌ No | ✅ Only | On signup, on earnings |
+| **NFTs** | ✅ Owned list | ✅ Owned list | On purchase |
+| **Conversion History** | ✅ Recent | ✅ All | On conversion |
+| **Statistics** | ✅ Counters | ✅ Counters | Periodic (30s) |
+
+### 13.3 Database Schema
+
+**Complete Supabase Tables:**
+
+#### **Table: profiles**
+```
+Stores user identity and core stats
+
+Columns:
+- id: UUID (primary key, Supabase auth user ID)
+- telegram_id: BIGINT (unique, Telegram user ID)
+- username: TEXT (Telegram username)
+- first_name: TEXT (Telegram first name)
+- last_name: TEXT (Telegram last name)
+- photo_url: TEXT (Telegram profile photo)
+- bz: BIGINT (BunnyZap balance)
+- bb: DECIMAL(20,6) (BunnyBucks balance, 6 decimals)
+- xp: BIGINT (Experience points)
+- tier: TEXT (Bronze/Silver/Gold/Platinum/Diamond)
+- total_taps: BIGINT (lifetime tap count)
+- total_tap_income: BIGINT (lifetime BZ from tapping)
+- total_idle_income: BIGINT (lifetime BZ from idle)
+- total_upgrades: INTEGER (lifetime upgrade count)
+- total_conversions: BIGINT (lifetime BZ converted)
+- daily_streak: INTEGER (consecutive daily login days)
+- current_reward_week: INTEGER (for daily reward scaling)
+- last_daily_claim_date: DATE (last daily reward claim)
+- last_idle_claim: TIMESTAMPTZ (last idle income claim)
+- referral_code: TEXT (8-char referral code)
+- referred_by: UUID (referrer's profile ID, foreign key)
+- referral_count: INTEGER (total referrals)
+- created_at: TIMESTAMPTZ (account creation)
+- updated_at: TIMESTAMPTZ (last update)
+
+Indexes:
+- telegram_id (unique, for fast lookups)
+- referral_code (for referral link validation)
+- referred_by (for referral queries)
+
+RLS: Enabled
+- Users can read/update own profile only
+```
+
+#### **Table: build_parts**
+```
+Stores player's build part ownership and levels
+
+Columns:
+- id: UUID (primary key)
+- user_id: UUID (foreign key → profiles.id)
+- telegram_id: BIGINT (foreign key → profiles.telegram_id)
+- part_id: TEXT (e.g., "s1p1", "s2p5")
+- stage: INTEGER (1-5)
+- part_number: INTEGER (1-10)
+- level: INTEGER (current level, 0 = not owned)
+- cost: BIGINT (BZ cost for next upgrade)
+- yield: BIGINT (BZ/hour passive income)
+- building_until: TIMESTAMPTZ (null if not building, timestamp if building)
+- created_at: TIMESTAMPTZ
+- updated_at: TIMESTAMPTZ
+
+Unique Constraint: (telegram_id, part_id)
+
+RLS: Enabled
+- Users can only see/modify their own parts
+```
+
+#### **Table: boosters**
+```
+Stores player's booster levels
+
+Columns:
+- id: UUID (primary key)
+- user_id: UUID (foreign key → profiles.id)
+- telegram_id: BIGINT (foreign key → profiles.telegram_id)
+- income_per_tap: INTEGER (level, default 1)
+- energy_per_tap: INTEGER (level, default 1)
+- energy_capacity: INTEGER (level, default 1)
+- recovery_rate: INTEGER (level, default 1)
+- created_at: TIMESTAMPTZ
+- updated_at: TIMESTAMPTZ
+
+Unique Constraint: telegram_id (one row per user)
+
+RLS: Enabled
+```
+
+#### **Table: tasks**
+```
+Defines available tasks (admin-managed)
+
+Columns:
+- id: UUID (primary key)
+- task_id: TEXT (unique, e.g., "daily_check_in")
+- title: TEXT (display name)
+- description: TEXT
+- task_type: TEXT (social/achievement/daily/weekly)
+- target: INTEGER (goal value)
+- reward_type: TEXT (BZ/BB/XP)
+- reward_amount: INTEGER or DECIMAL
+- is_active: BOOLEAN (whether task is available)
+- created_at: TIMESTAMPTZ
+
+Note: This is a reference table, not user-specific
+```
+
+#### **Table: user_tasks**
+```
+Stores player's task progress
+
+Columns:
+- id: UUID (primary key)
+- user_id: UUID (foreign key → profiles.id)
+- telegram_id: BIGINT (foreign key → profiles.telegram_id)
+- task_id: TEXT (foreign key → tasks.task_id)
+- current_progress: INTEGER (player's progress)
+- baseline_value: INTEGER (for weekly tasks, starting value)
+- completed: BOOLEAN (progress ≥ target)
+- claimed: BOOLEAN (reward received)
+- reset_at: DATE (for daily/weekly reset tracking)
+- created_at: TIMESTAMPTZ
+- updated_at: TIMESTAMPTZ
+
+Unique Constraint: (telegram_id, task_id, reset_at)
+
+RLS: Enabled
+```
+
+#### **Table: user_weekly_challenges**
+```
+Stores player's weekly challenge progress
+
+Columns:
+- id: UUID (primary key)
+- user_id: UUID (foreign key → profiles.id)
+- telegram_id: BIGINT (foreign key → profiles.telegram_id)
+- challenge_key: TEXT (builder/recruiter/converter)
+- baseline_value: INTEGER (stat value at week start)
+- current_progress: INTEGER (progress this week)
+- target_value: INTEGER (goal)
+- completed: BOOLEAN (progress ≥ target)
+- claimed: BOOLEAN (reward received)
+- week_start_date: DATE (Monday of this week)
+- year: INTEGER (for historical tracking)
+- week_number: INTEGER (1-52)
+- created_at: TIMESTAMPTZ
+- updated_at: TIMESTAMPTZ
+
+Unique Constraint: (telegram_id, challenge_key, year, week_number)
+
+RLS: Enabled
+```
+
+#### **Table: referrals**
+```
+Stores referral relationships
+
+Columns:
+- id: UUID (primary key)
+- inviter_id: UUID (referrer's profile ID)
+- inviter_telegram_id: BIGINT
+- invitee_id: UUID (referee's profile ID)
+- invitee_telegram_id: BIGINT
+- invited_at: TIMESTAMPTZ (signup timestamp)
+- signup_bonus_claimed: BOOLEAN (one-time bonus claimed)
+- lifetime_earnings_baseline: BIGINT (for 20% share calculation)
+- total_earned: BIGINT (cumulative BZ earned for inviter)
+- created_at: TIMESTAMPTZ
+
+Unique Constraint: invitee_telegram_id (one referrer per user)
+Indexes: inviter_telegram_id (for stats queries)
+
+RLS: Enabled
+```
+
+#### **Table: nfts**
+```
+Defines available NFTs (admin-managed)
+
+Columns:
+- id: UUID (primary key)
+- nft_id: TEXT (unique, e.g., "NFT_EARLY")
+- name: TEXT (display name)
+- description: TEXT
+- icon: TEXT (icon name)
+- price_bb: DECIMAL(20,6) (purchase price)
+- requirement_type: TEXT (referral/build/tap/xp/booster)
+- requirement_value: INTEGER (threshold)
+- is_active: BOOLEAN
+- created_at: TIMESTAMPTZ
+```
+
+#### **Table: user_nfts**
+```
+Stores player's NFT ownership
+
+Columns:
+- id: UUID (primary key)
+- user_id: UUID (foreign key → profiles.id)
+- telegram_id: BIGINT (foreign key → profiles.telegram_id)
+- nft_id: TEXT (foreign key → nfts.nft_id)
+- purchased_at: TIMESTAMPTZ
+- purchase_price: DECIMAL(20,6) (historical price)
+- created_at: TIMESTAMPTZ
+
+Unique Constraint: (telegram_id, nft_id)
+
+RLS: Enabled
+```
+
+#### **Table: conversion_history**
+```
+Stores BZ↔BB conversion transactions
+
+Columns:
+- id: UUID (primary key)
+- user_id: UUID (foreign key → profiles.id)
+- telegram_id: BIGINT (foreign key → profiles.telegram_id)
+- transaction_id: TEXT (unique, client-generated)
+- conversion_type: TEXT (bz-to-bb or bb-to-bz)
+- input_amount: BIGINT or DECIMAL (BZ or BB spent)
+- output_amount: DECIMAL or BIGINT (BB or BZ received)
+- bonus_amount: DECIMAL (tier bonus, if applicable)
+- tier: TEXT (player's tier at conversion time)
+- conversion_rate: DECIMAL (for historical tracking)
+- created_at: TIMESTAMPTZ
+
+Indexes: telegram_id, created_at (for history queries)
+
+RLS: Enabled
+```
+
+### 13.4 Row Level Security (RLS)
+
+**What is RLS?**
+- Security feature that filters database rows by user
+- Prevents users from seeing/modifying others' data
+- Enforced at database level (cannot be bypassed)
+
+**BunBun RLS Rules:**
+```
+For all user-specific tables:
+  SELECT: WHERE telegram_id = current_user_telegram_id
+  INSERT: WITH CHECK (telegram_id = current_user_telegram_id)
+  UPDATE: WHERE telegram_id = current_user_telegram_id
+  DELETE: WHERE telegram_id = current_user_telegram_id
+
+For reference tables (tasks, nfts):
+  SELECT: All users can read
+  INSERT/UPDATE/DELETE: Admin only
+```
+
+**How It Works:**
+1. User authenticates via Telegram
+2. System retrieves user's telegram_id
+3. All queries automatically filtered by RLS
+4. User can only access their own data
+
+---
+
+## 14. Sync Strategy
+
+### 14.1 Sync Philosophy
+
+**Core Principle: Math.max() for Progress**
+
+When merging data from localStorage and Supabase:
+- **Always keep the higher value** for progress metrics
+- Assumes progress only moves forward (never backward)
+- Prevents data loss from out-of-sync states
+
+**Formula:**
+```
+finalValue = Math.max(localStorageValue, supabaseValue)
+```
+
+**Why This Works:**
+- If device A is ahead, use device A's value
+- If database is ahead, use database's value
+- Handles device switches gracefully
+- Resolves most conflicts automatically
+
+### 14.2 Sync Flow
+
+**Three Phases:**
+
+**Phase 1: Load (App Start)**
+```
+1. Read localStorage (instant)
+2. Display UI with localStorage data
+3. Fetch from Supabase in background
+4. Merge Supabase data using Math.max()
+5. Update UI if Supabase had higher values
+6. Save merged state back to localStorage
+```
+
+**Phase 2: Runtime (During Gameplay)**
+```
+1. All changes write to localStorage first (instant)
+2. UI updates immediately
+3. Queue sync to Supabase in background
+4. Debounce sync (wait for burst of changes to finish)
+5. Send bulk update to Supabase
+6. Handle errors (retry with exponential backoff)
+```
+
+**Phase 3: Background Sync (Periodic)**
+```
+Every 30 seconds:
+1. Check if local state differs from last sync
+2. If changed, send update to Supabase
+3. On success, update "last synced" timestamp
+4. On failure, queue for retry
+```
+
+### 14.3 Merge Logic Examples
+
+**Example 1: Balances**
+```
+localStorage: { bz: 50000, bb: 2.5, xp: 25000 }
+Supabase: { bz: 45000, bb: 3.0, xp: 30000 }
+
+Merged:
+bz = Math.max(50000, 45000) = 50000 (local wins)
+bb = Math.max(2.5, 3.0) = 3.0 (database wins)
+xp = Math.max(25000, 30000) = 30000 (database wins)
+
+Result: { bz: 50000, bb: 3.0, xp: 30000 }
+```
+
+**Example 2: Build Parts (Array)**
+```
+localStorage: [
+  { part_id: "s1p1", level: 5 },
+  { part_id: "s1p2", level: 3 }
+]
+
+Supabase: [
+  { part_id: "s1p1", level: 4 },
+  { part_id: "s1p3", level: 2 }
+]
+
+Merge Process:
+1. Create map by part_id
+2. For each part, use Math.max(level)
+3. Union all parts
+
+Merged: [
+  { part_id: "s1p1", level: Math.max(5,4) = 5 },
+  { part_id: "s1p2", level: 3 }, // only in local
+  { part_id: "s1p3", level: 2 }  // only in database
+]
+```
+
+**Example 3: Tasks**
+```
+localStorage task "daily_tap_100":
+  progress: 75, completed: false, claimed: false
+
+Supabase same task:
+  progress: 50, completed: false, claimed: false
+
+Merged:
+  progress: Math.max(75, 50) = 75
+  completed: 75 ≥ 100 = false
+  claimed: false (both same)
+
+Result: Use local progress (higher)
+```
+
+**Example 4: Claimed Flags**
+```
+localStorage: daily_reward claimed: true
+Supabase: daily_reward claimed: false
+
+Merged: claimed = true (local wins)
+
+Logic: If claimed locally, assume it happened recently
+       Supabase may not have synced yet
+       Safe to trust local "true" value
+```
+
+### 14.4 Conflict Resolution
+
+**Scenario 1: Device Switch (Common)**
+```
 Device A (Phone):
-- Plays offline for 30 minutes
-- Earns 5,000 BZ through tapping
-- localStorage: bz = 15,000
+  - Player plays, earns 10K BZ
+  - localStorage: bz = 60K
+  - Synced to Supabase: bz = 60K
 
 Device B (Tablet):
-- Plays online
-- Earns 3,000 BZ through passive income
-- Supabase: bz = 13,000
-
-When Device A comes online and syncs:
-Merged BZ = MAX(15,000, 13,000) = 15,000
-Result: Both devices show 15,000 BZ (higher progress preserved)
+  - Player switches devices
+  - localStorage: bz = 50K (old data)
+  - Loads from Supabase: bz = 60K
+  - Math.max(50K, 60K) = 60K ✓ Correct!
 ```
 
-### 12.2 Sync Flow Stages
-
-**3-Stage Sync Process:**
-
+**Scenario 2: Offline Play**
 ```
-┌──────────────────────────────────────────────────────┐
-│  STAGE 1: LOAD (App Start)                           │
-├──────────────────────────────────────────────────────┤
-│  1. Read localStorage                                │
-│  2. Fetch from Supabase                              │
-│  3. Merge using Math.max()                           │
-│  4. Update app state with merged values              │
-│  5. Write merged values back to both storages        │
-└──────────────────────────────────────────────────────┘
-         ↓
-┌──────────────────────────────────────────────────────┐
-│  STAGE 2: RUNTIME (During Gameplay)                  │
-├──────────────────────────────────────────────────────┤
-│  1. User action occurs (tap, purchase, etc.)         │
-│  2. Update app state immediately                     │
-│  3. Write to localStorage immediately (0ms)          │
-│  4. Queue for background sync                        │
-└──────────────────────────────────────────────────────┘
-         ↓
-┌──────────────────────────────────────────────────────┐
-│  STAGE 3: BACKGROUND SYNC (Every 30s)                │
-├──────────────────────────────────────────────────────┤
-│  1. Debounced sync timer triggers                    │
-│  2. Fetch current Supabase values                    │
-│  3. Merge localStorage vs Supabase (Math.max)        │
-│  4. UPSERT to Supabase with merged values            │
-│  5. Update last_sync_at timestamp                    │
-└──────────────────────────────────────────────────────┘
+Player goes offline:
+  - Plays for 1 hour, earns 20K BZ
+  - localStorage: bz = 70K
+  - Supabase: bz = 50K (not synced)
+
+Player reconnects:
+  - Sync detects difference
+  - Uploads local state (70K) to Supabase
+  - Math.max(70K, 50K) = 70K ✓ Progress kept!
 ```
 
-### 12.3 Numeric Field Merge Logic
+**Scenario 3: Simultaneous Edits (Rare)**
+```
+Device A: Player taps, earns 5K BZ → bz = 55K
+Device B: Player claims idle, earns 10K BZ → bz = 60K
 
-**Fields that use Math.max():**
-- `bz` (BunnyZap balance)
-- `bb` (BunnyBucks balance)
-- `xp` (Experience Points)
-- `total_taps` (Lifetime tap count)
-- `total_upgrades` (Lifetime upgrade purchases)
-- `total_conversion_events` (Lifetime conversions)
-- `total_bz_converted` (Lifetime BZ converted)
-- `passive_income_rate` (Current BZ/hour)
-- `referral_count` (Successful referrals)
+Both devices offline, then sync:
+  - A uploads: bz = 55K
+  - B uploads: bz = 60K
+  - Database has 60K (last write wins)
+  - A re-fetches: Math.max(55K, 60K) = 60K
+  - A's local 5K taps are lost ✗
 
-**Merge Code Pattern:**
-```typescript
-const mergedBz = Math.max(
-  localStorageBz || 0,
-  supabaseBz || 0
-);
-
-const mergedXp = Math.max(
-  localStorageXp || 0,
-  supabaseXp || 0
-);
+Mitigation: Very rare (requires simultaneous play on 2 devices)
+            Acceptable loss for simplicity
 ```
 
-### 12.4 Array Field Merge Logic
+### 14.5 Performance Optimizations
 
-**Arrays use Set Union** (combine and deduplicate):
+**Debouncing:**
+```
+Problem: Player taps 100 times → 100 sync requests
+Solution: Wait 2 seconds after last change, then sync once
 
-**Owned Upgrades:**
-```typescript
-// localStorage: ["upgrade-1", "upgrade-2"]
-// Supabase: ["upgrade-2", "upgrade-3"]
-
-const mergedUpgrades = [
-  ...new Set([
-    ...localStorageUpgrades,
-    ...supabaseUpgrades
-  ])
-];
-// Result: ["upgrade-1", "upgrade-2", "upgrade-3"]
+Implementation:
+  let syncTimer = null
+  
+  function scheduleSync():
+    clearTimeout(syncTimer)
+    syncTimer = setTimeout(() => performSync(), 2000)
 ```
 
-**Owned NFTs:**
-```typescript
-// localStorage: ["nft-1", "nft-2"]
-// Supabase: ["nft-2", "nft-3", "nft-4"]
+**Selective Sync:**
+```
+Problem: Syncing entire state is expensive
+Solution: Only sync changed fields
 
-const mergedNfts = [
-  ...new Set([
-    ...localStorageNfts,
-    ...supabaseNfts
-  ])
-];
-// Result: ["nft-1", "nft-2", "nft-3", "nft-4"]
+Track "dirty" fields:
+  dirtyFields = { bz: true, xp: true }
+  
+Sync only dirty:
+  UPDATE profiles SET bz = ?, xp = ? WHERE telegram_id = ?
 ```
 
-**Why Set Union?**
-- Prevents duplicates
-- Preserves ownership from both sources
-- Handles purchases made offline on multiple devices
-
-### 12.5 Conflict Resolution Examples
-
-**Example 1: Offline Tapping**
+**Batch Updates:**
 ```
-Initial State (both synced):
-- localStorage: { bz: 10000, total_taps: 50000 }
-- Supabase: { bz: 10000, total_taps: 50000 }
+Problem: Multiple changes → multiple network requests
+Solution: Batch into one request
 
-Player goes offline, taps 5000 times:
-- localStorage: { bz: 15000, total_taps: 55000 }
-- Supabase: { bz: 10000, total_taps: 50000 } (stale)
-
-Player comes online, sync runs:
-- Merged: MAX(15000, 10000) = 15000 BZ
-- Merged: MAX(55000, 50000) = 55000 taps
-- Upsert to Supabase: { bz: 15000, total_taps: 55000 }
-
-Result: Offline progress preserved ✓
+Example:
+  Single request:
+    UPDATE profiles SET 
+      bz = ?, 
+      xp = ?, 
+      total_taps = ?, 
+      total_tap_income = ?
+    WHERE telegram_id = ?
 ```
 
-**Example 2: Simultaneous Device Usage**
+**Error Handling:**
 ```
-Initial State (both devices synced):
-- Device A: { bz: 20000 }
-- Device B: { bz: 20000 }
-- Supabase: { bz: 20000 }
+Retry Strategy:
+  Attempt 1: Immediate sync
+  Attempt 2: 5 seconds later (if failed)
+  Attempt 3: 15 seconds later (exponential backoff)
+  Attempt 4+: 30 seconds later (max interval)
 
-Both devices play simultaneously offline:
-- Device A: earns 5000 BZ → { bz: 25000 }
-- Device B: earns 3000 BZ → { bz: 23000 }
-
-Device A syncs first:
-- Upsert: { bz: MAX(25000, 20000) } = 25000
-- Supabase now: { bz: 25000 }
-
-Device B syncs second:
-- Merge: MAX(23000, 25000) = 25000
-- Device B updates to: { bz: 25000 }
-
-Result: Higher progress wins ✓
-```
-
-**Example 3: Upgrade Purchase on 2 Devices**
-```
-Initial State:
-- Device A: ownedUpgrades = ["upgrade-1", "upgrade-2"]
-- Device B: ownedUpgrades = ["upgrade-1", "upgrade-2"]
-
-Device A offline: purchases "upgrade-3"
-- Device A: ["upgrade-1", "upgrade-2", "upgrade-3"]
-
-Device B offline: purchases "upgrade-4"
-- Device B: ["upgrade-1", "upgrade-2", "upgrade-4"]
-
-Both sync:
-- Device A upserts: Set union with Supabase
-- Device B upserts: Set union with Supabase
-- Final merged: ["upgrade-1", "upgrade-2", "upgrade-3", "upgrade-4"]
-
-Result: Both purchases preserved ✓
-```
-
-### 12.6 UPSERT Operation
-
-**What is UPSERT?**
-```
-UPSERT = UPDATE if exists, INSERT if not
-```
-
-**Supabase Syntax:**
-```typescript
-await supabase
-  .from('profiles')
-  .upsert({
-    telegram_id: user.telegramId,
-    bz: mergedBz,
-    xp: mergedXp,
-    total_taps: mergedTaps,
-    // ... other fields
-    updated_at: new Date().toISOString()
-  }, {
-    onConflict: 'telegram_id' // Match on this field
-  });
-```
-
-**Why UPSERT?**
-- Handles new users (INSERT)
-- Handles existing users (UPDATE)
-- Single operation (atomic)
-- Idempotent (safe to retry)
-
-### 12.7 Sync Frequency & Debouncing
-
-**Sync Triggers:**
-
-| Event | Sync Timing | Reason |
-|-------|-------------|--------|
-| App Load | Immediate | Get latest data |
-| Tap | Debounced 30s | Avoid DB spam |
-| Upgrade Purchase | Immediate | Critical transaction |
-| Task Claim | Immediate | Critical transaction |
-| Challenge Claim | Immediate | Critical transaction |
-| Conversion | Immediate | Critical transaction |
-| Background Timer | Every 30s | Periodic backup |
-| App Minimize | Immediate | Save before close |
-
-**Debouncing Logic:**
-```typescript
-let syncTimer: NodeJS.Timeout;
-
-function queueSync() {
-  clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => {
-    performSync();
-  }, 30000); // 30 seconds
-}
-
-function performImmediateSync() {
-  clearTimeout(syncTimer);
-  performSync();
-}
-```
-
-**Why Debounce?**
-- Taps can happen 10× per second
-- Each sync = 1 database write
-- Debouncing: 100 taps = 1 write (instead of 100 writes)
-- Reduces database load, billing costs, latency
-
-### 12.8 Offline Behavior
-
-**When Offline:**
-1. All updates write to localStorage only
-2. App continues functioning normally
-3. User sees no difference (seamless UX)
-4. Sync queue builds up
-
-**When Coming Online:**
-1. Detect network connectivity
-2. Trigger immediate sync
-3. Merge all offline changes
-4. UPSERT to Supabase
-5. Display success message (optional)
-
-**Offline Duration Handling:**
-```
-Offline for 5 minutes:
-- localStorage: accurate, up-to-date
-- Supabase: stale by 5 minutes
-
-On reconnect:
-- Calculate passive income for offline time
-- Merge with Math.max()
-- Result: Player gets full offline progress
+Failure Actions:
+  - Keep trying in background
+  - Show "Offline Mode" indicator in UI
+  - Ensure localStorage persists data
+  - Sync automatically when connection restored
 ```
 
 ---
 
-## 13. Telegram Integration
+## 15. Telegram Integration
 
-### 13.1 Telegram Mini Apps Overview
+### 15.1 Telegram Mini App (TMA) Basics
 
-**What is a Telegram Mini App (TMA)?**
-- Web application running inside Telegram client
-- Accessed via bot deeplinks or menu button
-- Full-screen iframe experience
-- Access to Telegram WebApp SDK
+**What is a TMA?**
+- Web app that runs inside Telegram
+- Uses Telegram WebApp SDK (JavaScript)
+- Full access to Telegram user data
+- Can use Telegram UI elements (buttons, popups)
+- Can accept Telegram Payments (Stars, in-app purchases)
 
-**BunBun's Integration:**
-```
-User opens: https://t.me/BunBunBot
-Bot shows: "Play BunBun" button
-User clicks: Opens Mini App (your web app)
-App loads: Inside Telegram iframe with SDK access
-```
+**How Users Access:**
+1. Open Telegram bot (@bunergy_bot)
+2. Click "Play Game" button
+3. TMA opens in embedded browser
+4. Seamless experience (no app install needed)
 
-### 13.2 Telegram WebApp SDK
+### 15.2 Telegram WebApp SDK
 
-**Key Features Used:**
-
-**1. User Data Access:**
+**SDK Initialization:**
 ```javascript
-const initData = window.Telegram.WebApp.initData;
-const user = window.Telegram.WebApp.initDataUnsafe.user;
+// Load SDK from Telegram CDN
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-// Returns:
-{
-  id: 123456789,          // Telegram user ID
-  first_name: "John",
-  last_name: "Doe",
-  username: "johndoe",
-  language_code: "en"
+// Initialize in app
+window.Telegram.WebApp.ready()
+window.Telegram.WebApp.expand() // Full-screen mode
+```
+
+**Available APIs:**
+- `initData` - User authentication data
+- `initDataUnsafe` - Parsed user data
+- `colorScheme` - Light/dark theme
+- `themeParams` - Telegram colors
+- `viewportHeight` - Available screen height
+- `showPopup()` - Show Telegram-style popups
+- `showAlert()` - Show alerts
+- `close()` - Close TMA
+- `HapticFeedback` - Vibration feedback
+
+### 15.3 Authentication Flow
+
+**Step 1: Telegram Sends initData**
+```
+When TMA opens, Telegram attaches URL parameter:
+  ?tgWebAppData={INIT_DATA}
+
+initData contains (URL-encoded):
+  - user: {id, first_name, last_name, username, photo_url}
+  - auth_date: timestamp
+  - hash: HMAC signature for verification
+```
+
+**Step 2: Client Parses initData**
+```javascript
+const initData = window.Telegram.WebApp.initDataUnsafe
+const telegramUser = initData.user
+
+// Extract user info
+const userId = telegramUser.id // Telegram user ID (integer)
+const firstName = telegramUser.first_name
+const username = telegramUser.username
+```
+
+**Step 3: Backend Verifies initData**
+```
+1. Receive initData from client
+2. Parse query string
+3. Extract hash
+4. Recreate hash using bot token as key
+5. Compare hashes
+6. If match → user is authenticated ✓
+7. If mismatch → reject request ✗
+```
+
+**Step 4: Create/Fetch User Profile**
+```
+1. Query database: SELECT * FROM profiles WHERE telegram_id = ?
+2. If exists → load profile
+3. If not exists → create new profile with Telegram data
+4. Return profile to client
+5. Client stores in context + localStorage
+```
+
+**Security Notes:**
+- Never trust client-sent user IDs directly
+- Always verify initData hash on backend
+- Use bot token as HMAC secret
+- Reject requests with invalid/expired hashes
+
+### 15.4 Deep Linking (Referrals)
+
+**Link Format:**
+```
+https://t.me/{BOT_USERNAME}/BunBun?startapp={REFERRAL_CODE}
+```
+
+**How It Works:**
+1. User clicks referral link (anywhere)
+2. Telegram opens bot
+3. If user hasn't started bot yet → Shows "Start" button
+4. User clicks "Start"
+5. TMA opens with `startapp` parameter
+6. Client reads parameter from `initDataUnsafe.start_param`
+7. Client sends referral code to backend
+8. Backend validates and links users
+
+**Example:**
+```javascript
+const startParam = window.Telegram.WebApp.initDataUnsafe.start_param
+if (startParam) {
+  // startParam = "ABC12345" (referral code)
+  await registerReferral(startParam)
 }
 ```
 
-**2. Theme Integration:**
-```javascript
-const theme = window.Telegram.WebApp.themeParams;
-// Adapts app colors to user's Telegram theme
-```
+### 15.5 Telegram Payments (Future)
 
-**3. Haptic Feedback:**
-```javascript
-window.Telegram.WebApp.HapticFeedback.impactOccurred('light');
-// Vibrates phone on tap/action
-```
+**Telegram Stars:**
+- In-app currency (1 Star ≈ $0.01 USD)
+- Players buy Stars with real money
+- Developers receive 70% of revenue
 
-**4. Close/Back Button:**
-```javascript
-window.Telegram.WebApp.BackButton.show();
-window.Telegram.WebApp.BackButton.onClick(() => {
-  // Handle back navigation
-});
-```
-
-### 13.3 Authentication Flow
-
-**How BunBun Authenticates Users:**
-
-```
-1. User opens Mini App
-   ↓
-2. Telegram provides initData (signed string)
-   ↓
-3. App sends initData to Supabase Edge Function
-   ↓
-4. Edge Function verifies signature using bot token
-   ↓
-5. If valid: Extract Telegram ID + create/fetch user profile
-   ↓
-6. Return session token to app
-   ↓
-7. App stores token, proceeds to game
-```
-
-**Security:**
-- `initData` is cryptographically signed by Telegram
-- Cannot be forged
-- Includes hash to prevent tampering
-- Bot token secret stays on server
-
-**Verification Algorithm:**
-```javascript
-// Server-side verification
-import crypto from 'crypto';
-
-function verifyTelegramInitData(initData: string, botToken: string): boolean {
-  const data = new URLSearchParams(initData);
-  const hash = data.get('hash');
-  data.delete('hash');
-  
-  const dataCheckString = Array.from(data.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${k}=${v}`)
-    .join('\n');
-  
-  const secretKey = crypto
-    .createHmac('sha256', 'WebAppData')
-    .update(botToken)
-    .digest();
-  
-  const calculatedHash = crypto
-    .createHmac('sha256', secretKey)
-    .update(dataCheckString)
-    .digest('hex');
-  
-  return calculatedHash === hash;
-}
-```
-
-### 13.4 Bot Commands
-
-**Available Commands:**
-
-```
-/start - Launch BunBun Mini App
-/help - Show game instructions
-/stats - View your current stats (future)
-/leaderboard - View top players (future)
-```
-
-**Referral Deeplink:**
-```
-/start ref_123456789
-```
-→ Opens app with referral parameter
-
-### 13.5 Deep Linking for Referrals
-
-**How Referral Links Work:**
-
-**Step 1: Generate Link**
-```javascript
-const referralLink = `https://t.me/BunBunBot?start=ref_${user.telegramId}`;
-```
-
-**Step 2: User Shares Link**
-- Copy to clipboard
-- Share via Telegram share dialog
-- Post in groups/channels
-
-**Step 3: Recipient Clicks Link**
-- Opens Telegram
-- Navigates to BunBunBot
-- Sees "Play BunBun" button
-- Clicks → Opens Mini App
-
-**Step 4: App Receives Parameter**
-```javascript
-const startParam = window.Telegram.WebApp.initDataUnsafe.start_param;
-// Returns: "ref_123456789"
-```
-
-**Step 5: App Processes Referral**
-- Extract referrer ID from `start_param`
-- Validate: New user? Valid referrer?
-- If valid: Distribute rewards
-- Store referral relationship
-
-### 13.6 Future: Telegram Payments
-
-**Telegram Stars Integration (Planned):**
-
-**What are Telegram Stars?**
-- Telegram's in-app currency
-- Users buy Stars with real money
-- Apps can sell items for Stars
-- Telegram handles payment processing
-
-**BunBun's Future Use:**
-```
-User wants to buy 1000 BB:
-1. Tap "Buy BB" button
-2. Select package (e.g., "1000 BB for 50 Stars")
-3. Telegram payment modal opens
-4. User confirms purchase
+**Payment Flow (Planned):**
+1. Player clicks "Speed Up Build" with Stars
+2. Client calls `window.Telegram.WebApp.showPopup()` with invoice
+3. Telegram shows payment UI
+4. Player confirms payment
 5. Telegram processes payment
-6. BunBun receives webhook
-7. Add 1000 BB to user's account
+6. Backend receives webhook notification
+7. Backend grants in-game item
+8. Client refreshes state
+
+**Implementation:**
+```javascript
+// Create invoice (backend)
+const invoice = await telegram.createInvoiceLink({
+  title: "Speed Up Build",
+  description: "Complete upgrade instantly",
+  payload: JSON.stringify({ type: "speed_up", part_id: "s2p3" }),
+  currency: "XTR", // Telegram Stars
+  prices: [{ label: "Speed Up", amount: 5 }] // 5 Stars
+})
+
+// Show payment UI (frontend)
+window.Telegram.WebApp.openInvoice(invoice.url, (status) => {
+  if (status === "paid") {
+    // Payment successful, grant item
+  }
+})
 ```
 
-**Advantages:**
-- Native Telegram experience
-- No external payment provider
-- Instant delivery
-- Revenue share with Telegram
+### 15.6 Bot Commands
+
+**Available Commands (In Bot Chat):**
+```
+/start - Open BunBun TMA
+/play - Open TMA (alias)
+/stats - Show player stats inline
+/help - Show help text
+/referral - Get referral link
+```
+
+**Command Handlers (Backend):**
+- Bot receives command from Telegram
+- Bot fetches user data from database
+- Bot sends reply (text, image, inline buttons)
+- Bot can also open TMA via inline keyboard button
 
 ---
 
-## 14. User Interface Structure
+## 16. User Interface Structure
 
-### 14.1 Screen Navigation
+### 16.1 Navigation Overview
 
-**6 Main Screens:**
+**Bottom Navigation Bar (Always Visible):**
+- 6 main tabs
+- Fixed position at bottom
+- Icon + label for each tab
+- Active tab highlighted
 
+**Tabs:**
+1. **Tap** - Main gameplay (tap bunny, earn BZ)
+2. **Boost** - Energy booster upgrades
+3. **Build** - Hardware part upgrades
+4. **Convert** - BZ ↔ BB exchange
+5. **XP Tiers** - View tier progression
+6. **Rewards** - Daily/weekly rewards, tasks, NFTs
+
+### 16.2 Screen Details
+
+**Tap Screen:**
 ```
-┌─────────────────────────────────────────────────────┐
-│  Header (Always Visible)                            │
-│  - BZ Balance                                       │
-│  - BB Balance                                       │
-│  - XP / Tier Badge                                  │
-│  - Profile Button                                   │
-└─────────────────────────────────────────────────────┘
+Components:
+- Large bunny character (tappable)
+- Energy bar (current/max, color-coded)
+- Balance display (BZ, BB, XP)
+- Tier badge
+- Stats panel (BZ/hour, taps today)
+- Compact dashboard (optional)
 
-┌─────────────────────────────────────────────────────┐
-│  Main Content Area (Swipeable)                      │
-│                                                      │
-│  [Current Screen Content]                           │
-│                                                      │
-└─────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────┐
-│  Bottom Navigation (Always Visible)                 │
-│  [Tap] [Boost] [Build] [Convert] [XP Tiers] [Rewards]│
-└─────────────────────────────────────────────────────┘
+Interactions:
+- Tap bunny → earn BZ + XP
+- Energy depletes with each tap
+- Energy regenerates over time
+- Visual feedback (animation, haptics)
 ```
 
-### 14.2 Screen Breakdown
+**Boost Screen:**
+```
+Components:
+- 4 booster cards
+- Each card shows:
+  * Booster name
+  * Current level
+  * Effect (e.g., "+50 BZ per tap")
+  * Upgrade cost
+  * Upgrade button
+  * Lock status (if tier/referral gate not met)
 
-#### **1. Tap Screen**
-**Purpose:** Manual tapping for BZ and XP
+Layout:
+- 2x2 grid or vertical list
+- Color-coded by booster type
+```
 
-**Elements:**
-- Large bunny character (tap target)
-- Tap counter (increments on tap)
-- BZ gained counter (e.g., "+1 BZ")
-- XP gained counter (e.g., "+1 XP")
-- Tap animation (bunny bounces, particles)
+**Build Screen:**
+```
+Components:
+- 5 stage accordions/tabs
+- Each stage contains 10 parts
+- Each part card shows:
+  * Part name
+  * Current level
+  * Yield (BZ/hour)
+  * Upgrade cost
+  * Build time (if applicable)
+  * Upgrade/Speed-up buttons
+  * Building progress (if in progress)
 
-**Interactions:**
-- Tap bunny → +1 BZ, +1 XP, animate
-- Continuous tapping → smooth animations
-- Haptic feedback on each tap
+Features:
+- Build queue (1 at a time)
+- Speed-up options (BB or Stars)
+- Total passive income display at top
+```
+
+**Convert Screen:**
+```
+Components:
+- Balance display (BZ, BB)
+- Conversion type toggle (BZ→BB or BB→BZ)
+- Input field (amount to convert)
+- Quick fill buttons (Half, Max)
+- Conversion preview (shows output + bonus/burn)
+- Convert button
+- Conversion history list (recent transactions)
+
+Features:
+- Real-time calculation preview
+- Tier bonus indicator
+- Validation messages (insufficient balance, tier locked)
+```
+
+**XP Tiers Screen:**
+```
+Components:
+- Current tier badge (large)
+- XP progress bar
+- Next tier display
+- Tier benefits table
+- Tier progression roadmap
+
+Features:
+- Visual tier icons
+- Benefits comparison
+- Motivational milestones
+```
+
+**Rewards Screen:**
+```
+3 Sub-Sections (Tabs):
+
+1. Daily Rewards:
+   - 7-day calendar grid
+   - Current day highlighted
+   - Claim button
+   - Streak counter
+
+2. Weekly Challenges:
+   - 3 challenge cards
+   - Progress bars
+   - Claim buttons
+   - Reset countdown
+
+3. NFTs:
+   - NFT collection grid
+   - Each NFT card shows:
+     * Artwork/icon
+     * Name
+     * Requirement (locked/unlocked)
+     * Price
+     * Purchase/Owned status
+   - Progress bars for unlock requirements
+```
+
+**Tasks Screen:**
+```
+Components:
+- Task type filters (Daily, Weekly, Progressive)
+- Task list (grouped by type)
+- Each task card shows:
+  * Title + description
+  * Progress bar
+  * Reward display
+  * Claim button (if completed)
+  * Completion status
+
+Features:
+- Collapsible sections
+- Search/filter
+- Sort by reward, progress, etc.
+```
+
+**Referrals Screen:**
+```
+Components:
+- Referral stats card:
+  * Total referrals count
+  * Pending earnings (BZ)
+  * Total claimed (BZ)
+- Referral code display (large, copyable)
+- Referral link (copyable)
+- Share buttons (Telegram, copy)
+- Referral list (shows each referee + earnings)
+- Milestone progress (visual checklist)
+- Claim button (for pending earnings)
+
+Features:
+- One-tap share to Telegram
+- Automatic code generation
+- Real-time earnings updates
+```
+
+### 16.3 Always-Visible Elements
+
+**Header:**
+- App logo/name
+- Current balance (BZ, BB, XP) - always visible
+- Settings icon (opens modal)
+
+**Settings Modal:**
+- Sound/haptic toggles
+- Theme selector (light/dark/auto)
+- Account info (Telegram user)
+- Sync status
+- Logout option
+
+**Loading States:**
+- Skeleton loaders while fetching data
+- Spinner for long operations
+- Offline indicator (if no connection)
+
+**Notifications/Toasts:**
+- Success messages (rewards claimed, upgrades completed)
+- Error messages (insufficient balance, server errors)
+- Info messages (new tier reached, milestones)
 
 ---
 
-#### **2. Boost Screen**
-**Purpose:** QuickCharge feature for instant energy
+## 17. Business Rules & Validation
 
-**Elements:**
-- "QuickCharge" title
-- Uses remaining indicator (e.g., "5 uses left")
-- Cooldown timer (if on cooldown)
-- "Use QuickCharge" button
-- Explanation text
+### 17.1 Resource Spending Rules
 
-**Functionality:**
-- Limited uses per period (e.g., 5 per day)
-- Cooldown between uses (e.g., 1 hour)
-- Effect: Instant +X BZ boost
-- Resets daily at 00:00 UTC
+**BZ Spending:**
+- Can only spend up to current balance
+- Must have exact amount (no partial spends)
+- Negative balances not allowed
 
----
+**BB Spending:**
+- Must have sufficient balance for purchase + burn (if applicable)
+- Precision: 6 decimals
+- Cannot spend below 0.000001 BB
 
-#### **3. Build Screen**
-**Purpose:** Purchase hardware upgrades
+**XP:**
+- Never spent (only accumulated)
+- Used for tier calculation (read-only)
 
-**Elements:**
-- Category tabs (All / Energy / Computing / Other)
-- Grid of upgrade cards:
-  - Icon/image
-  - Name
-  - Description
-  - Base income (BZ/h)
-  - Current cost (dynamically calculated)
-  - Quantity owned
-  - "Buy" button
-  - Lock icon (if XP requirement not met)
-- Total passive income display (top)
+### 17.2 Purchase Validation
 
-**Interactions:**
-- Tap upgrade card → Show details modal
-- Tap "Buy" → Confirm → Purchase flow
-- Filter by category
-- Sort by: Price / Income / Name
-
-**Visual Feedback:**
-- Locked upgrades: Grayed out
-- Affordable upgrades: Green "Buy" button
-- Unaffordable upgrades: Red/disabled button
-
----
-
-#### **4. Convert Screen**
-**Purpose:** Exchange BZ for BB
-
-**Elements:**
-- Input field: "Amount of BZ to convert"
-- Exchange rate indicator: "1000 BZ = 1 BB"
-- Preview: "You will receive X BB"
-- Current balances: BZ | BB
-- "Convert" button
-- Validation messages
-
-**Interactions:**
-- User enters BZ amount
-- System validates (multiple of 1000, sufficient balance, Bronze+ tier)
-- Shows preview of BB received
-- Tap "Convert" → Confirmation modal → Execute
-- Success: Show "+X BB received!"
-
-**Requirements:**
-- Minimum: 1000 BZ
-- Must be Bronze tier or higher
-- Only multiples of 1000 BZ
-
----
-
-#### **5. XP & Tiers Screen**
-**Purpose:** View progression and tier benefits
-
-**Elements:**
-- Current tier badge (large, animated)
-- Current XP / Next tier XP
-- Progress bar to next tier
-- List of all 8 tiers:
-  - Tier icon
-  - Tier name
-  - XP threshold
-  - Benefits/unlocks
-  - Checkmark if achieved
-  - Lock if not achieved
-- "Your Progress" section
-
-**Interactions:**
-- Scroll through tier list
-- Tap tier → View detailed benefits
-- Celebrate tier-up with animation
-
----
-
-#### **6. Rewards & NFTs Screen**
-**Purpose:** Complete tasks, challenges, view NFTs
-
-**Sub-Tabs:**
-1. **Tasks**
-   - Daily tasks
-   - Weekly tasks
-   - Social tasks
-   - Achievement tasks
-   - Filter: All / Available / Completed / Claimed
-
-2. **Weekly Challenges**
-   - 4 challenge cards:
-     - Icon + Name
-     - Description
-     - Progress bar (X / Y)
-     - "Claim Reward" button (if complete)
-     - Reward amount
-
-3. **Referrals**
-   - Referral link (copy/share)
-   - Referral count
-   - Pending referrals
-   - Referral leaderboard (future)
-
-4. **NFT Collection**
-   - Grid of NFT cards:
-     - Image
-     - Name
-     - Rarity badge
-     - Price (if not owned)
-     - "OWNED" badge (if owned)
-     - Lock icon (if locked)
-   - Filter: All / Owned / Available / Locked
-   - Progress: "X / Y NFTs Collected"
-
-### 14.3 Always-Visible Elements
-
-**Header Bar:**
+**Build Part Upgrades:**
 ```
-[Profile Icon] | [65,906 BZ] [3.18 BB] [306,160 XP] [Platinum Badge]
+Checks:
+1. Player has sufficient BZ
+2. No other part currently building (if build time > 0)
+3. Part exists in system
+4. Level increase is exactly +1 (no skipping)
+
+On Success:
+- Deduct BZ
+- Set building_until timestamp (if applicable)
+- Increment level
+- Sync to database
 ```
 
-**Bottom Navigation:**
+**Booster Upgrades:**
 ```
-[⚡ Tap] [🚀 Boost] [🔨 Build] [🔄 Convert] [👤 XP] [🎁 Rewards]
-```
+Checks:
+1. Player has sufficient BZ
+2. Tier requirement met (Level 3+ needs Silver+)
+3. Referral requirement met (Level 3+ needs X refs)
+4. Level increase is exactly +1
 
-**Profile Modal (accessible from header):**
-- Username + Telegram info
-- Full stats summary
-- Settings (theme, language)
-- Logout button
-
----
-
-## 15. Business Rules & Validation
-
-### 15.1 Resource Spending Rules
-
-**BunnyZap (BZ) Spending:**
-- Cannot spend more than current balance
-- Balance cannot go negative
-- Must be integer amounts
-- Validation: `player.bz >= cost`
-
-**BunnyBucks (BB) Spending:**
-- Cannot spend more than current balance
-- Balance cannot go negative
-- Must be integer amounts
-- More strict validation (premium currency)
-
-### 15.2 Purchase Validation
-
-**Hardware Upgrade Purchase:**
-```
-Required Conditions (ALL must be true):
-1. Player has sufficient BZ (player.bz >= upgrade_cost)
-2. Player meets XP requirement (player.xp >= upgrade.required_xp)
-3. Upgrade exists and is defined
-4. Upgrade is not disabled
-
-If valid:
-  - Deduct BZ
-  - Increment ownership
-  - Add XP reward
-  - Update passive income
-  - Sync to DB
-
-If invalid:
-  - Show error message
-  - Do not process transaction
+On Success:
+- Deduct BZ
+- Increment booster level
+- Recalculate effects (income per tap, energy, etc.)
+- Sync to database
 ```
 
-**NFT Purchase:**
+**NFT Purchases:**
 ```
-Required Conditions (ALL must be true):
-1. Player has sufficient BB (player.bb >= nft.price_bb)
-2. Player meets unlock requirements:
-   - XP requirement: player.xp >= nft.requirement_value (if type = xp)
-   - Tier requirement: player.tier >= nft.requirement_value (if type = tier)
-   - Referral requirement: player.referralCount >= nft.requirement_value (if type = referrals)
-3. NFT is not already owned (nft.id NOT IN player.ownedNfts)
-4. NFT exists and is defined
+Checks:
+1. NFT unlocked (requirement met)
+2. NFT not already owned
+3. Player has sufficient BB
 
-If valid:
-  - Deduct BB
-  - Add to ownedNfts array
-  - Insert user_nfts record
-  - Sync to DB
-
-If invalid:
-  - Show error message (specific reason)
-  - Do not process transaction
+On Success:
+- Deduct BB
+- Mark NFT as owned
+- Record purchase in database
+- Add to owned list
 ```
 
-### 15.3 Task/Challenge Claiming Rules
+### 17.3 Task/Challenge Claiming Rules
 
-**Task Claim Validation:**
+**Task Claiming:**
 ```
-Required Conditions (ALL must be true):
-1. Task is in "Completed" state
-2. Task has not been claimed yet (claimed = false)
-3. Player meets verification requirements:
-   - Auto: System verified progress meets requirement
-   - Manual: Player clicked verify, system checked
-   - Honor: Player marked as complete
-4. Task exists and is assigned to player
+Checks:
+1. Task is completed (progress ≥ target)
+2. Task not already claimed
+3. Task is active
 
-If valid:
-  - Add reward (BZ, BB, or XP)
-  - Mark claimed = true
-  - Set claimed_at = NOW()
-  - Sync to DB
+On Success:
+- Award reward (BZ/BB/XP)
+- Mark task as claimed
+- Update UI
+- Sync to database
 
-If invalid:
-  - Show error message
-  - Do not distribute reward
+One-Time vs Repeating:
+- Daily/Weekly: Can claim again after reset
+- Progressive: One-time only
 ```
 
-**Weekly Challenge Claim Validation:**
+**Challenge Claiming:**
 ```
-Required Conditions (ALL must be true):
-1. challenge.current_progress >= challenge.target_value
-2. challenge.claimed = false
-3. Challenge belongs to player (user_id match)
-4. Challenge is for current week (not expired)
-
-If valid:
-  - Add reward (XP or BB)
-  - Mark claimed = true
-  - Set claimed_at = NOW()
-  - Sync to DB
-
-If invalid:
-  - Show error message
-  - Do not distribute reward
+Same as task claiming, plus:
+- Challenge resets weekly (can claim again next week)
+- Baseline updates on reset
 ```
 
-### 15.4 Referral Validation
+### 17.4 Referral Validation
 
-**New Referral Validation:**
+**Signup Validation:**
 ```
-Required Conditions (ALL must be true):
-1. Referee (Player B) is NEW:
-   - telegram_id does not exist in profiles table
-   - First time opening app
-2. Referrer (Player A) is VALID:
-   - telegram_id exists in profiles table
-   - Has active profile
-3. Not self-referral:
-   - referee_telegram_id !== referrer_telegram_id
-4. Referee has not been referred before:
-   - referred_by field is NULL
-5. Referral code is valid format:
-   - Matches pattern: ref_[0-9]+
-6. Link originated from Telegram:
-   - Has start_param in initData
+Checks:
+1. Referral code is valid (decodes to existing user)
+2. Referee is new (not already registered)
+3. Referee is not referrer (no self-referrals)
+4. Referee doesn't already have a referrer
 
-If valid:
-  - Create profiles record for referee
-  - Set referee.referred_by = referrer.user_id
-  - Distribute rewards to both
-  - Increment referrer.referralCount
-  - Insert referrals record
-  - Sync to DB
-
-If invalid:
-  - Allow app use (don't block)
-  - Do not distribute rewards
-  - Log invalid attempt (optional)
+On Success:
+- Link referee to referrer
+- Award signup bonuses (both users)
+- Create referral record
+- Enable earnings sharing
 ```
 
-### 15.5 Data Integrity Rules
+**Earnings Claim:**
+```
+Checks:
+1. Pending earnings > 0
+2. User has referrals
+
+On Success:
+- Calculate: 20% × (referee's current total - baseline)
+- Award BZ to referrer
+- Update baseline to referee's current total
+- Reset pending to 0
+```
+
+### 17.5 Data Integrity Rules
 
 **Immutable Fields:**
-- `telegram_id` - Never changes after creation
-- `created_at` - Set once on account creation
-- `referred_by` - Set once, never changes
+- `telegram_id` (never changes)
+- `created_at` (set once)
+- `referred_by` (permanent link)
 
-**Monotonic Fields (only increase):**
-- `xp` - Cannot decrease
-- `total_taps` - Cannot decrease
-- `total_upgrades` - Cannot decrease
-- `total_conversion_events` - Cannot decrease
-- `total_bz_converted` - Cannot decrease
-- `referral_count` - Cannot decrease
+**Monotonic Fields (Only Increase):**
+- `total_taps`
+- `total_tap_income`
+- `total_idle_income`
+- `total_upgrades`
+- `total_conversions`
+- `xp` (never decreases)
 
-**Bounded Fields:**
-- All balances: `>= 0` (cannot be negative)
-- XP tier: `1-8` (8 defined tiers)
+**Calculated Fields:**
+- `tier` (derived from xp)
+- `daily_streak` (can reset)
+- `referral_count` (count of referrals table)
 
-**Uniqueness Constraints:**
-- `telegram_id` - One account per Telegram user
-- `(user_id, nft_id)` - Cannot own same NFT twice
-- `(user_id, build_part_id)` - One record per upgrade type (quantity tracked in field)
-- `(user_id, challenge_key, week_start_date)` - One challenge instance per week
+**Validation on Write:**
+- Balances ≥ 0 (never negative)
+- Levels ≥ 0 (never negative)
+- Timestamps are valid ISO 8601
+- Enums match allowed values (e.g., tier = Bronze/Silver/Gold/Platinum/Diamond)
 
 ---
 
-## 16. Appendix: Quick Reference
+## 18. Appendix: Quick Reference
 
-### 16.1 All Formulas
+### 18.1 All Formulas
 
-**Upgrade Pricing:**
+**Tapping:**
 ```
-Cost = Base Price × (1.15 ^ Current Level)
-```
-
-**Passive Income:**
-```
-Total BZ/h = SUM(upgrade.base_income × quantity_owned)
+BZ per tap = (10 × incomePerTap level) × (1 + tier%)
+XP per tap = 1
+Energy per tap = energyPerTap level
 ```
 
-**XP from Upgrade Purchase:**
+**Build Parts:**
 ```
-XP Gained = FLOOR(Purchase Cost × 0.10)
+Cost = baseCost × (1.2 ^ level) × (1 + 0.10 × stage)
+Yield = baseYield × (1.15 ^ level) × (1 + 0.15 × stage)
+XP reward = 50 × stage × (1 + level × 0.1)
 ```
 
-**BZ → BB Conversion:**
+**Boosters:**
 ```
-BB Received = BZ Amount ÷ 1000
+Cost = baseCost × (1 + level)² + 1.2 × bzPerHour
+```
+
+**Conversion (BZ → BB):**
+```
+Base output = Input BZ ÷ 1,000,000
+Tier bonus = Base × (tier% ÷ 100)
+Total BB = Base + Tier bonus
+```
+
+**Conversion (BB → BZ):**
+```
+Burned = Converted ÷ (tier% × 2)
+Total cost = Converted + Burned
+Output BZ = Converted × 1,000,000
 ```
 
 **Weekly Challenge Progress:**
 ```
-Progress = MAX(0, Current Stat Value - Baseline Value)
+Progress = MAX(0, Current Total - Baseline)
 ```
 
-**Offline Passive Income:**
+**Referral Earnings:**
 ```
-BZ Earned = (Current Time - Last Sync Time) × (Passive Income Rate ÷ 3600)
-```
-
-**XP Tier Progress:**
-```
-Progress % = (Current XP - Current Tier Threshold) / (Next Tier - Current Tier) × 100
+Pending = 20% × (Referee's Current Total - Baseline)
 ```
 
-### 16.2 Key Ratios & Rates
+### 18.2 Key Ratios & Constants
 
-| Metric | Value |
-|--------|-------|
-| BZ → BB Exchange Rate | 1000:1 |
-| Tap Reward | +1 BZ, +1 XP |
-| Upgrade Price Growth | 1.15× per level |
-| XP from Purchase | 10% of cost |
-| Background Sync Frequency | 30 seconds |
-| Daily Task Reset | 00:00 UTC |
-| Weekly Reset (Tasks & Challenges) | Monday 00:00 UTC |
-| QuickCharge Uses | 5 per day |
-| QuickCharge Cooldown | 1 hour |
+```
+BZ:BB Anchor Rate = 1,000,000:1
+Referral Share = 20%
+Max Offline Accumulation = 3 hours
+Daily Reset Time = 00:00 UTC
+Weekly Reset Day = Monday 00:00 UTC
+Max Build Queue = 1 part at a time
+BB Decimal Precision = 6 places
+```
 
-### 16.3 Reward Values
+### 18.3 XP Tier Thresholds
 
-**Tasks:**
-| Task Type | BZ Range | BB Range | XP Range |
-|-----------|----------|----------|----------|
-| Social | 100-5,000 | 100-1,000 | 100-2,000 |
-| Achievement | 1,000-50,000 | 0-5,000 | 1,000-10,000 |
-| Daily | 500-10,000 | 0-500 | 500-5,000 |
-| Weekly | 5,000-100,000 | 0-2,000 | 5,000-20,000 |
+```
+Bronze: 0 - 9,999
+Silver: 10,000 - 49,999
+Gold: 50,000 - 149,999
+Platinum: 150,000 - 499,999
+Diamond: 500,000+
+```
 
-**Weekly Challenges:**
-| Challenge | Reward |
-|-----------|--------|
-| Tap Master | 5,000 XP |
-| Builder | 5,000 XP |
-| Exchange Guru | 5,000 XP |
-| Networker | 1,000 BB |
+### 18.4 Build Times by Level
 
-**Referrals:**
-| Recipient | BZ | BB |
-|-----------|----|----|
-| Referrer | 5,000 | 500 |
-| Referee | 2,000 | 200 |
+```
+L0-L2: Instant
+L3: 15 minutes
+L4: 30 minutes
+L5: 1 hour
+L6: 4 hours
+L7: 8 hours
+L8: 16 hours
+L9: 24 hours
+L10: 36 hours
+L11+: 48 hours
+```
 
-### 16.4 XP Tier Thresholds
+### 18.5 Task Reward Ranges
 
-| Tier | XP Required |
-|------|-------------|
-| Newbie | 0 |
-| Bronze | 1,000 |
-| Silver | 5,000 |
-| Gold | 25,000 |
-| Platinum | 100,000 |
-| Diamond | 500,000 |
-| Master | 2,000,000 |
-| Legend | 10,000,000 |
+```
+Daily Tasks: 1,000 - 5,000 BZ or XP
+Weekly Tasks: 2,000 - 10,000 BZ/XP
+Progressive Tasks: 1.0 - 5.0 BB
+Challenge Rewards: 5,000 - 10,000 BZ/XP or 0.005 BB
+Referral Signup: 2,500 XP + 1,000 BZ (referrer)
+```
 
-### 16.5 Reset Times
+### 18.6 NFT Price Ranges
 
-| Event | Frequency | Time (UTC) |
-|-------|-----------|------------|
-| Daily Tasks | Every 24 hours | 00:00 |
-| Weekly Tasks | Every 7 days | Monday 00:00 |
-| Weekly Challenges | Every 7 days | Monday 00:00 |
-| QuickCharge Uses | Every 24 hours | 00:00 |
+```
+Free: 0 BB (Early Adopter)
+Common: 2.0 BB
+Rare: 3.0 - 4.0 BB
+Epic: 5.0 BB
+Legendary: 7.0 BB
+```
 
 ---
 
-## Document End
+## Document Maintenance
 
-**This document provides complete understanding of BunBun's product design, game mechanics, business logic, and system architecture.**
+**This document should be updated whenever:**
+- New features are added
+- Game balance changes (formulas, costs, rewards)
+- Database schema changes
+- New integrations added
 
-Any development team can use this specification to build BunBun from scratch using their preferred technologies and implementation patterns.
-
-**Key Takeaways:**
-1. **Hybrid sync strategy** (localStorage + Supabase) for performance + persistence
-2. **Math.max() merge** philosophy prevents data loss
-3. **Baseline system** for weekly challenges tracks progress from week start
-4. **Exponential pricing** (1.15×) for upgrade costs
-5. **Dual tracking** for conversions (total BZ + event count)
-6. **Set union** for array merges (upgrades, NFTs)
-7. **UPSERT** operations for safe database writes
-8. **RLS policies** secure user data at database level
+**Treat this as living documentation that evolves with the product.**
 
 ---
 
-*Document can be updated whenever major features are added or architecture changes. Treat it as living documentation.*
+**END OF TECHNICAL SPECIFICATION**
