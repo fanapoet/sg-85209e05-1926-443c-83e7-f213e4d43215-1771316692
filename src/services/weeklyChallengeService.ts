@@ -105,7 +105,7 @@ export async function updateChallengeProgress(
   weekNumber: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Get user_id and baseline from database
+    // Get user_id from profiles table
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id")
@@ -120,14 +120,14 @@ export async function updateChallengeProgress(
     // Get existing challenge to get baseline
     const { data: existing } = await supabase
       .from("user_weekly_challenges")
-      .select("baseline_value, current_progress")
+      .select("baseline_value, claimed")
       .eq("telegram_id", telegramId)
       .eq("challenge_key", challengeKey)
       .eq("year", year)
       .eq("week_number", weekNumber)
       .maybeSingle();
 
-    const baseline = existing?.baseline_value || 0;
+    const baseline = existing?.baseline_value ?? currentValue;
     const progress = Math.max(0, currentValue - baseline);
     const completed = progress >= targetValue;
 
@@ -139,7 +139,7 @@ export async function updateChallengeProgress(
       current_progress: progress,
       target_value: targetValue,
       completed,
-      claimed: existing ? (existing as any).claimed : false,
+      claimed: existing?.claimed ?? false,
       week_start_date: new Date().toISOString().split("T")[0],
       year,
       week_number: weekNumber,
@@ -157,7 +157,6 @@ export async function updateChallengeProgress(
       return { success: false, error: error.message };
     }
 
-    console.log(`✅ [WeeklyChallenge] Updated ${challengeKey}: progress=${progress}/${targetValue}`);
     return { success: true };
   } catch (error) {
     console.error("❌ [WeeklyChallenge] Exception:", error);

@@ -304,7 +304,7 @@ export function RewardsNFTsScreen() {
     hasInitialized.current = true;
   }, [loading, totalUpgrades, totalConversions, referralCount]);
 
-  // Update Challenge Progress - Sync to Database
+  // Update Challenge Progress - Sync to Database and Reload
   useEffect(() => {
     const syncProgress = async () => {
       if (loading || !telegramId || !currentWeeklyPeriodStart) return;
@@ -312,39 +312,37 @@ export function RewardsNFTsScreen() {
       const year = new Date(currentWeeklyPeriodStart).getFullYear();
       const weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
       
-      // Get baselines from localStorage (fallback for display)
-      const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
-      const baseUpgrades = weeklyBaselines.upgrades || 0;
-      const baseReferrals = weeklyBaselines.referrals || 0;
-      const baseConversions = weeklyBaselines.conversions || 0;
-      
-      // Update database with current progress
-      const updates = [
+      // Update database with current values
+      await Promise.all([
         updateChallengeProgress(telegramId, "builder", totalUpgrades || 0, 50, year, weekNumber),
         updateChallengeProgress(telegramId, "recruiter", referralCount || 0, 5, year, weekNumber),
         updateChallengeProgress(telegramId, "converter", totalConversions || 0, 10, year, weekNumber)
-      ];
+      ]);
       
-      await Promise.all(updates);
+      // Reload challenges from database to get accurate progress
+      const result = await getWeeklyChallenges(telegramId, year, weekNumber);
       
-      // Update local UI state
-      setWeeklyChallenges(prev => 
-        prev.map(c => {
-          let newProgress = c.progress;
-          
-          if (c.key === "builder") {
-            newProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
-          }
-          if (c.key === "recruiter") {
-            newProgress = Math.max(0, (referralCount || 0) - baseReferrals);
-          }
-          if (c.key === "converter") {
-            newProgress = Math.max(0, (totalConversions || 0) - baseConversions);
-          }
-          
-          return { ...c, progress: Math.min(newProgress, c.target) };
-        })
-      );
+      if (result.success && result.data && result.data.length > 0) {
+        const challenges = result.data.map(dbChallenge => ({
+          key: dbChallenge.challengeKey,
+          name: dbChallenge.challengeKey === "builder" ? "Master Builder" : 
+                dbChallenge.challengeKey === "recruiter" ? "Top Recruiter" : "Exchange Guru",
+          icon: dbChallenge.challengeKey === "builder" ? "Hammer" : 
+                dbChallenge.challengeKey === "recruiter" ? "Users" : "ArrowLeftRight",
+          description: dbChallenge.challengeKey === "builder" ? "Perform 50 upgrades" : 
+                      dbChallenge.challengeKey === "recruiter" ? "Invite 5 friends" : "Convert 10 times",
+          target: dbChallenge.targetValue,
+          progress: dbChallenge.currentProgress,
+          reward: dbChallenge.challengeKey === "builder" 
+            ? { type: "BZ" as const, amount: 10000 }
+            : dbChallenge.challengeKey === "recruiter"
+            ? { type: "BB" as const, amount: 0.005 }
+            : { type: "XP" as const, amount: 5000 },
+          claimed: dbChallenge.claimed
+        }));
+        
+        setWeeklyChallenges(challenges);
+      }
     };
     
     syncProgress();
