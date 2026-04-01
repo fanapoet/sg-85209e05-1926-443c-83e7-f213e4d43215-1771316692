@@ -317,17 +317,22 @@ export async function syncWeeklyChallenges(
       .maybeSingle();
 
     if (profileError || !profile) {
-      console.error("❌ [WeeklyChallenge-Sync] Profile not found:", profileError);
-      return { success: false, error: "Profile not found" };
+      const errorMsg = profileError ? JSON.stringify(profileError) : "Profile not found";
+      console.error("❌ [WeeklyChallenge-Sync] Profile not found:", errorMsg);
+      return { success: false, error: errorMsg };
     }
 
     // Get existing challenges to preserve baselines
-    const { data: existing } = await supabase
+    const { data: existing, error: fetchError } = await supabase
       .from("user_weekly_challenges")
       .select("*")
       .eq("telegram_id", telegramId)
       .eq("year", year)
       .eq("week_number", weekNumber);
+
+    if (fetchError) {
+      console.error("❌ [WeeklyChallenge-Sync] Fetch error:", JSON.stringify(fetchError));
+    }
 
     console.log("📊 [WeeklyChallenge-Sync] Existing challenges:", existing);
 
@@ -375,23 +380,30 @@ export async function syncWeeklyChallenges(
       }
     ];
 
-    console.log("📝 [WeeklyChallenge-Sync] Upserting challenges:", challenges);
+    console.log("📝 [WeeklyChallenge-Sync] Upserting challenges:", JSON.stringify(challenges, null, 2));
 
-    const { error } = await supabase
+    const { data: upsertData, error } = await supabase
       .from("user_weekly_challenges")
       .upsert(challenges, {
         onConflict: "telegram_id,challenge_key,year,week_number"
       });
 
     if (error) {
-      console.error("❌ [WeeklyChallenge-Sync] Upsert failed:", error);
-      return { success: false, error: error.message };
+      const errorDetails = {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      };
+      console.error("❌ [WeeklyChallenge-Sync] Upsert failed:", JSON.stringify(errorDetails, null, 2));
+      return { success: false, error: JSON.stringify(errorDetails) };
     }
 
     console.log(`✅ [WeeklyChallenge-Sync] Successfully synced ${challenges.length} challenges`);
     return { success: true };
   } catch (error) {
-    console.error("❌ [WeeklyChallenge-Sync] Exception:", error);
-    return { success: false, error: String(error) };
+    const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
+    console.error("❌ [WeeklyChallenge-Sync] Exception:", errorMsg);
+    return { success: false, error: errorMsg };
   }
 }
