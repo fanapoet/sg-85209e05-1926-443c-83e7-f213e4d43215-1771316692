@@ -304,49 +304,48 @@ export function RewardsNFTsScreen() {
     hasInitialized.current = true;
   }, [loading, totalUpgrades, totalConversions, referralCount]);
 
-  // Update Challenge Progress - Sync to Database and Reload
+  // Update Challenge Progress - Simple direct update like daily tasks
   useEffect(() => {
-    const syncProgress = async () => {
-      if (loading || !telegramId || !currentWeeklyPeriodStart) return;
-      
-      const year = new Date(currentWeeklyPeriodStart).getFullYear();
-      const weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
-      
-      // Update database with current values
-      await Promise.all([
-        updateChallengeProgress(telegramId, "builder", totalUpgrades || 0, 50, year, weekNumber),
-        updateChallengeProgress(telegramId, "recruiter", referralCount || 0, 5, year, weekNumber),
-        updateChallengeProgress(telegramId, "converter", totalConversions || 0, 10, year, weekNumber)
-      ]);
-      
-      // Reload challenges from database to get accurate progress
-      const result = await getWeeklyChallenges(telegramId, year, weekNumber);
-      
-      if (result.success && result.data && result.data.length > 0) {
-        const challenges = result.data.map(dbChallenge => ({
-          key: dbChallenge.challengeKey,
-          name: dbChallenge.challengeKey === "builder" ? "Master Builder" : 
-                dbChallenge.challengeKey === "recruiter" ? "Top Recruiter" : "Exchange Guru",
-          icon: dbChallenge.challengeKey === "builder" ? "Hammer" : 
-                dbChallenge.challengeKey === "recruiter" ? "Users" : "ArrowLeftRight",
-          description: dbChallenge.challengeKey === "builder" ? "Perform 50 upgrades" : 
-                      dbChallenge.challengeKey === "recruiter" ? "Invite 5 friends" : "Convert 10 times",
-          target: dbChallenge.targetValue,
-          progress: dbChallenge.currentProgress,
-          reward: dbChallenge.challengeKey === "builder" 
-            ? { type: "BZ" as const, amount: 10000 }
-            : dbChallenge.challengeKey === "recruiter"
-            ? { type: "BB" as const, amount: 0.005 }
-            : { type: "XP" as const, amount: 5000 },
-          claimed: dbChallenge.claimed
-        }));
-        
-        setWeeklyChallenges(challenges);
-      }
-    };
+    if (loading || !telegramId || !currentWeeklyPeriodStart || weeklyChallenges.length === 0) return;
     
-    syncProgress();
-  }, [totalUpgrades, referralCount, totalConversions, loading, telegramId, currentWeeklyPeriodStart]);
+    const year = new Date(currentWeeklyPeriodStart).getFullYear();
+    const weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+    
+    // Get baselines from localStorage
+    const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
+    const baseUpgrades = weeklyBaselines.upgrades || 0;
+    const baseReferrals = weeklyBaselines.referrals || 0;
+    const baseConversions = weeklyBaselines.conversions || 0;
+    
+    // Calculate progress locally
+    const builderProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
+    const recruiterProgress = Math.max(0, (referralCount || 0) - baseReferrals);
+    const converterProgress = Math.max(0, (totalConversions || 0) - baseConversions);
+    
+    // Update UI immediately
+    setWeeklyChallenges(prev => 
+      prev.map(c => {
+        if (c.key === "builder") {
+          return { ...c, progress: Math.min(builderProgress, c.target) };
+        }
+        if (c.key === "recruiter") {
+          return { ...c, progress: Math.min(recruiterProgress, c.target) };
+        }
+        if (c.key === "converter") {
+          return { ...c, progress: Math.min(converterProgress, c.target) };
+        }
+        return c;
+      })
+    );
+    
+    // Sync to database in background (fire and forget)
+    Promise.all([
+      updateChallengeProgress(telegramId, "builder", totalUpgrades || 0, 50, year, weekNumber),
+      updateChallengeProgress(telegramId, "recruiter", referralCount || 0, 5, year, weekNumber),
+      updateChallengeProgress(telegramId, "converter", totalConversions || 0, 10, year, weekNumber)
+    ]).catch(err => console.error("❌ [Rewards] Background sync error:", err));
+    
+  }, [totalUpgrades, referralCount, totalConversions, loading, telegramId, currentWeeklyPeriodStart, weeklyChallenges.length]);
 
   // Persist Challenges to LocalStorage
   useEffect(() => {
