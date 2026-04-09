@@ -223,45 +223,21 @@ export function TasksReferralsScreen() {
         return hasClaimedIdleToday ? 1 : 0;
       case "weekly_upgrade":
         const upgradeProgress = getTaskProgress("weekly_upgrade");
-        let upgradeBaseline = upgradeProgress?.baselineValue || 0;
-        
-        // If baseline is 0 (just reset), set it to current lifetime total
-        if (upgradeBaseline === 0 && upgradeProgress) {
-          upgradeBaseline = totalUpgrades;
-          console.log(`🔧 [Tasks-Value] Setting upgrade baseline to ${upgradeBaseline}`);
-          updateTaskProgress("weekly_upgrade", { baselineValue: upgradeBaseline });
-        }
-        
+        const upgradeBaseline = upgradeProgress?.baselineValue || 0;
         const upgradeWeekly = Math.max(0, totalUpgrades - upgradeBaseline);
         console.log(`🎯 [Tasks-Value] weekly_upgrade: lifetime=${totalUpgrades}, baseline=${upgradeBaseline}, weekly=${upgradeWeekly}`);
         return upgradeWeekly;
         
       case "weekly_convert":
         const convertProgress = getTaskProgress("weekly_convert");
-        let convertBaseline = convertProgress?.baselineValue || 0;
-        
-        // If baseline is 0 (just reset), set it to current lifetime total
-        if (convertBaseline === 0 && convertProgress) {
-          convertBaseline = totalConversions;
-          console.log(`🔧 [Tasks-Value] Setting convert baseline to ${convertBaseline}`);
-          updateTaskProgress("weekly_convert", { baselineValue: convertBaseline });
-        }
-        
+        const convertBaseline = convertProgress?.baselineValue || 0;
         const convertWeekly = Math.max(0, totalConversions - convertBaseline);
         console.log(`🎯 [Tasks-Value] weekly_convert: lifetime=${totalConversions}, baseline=${convertBaseline}, weekly=${convertWeekly}`);
         return convertWeekly;
         
       case "weekly_invite":
         const inviteProgress = getTaskProgress("weekly_invite");
-        let inviteBaseline = inviteProgress?.baselineValue || 0;
-        
-        // If baseline is 0 (just reset), set it to current lifetime total
-        if (inviteBaseline === 0 && inviteProgress) {
-          inviteBaseline = referralCount;
-          console.log(`🔧 [Tasks-Value] Setting invite baseline to ${inviteBaseline}`);
-          updateTaskProgress("weekly_invite", { baselineValue: inviteBaseline });
-        }
-        
+        const inviteBaseline = inviteProgress?.baselineValue || 0;
         const inviteWeekly = Math.max(0, referralCount - inviteBaseline);
         console.log(`🎯 [Tasks-Value] weekly_invite: lifetime=${referralCount}, baseline=${inviteBaseline}, weekly=${inviteWeekly}`);
         return inviteWeekly;
