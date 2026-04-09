@@ -161,8 +161,16 @@ export function TasksReferralsScreen() {
     [...taskDefinitions.daily, ...taskDefinitions.weekly, ...taskDefinitions.progressive].forEach(def => {
       // For weekly tasks, initialize with current lifetime totals as baseline
       if (def.type === "weekly") {
-        const baselineValue = getCurrentValueForTask(def.id);
-        console.log(`🎬 [Tasks-Init] Initializing ${def.id} with baseline=${baselineValue}`);
+        // CRITICAL FIX: Pass lifetime totals DIRECTLY, not via getCurrentValueForTask
+        let baselineValue = 0;
+        if (def.id === "weekly_upgrade") {
+          baselineValue = totalUpgrades;
+        } else if (def.id === "weekly_convert") {
+          baselineValue = totalConversions;
+        } else if (def.id === "weekly_invite") {
+          baselineValue = referralCount;
+        }
+        console.log(`🎬 [Tasks-Init] Initializing ${def.id} with baseline=${baselineValue} (lifetime total)`);
         initializeTask(def.id, def.type, baselineValue);
       } else {
         initializeTask(def.id, def.type);
