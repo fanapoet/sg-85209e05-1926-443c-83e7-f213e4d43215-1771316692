@@ -130,6 +130,7 @@ export async function updateChallengeProgress(
     const baseline = existing?.baseline_value ?? currentValue;
     const progress = Math.max(0, currentValue - baseline);
     const completed = progress >= targetValue;
+    const weekStartDate = new Date().toISOString().split("T")[0];
 
     const record = {
       user_id: profile.id,
@@ -140,7 +141,7 @@ export async function updateChallengeProgress(
       target_value: targetValue,
       completed,
       claimed: existing?.claimed ?? false,
-      week_start_date: new Date().toISOString().split("T")[0],
+      week_start_date: weekStartDate,
       year,
       week_number: weekNumber,
       updated_at: new Date().toISOString()
@@ -149,7 +150,7 @@ export async function updateChallengeProgress(
     const { error } = await supabase
       .from("user_weekly_challenges")
       .upsert(record, {
-        onConflict: "telegram_id,challenge_key,year,week_number"
+        onConflict: "user_id,challenge_key,week_start_date"
       });
 
     if (error) {
@@ -279,7 +280,7 @@ export async function resetWeeklyChallenges(
     const { error } = await supabase
       .from("user_weekly_challenges")
       .upsert(challenges, {
-        onConflict: "telegram_id,challenge_key,year,week_number"
+        onConflict: "user_id,challenge_key,week_start_date"
       });
 
     if (error) {
@@ -322,6 +323,8 @@ export async function syncWeeklyChallenges(
       return { success: false, error: errorMsg };
     }
 
+    const weekStartDate = new Date().toISOString().split("T")[0];
+
     // Get existing challenges to preserve baselines
     const { data: existing, error: fetchError } = await supabase
       .from("user_weekly_challenges")
@@ -335,8 +338,6 @@ export async function syncWeeklyChallenges(
     }
 
     console.log("📊 [WeeklyChallenge-Sync] Existing challenges:", existing);
-
-    const weekStartDate = new Date().toISOString().split("T")[0];
 
     const challenges = [
       {
@@ -385,7 +386,7 @@ export async function syncWeeklyChallenges(
     const { data: upsertData, error } = await supabase
       .from("user_weekly_challenges")
       .upsert(challenges, {
-        onConflict: "telegram_id,challenge_key,year,week_number"
+        onConflict: "user_id,challenge_key,week_start_date"
       });
 
     if (error) {
