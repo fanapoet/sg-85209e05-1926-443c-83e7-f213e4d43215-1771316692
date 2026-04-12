@@ -226,12 +226,6 @@ export function RewardsNFTsScreen() {
     initChallenges();
   }, []); // Only run once on mount
 
-  // Initialize challenges on first load
-  useEffect(() => {
-    if (hasInitialized.current) return;
-    initChallenges();
-  }, []);
-
   // Re-load baselines when weekly period resets
   useEffect(() => {
     if (!hasInitialized.current) return; // Skip on first mount
