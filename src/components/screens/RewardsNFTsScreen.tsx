@@ -122,7 +122,13 @@ export function RewardsNFTsScreen() {
   const dailyRewards = getWeeklyRewards(currentWeek);
 
   // Calculate current day within the 7-day cycle
-  const currentDayOfWeek = (streak % 7) + 1;
+  const currentDayOfWeek = (() => {
+    if (!currentWeeklyPeriodStart) return (streak % 7) + 1;
+    const now = new Date();
+    const periodStart = new Date(currentWeeklyPeriodStart);
+    const daysPassed = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(1, Math.min(daysPassed + 1, 7));
+  })();
 
   // Initialize challenges ONCE
   useEffect(() => {
