@@ -150,6 +150,19 @@ export function RewardsNFTsScreen() {
         }
       }
 
+      // Initialize baselines ONLY if they don't exist (don't overwrite existing ones)
+      const savedBaselines = localStorage.getItem("weeklyBaselines");
+      if (!savedBaselines) {
+        const initialBaselines = {
+          upgrades: totalUpgrades || 0,
+          referrals: referralCount || 0,
+          conversions: totalConversions || 0,
+          timestamp: Date.now()
+        };
+        console.log("🔄 [Rewards] Setting initial baselines:", initialBaselines);
+        localStorage.setItem("weeklyBaselines", JSON.stringify(initialBaselines));
+      }
+
       // Load challenges from localStorage or initialize defaults
       const savedChallenges = localStorage.getItem("weeklyChallenges");
       if (savedChallenges) {
