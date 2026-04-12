@@ -121,6 +121,17 @@ export function RewardsNFTsScreen() {
   const streak = dailyStreak || 0;
   const dailyRewards = getWeeklyRewards(currentWeek);
 
+  // Calculate current day of week from weekly period start (NOT from dailyStreak)
+  const getCurrentDayOfWeek = (): number => {
+    if (!currentWeeklyPeriodStart) return 1;
+    const now = new Date();
+    const periodStart = new Date(currentWeeklyPeriodStart);
+    const daysPassed = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.min(daysPassed + 1, 7); // Day 1-7 (cap at 7)
+  };
+
+  const currentDayOfWeek = getCurrentDayOfWeek();
+
   // Initialize baselines and challenges ONCE
   useEffect(() => {
     if (hasInitialized.current) return;
@@ -147,15 +158,36 @@ export function RewardsNFTsScreen() {
         }
       }
 
-      // Initialize weekly baselines if they don't exist
+      // Check if baselines are stale (from a previous week)
       const savedBaselines = localStorage.getItem("weeklyBaselines");
-      if (!savedBaselines) {
+      let shouldResetBaselines = false;
+      
+      if (savedBaselines && currentWeeklyPeriodStart) {
+        try {
+          const baselines = JSON.parse(savedBaselines);
+          const baselineTimestamp = baselines.timestamp || 0;
+          const periodStartTime = new Date(currentWeeklyPeriodStart).getTime();
+          
+          // If baselines are older than current weekly period, they're stale
+          if (baselineTimestamp < periodStartTime) {
+            console.log("⚠️ [Rewards] Baselines are stale, resetting to current values");
+            shouldResetBaselines = true;
+          }
+        } catch (e) {
+          console.error("Error parsing baselines:", e);
+          shouldResetBaselines = true;
+        }
+      }
+
+      // Initialize or reset baselines
+      if (!savedBaselines || shouldResetBaselines) {
         const initialBaselines = {
           upgrades: totalUpgrades || 0,
           referrals: referralCount || 0,
           conversions: totalConversions || 0,
-          timestamp: Date.now()
+          timestamp: currentWeeklyPeriodStart ? new Date(currentWeeklyPeriodStart).getTime() : Date.now()
         };
+        console.log("🔄 [Rewards] Setting baselines:", initialBaselines);
         localStorage.setItem("weeklyBaselines", JSON.stringify(initialBaselines));
       }
 
@@ -399,7 +431,7 @@ export function RewardsNFTsScreen() {
         if (lastClaim.getTime() === today.getTime()) return;
       }
 
-      const nextDay = (streak % 7) + 1;
+      const nextDay = currentDayOfWeek;
       const reward = dailyRewards[nextDay - 1];
       
       let nextWeek = currentWeek;
@@ -467,7 +499,7 @@ export function RewardsNFTsScreen() {
   };
 
   const canClaimDaily = !isClaimedToday();
-  const currentDayReward = dailyRewards[(streak % 7)];
+  const currentDayReward = dailyRewards[currentDayOfWeek - 1];
 
   const getProgressText = (nft: NFT): string => {
     if (nft.owned) return "";
@@ -531,7 +563,7 @@ export function RewardsNFTsScreen() {
                 Week {currentWeek}
               </Badge>
               <Badge variant="outline">
-                Day {(streak % 7) + 1}/7
+                Day {currentDayOfWeek}/7
               </Badge>
             </div>
           </div>
@@ -540,7 +572,7 @@ export function RewardsNFTsScreen() {
             {dailyRewards.map((reward, index) => {
               const dayNum = index + 1;
               const isClaimed = streak >= dayNum;
-              const isCurrent = (streak % 7) + 1 === dayNum;
+              const isCurrent = currentDayOfWeek === dayNum;
 
               return (
                 <div
