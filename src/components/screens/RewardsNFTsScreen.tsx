@@ -220,6 +220,37 @@ export function RewardsNFTsScreen() {
     initChallenges();
   }, []); // Only run once on mount
 
+  // Initialize challenges on first load
+  useEffect(() => {
+    if (hasInitialized.current) return;
+    initChallenges();
+  }, []);
+
+  // Re-load baselines when weekly period resets
+  useEffect(() => {
+    if (!hasInitialized.current) return; // Skip on first mount
+    if (!currentWeeklyPeriodStart) return;
+    
+    console.log("🔄 [Rewards] Weekly period changed, reloading baselines");
+    
+    // Reload baselines from localStorage (updated by GameStateContext)
+    const savedBaselines = localStorage.getItem("weeklyBaselines");
+    if (savedBaselines) {
+      try {
+        const baselines = JSON.parse(savedBaselines);
+        console.log("📊 [Rewards] New baselines loaded:", baselines);
+        
+        // Force re-render of challenges with new baselines
+        const savedChallenges = localStorage.getItem("weeklyChallenges");
+        if (savedChallenges) {
+          setWeeklyChallenges(JSON.parse(savedChallenges));
+        }
+      } catch (e) {
+        console.error("Error reloading baselines:", e);
+      }
+    }
+  }, [currentWeeklyPeriodStart]);
+
   // Update Challenge Progress - Simple direct update
   useEffect(() => {
     if (loading || weeklyChallenges.length === 0) return;
