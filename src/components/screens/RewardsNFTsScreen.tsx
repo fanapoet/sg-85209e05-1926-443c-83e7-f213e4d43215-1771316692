@@ -107,10 +107,18 @@ export function RewardsNFTsScreen() {
     resetWeeklyPeriod
   } = useGameState();
   
-  const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
   const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallenge[]>([]);
+  const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const hasInitialized = useRef(false);
+  
+  // Track baselines in state so UI updates when they change
+  const [weeklyBaselines, setWeeklyBaselines] = useState<{
+    upgrades: number;
+    referrals: number;
+    conversions: number;
+    timestamp: number;
+  }>({ upgrades: 0, referrals: 0, conversions: 0, timestamp: 0 });
   
   // Get telegram user
   const tgUser = getCurrentTelegramUser();
@@ -167,6 +175,15 @@ export function RewardsNFTsScreen() {
         };
         console.log("🔄 [Rewards] Setting initial baselines:", initialBaselines);
         localStorage.setItem("weeklyBaselines", JSON.stringify(initialBaselines));
+        setWeeklyBaselines(initialBaselines);
+      } else {
+        try {
+          const parsed = JSON.parse(savedBaselines);
+          setWeeklyBaselines(parsed);
+          console.log("📊 [Rewards] Loaded baselines from localStorage:", parsed);
+        } catch (e) {
+          console.error("Error parsing baselines:", e);
+        }
       }
 
       // Load challenges from localStorage or initialize defaults
@@ -229,22 +246,16 @@ export function RewardsNFTsScreen() {
   // Re-load baselines when weekly period resets
   useEffect(() => {
     if (!hasInitialized.current) return; // Skip on first mount
-    if (!currentWeeklyPeriodStart) return;
     
     console.log("🔄 [Rewards] Weekly period changed, reloading baselines");
     
-    // Reload baselines from localStorage (updated by GameStateContext)
+    // Reload baselines from localStorage (updated by GameStateContext.resetWeeklyPeriod)
     const savedBaselines = localStorage.getItem("weeklyBaselines");
     if (savedBaselines) {
       try {
         const baselines = JSON.parse(savedBaselines);
         console.log("📊 [Rewards] New baselines loaded:", baselines);
-        
-        // Force re-render of challenges with new baselines
-        const savedChallenges = localStorage.getItem("weeklyChallenges");
-        if (savedChallenges) {
-          setWeeklyChallenges(JSON.parse(savedChallenges));
-        }
+        setWeeklyBaselines(baselines);
       } catch (e) {
         console.error("Error reloading baselines:", e);
       }
@@ -255,30 +266,29 @@ export function RewardsNFTsScreen() {
   useEffect(() => {
     if (loading || weeklyChallenges.length === 0) return;
     
-    // Get baselines from localStorage
-    const weeklyBaselines = JSON.parse(localStorage.getItem("weeklyBaselines") || "{}");
-    const baseUpgrades = weeklyBaselines.upgrades || 0;
-    const baseReferrals = weeklyBaselines.referrals || 0;
-    const baseConversions = weeklyBaselines.conversions || 0;
-    
-    console.log("📊 [Rewards-Progress] Baselines:", { baseUpgrades, baseReferrals, baseConversions });
-    console.log("📊 [Rewards-Progress] Current totals:", { totalUpgrades, referralCount, totalConversions });
-    
-    // Calculate progress locally
-    const builderProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
-    const recruiterProgress = Math.max(0, (referralCount || 0) - baseReferrals);
+    // Calculate weekly challenge progress using baselines from state
+    const baseUpgrades = weeklyBaselines.upgrades;
+    const baseReferrals = weeklyBaselines.referrals;
+    const baseConversions = weeklyBaselines.conversions;
+
+    const upgradesProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
+    const referralsProgress = Math.max(0, (referralCount || 0) - baseReferrals);
     const converterProgress = Math.max(0, (totalConversions || 0) - baseConversions);
-    
-    console.log("📊 [Rewards-Progress] Calculated progress:", { builderProgress, recruiterProgress, converterProgress });
+
+    console.log("📊 [Rewards] Progress calculation:", {
+      upgrades: { total: totalUpgrades, baseline: baseUpgrades, progress: upgradesProgress },
+      referrals: { total: referralCount, baseline: baseReferrals, progress: referralsProgress },
+      conversions: { total: totalConversions, baseline: baseConversions, progress: converterProgress }
+    });
     
     // Update UI immediately
     setWeeklyChallenges(prev => 
       prev.map(c => {
         if (c.key === "builder") {
-          return { ...c, progress: Math.min(builderProgress, c.target) };
+          return { ...c, progress: Math.min(upgradesProgress, c.target) };
         }
         if (c.key === "recruiter") {
-          return { ...c, progress: Math.min(recruiterProgress, c.target) };
+          return { ...c, progress: Math.min(referralsProgress, c.target) };
         }
         if (c.key === "converter") {
           return { ...c, progress: Math.min(converterProgress, c.target) };
