@@ -953,6 +953,18 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     console.log("🔄 [Weekly Reset] Resetting weekly rewards period");
     console.log("🔄 [Weekly Reset] New period start:", now);
     
+    // Get FRESH values from database before setting baselines
+    const serverData = await loadPlayerState();
+    const currentTotalUpgrades = serverData ? Number(serverData.total_upgrades || 0) : totalUpgrades;
+    const currentTotalConversions = serverData ? Number(serverData.total_conversions || 0) : totalConversions;
+    const currentReferralCount = serverData ? Number(serverData.referral_count || 0) : referralCount;
+    
+    console.log("🔄 [Weekly Reset] Setting baselines to current totals:", {
+      upgrades: currentTotalUpgrades,
+      conversions: currentTotalConversions,
+      referrals: currentReferralCount
+    });
+    
     // 1. Update local state immediately
     setCurrentWeeklyPeriodStart(now);
     
@@ -969,19 +981,23 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         telegramId,
         year,
         weekNumber,
-        { totalUpgrades, referralCount, totalConversions }
+        { 
+          totalUpgrades: currentTotalUpgrades, 
+          referralCount: currentReferralCount, 
+          totalConversions: currentTotalConversions 
+        }
       );
       console.log("✅ [Weekly Reset] Weekly challenges reset in database");
       
-      // 4. Update localStorage baselines
+      // 4. Update localStorage baselines with FRESH database values
       const weeklyBaselines = {
-        upgrades: totalUpgrades || 0,
-        referrals: referralCount || 0,
-        conversions: totalConversions || 0,
+        upgrades: currentTotalUpgrades,
+        referrals: currentReferralCount,
+        conversions: currentTotalConversions,
         timestamp: Date.now()
       };
       localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
-      console.log("✅ [Weekly Reset] localStorage baselines updated");
+      console.log("✅ [Weekly Reset] localStorage baselines updated:", weeklyBaselines);
     } catch (error) {
       console.error("❌ [Weekly Reset] Failed to update database:", error);
     }
