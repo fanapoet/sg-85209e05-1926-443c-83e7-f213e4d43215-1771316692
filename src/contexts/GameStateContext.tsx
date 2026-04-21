@@ -955,9 +955,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     
     // Get FRESH values from database before setting baselines
     const serverData = await loadPlayerState();
-    const currentTotalUpgrades = serverData ? Number(serverData.total_upgrades || 0) : totalUpgrades;
-    const currentTotalConversions = serverData ? Number(serverData.total_conversions || 0) : totalConversions;
-    const currentReferralCount = serverData ? Number(serverData.referral_count || 0) : referralCount;
+    const currentTotalUpgrades = serverData ? Number((serverData as any).total_upgrades || 0) : totalUpgrades;
+    const currentTotalConversions = serverData ? Number((serverData as any).total_conversions || 0) : totalConversions;
+    const currentReferralCount = serverData ? Number((serverData as any).referral_count || 0) : referralCount;
     
     console.log("🔄 [Weekly Reset] Setting baselines to current totals:", {
       upgrades: currentTotalUpgrades,
