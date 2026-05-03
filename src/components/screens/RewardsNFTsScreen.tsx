@@ -111,6 +111,7 @@ export function RewardsNFTsScreen() {
   const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const hasInitialized = useRef(false);
+  const lastProcessedPeriod = useRef<string | null>(null);
   
   // Track baselines in state so UI updates when they change
   const [weeklyBaselines, setWeeklyBaselines] = useState<{
@@ -246,8 +247,19 @@ export function RewardsNFTsScreen() {
   // Re-load baselines when weekly period resets
   useEffect(() => {
     if (!hasInitialized.current) return; // Skip on first mount
+    if (!currentWeeklyPeriodStart) return;
+    
+    // Only reset if this is a NEW period (different from last processed)
+    if (lastProcessedPeriod.current === currentWeeklyPeriodStart) {
+      return; // Same period, no reset needed
+    }
     
     console.log("🔄 [Rewards] Weekly period changed, reloading baselines");
+    console.log("🔄 [Rewards] Old period:", lastProcessedPeriod.current);
+    console.log("🔄 [Rewards] New period:", currentWeeklyPeriodStart);
+    
+    // Update last processed period
+    lastProcessedPeriod.current = currentWeeklyPeriodStart;
     
     // Reload baselines from localStorage (updated by GameStateContext.resetWeeklyPeriod)
     const savedBaselines = localStorage.getItem("weeklyBaselines");
