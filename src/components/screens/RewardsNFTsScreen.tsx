@@ -256,6 +256,43 @@ export function RewardsNFTsScreen() {
         const baselines = JSON.parse(savedBaselines);
         console.log("📊 [Rewards] New baselines loaded:", baselines);
         setWeeklyBaselines(baselines);
+        
+        // CRITICAL FIX: Also reset the weeklyChallenges array to fresh state
+        const freshChallenges = [
+          {
+            key: "builder",
+            name: "Master Builder",
+            icon: "Hammer",
+            description: "Perform 50 upgrades",
+            target: 50,
+            progress: 0,
+            reward: { type: "BZ" as const, amount: 10000 },
+            claimed: false
+          },
+          {
+            key: "recruiter",
+            name: "Top Recruiter",
+            icon: "Users",
+            description: "Invite 5 friends",
+            target: 5,
+            progress: 0,
+            reward: { type: "BB" as const, amount: 0.005 },
+            claimed: false
+          },
+          {
+            key: "converter",
+            name: "Exchange Guru",
+            icon: "ArrowLeftRight",
+            description: "Convert 10 times",
+            target: 10,
+            progress: 0,
+            reward: { type: "XP" as const, amount: 5000 },
+            claimed: false
+          }
+        ];
+        setWeeklyChallenges(freshChallenges);
+        localStorage.setItem("weeklyChallenges", JSON.stringify(freshChallenges));
+        console.log("✅ [Rewards] Weekly challenges reset to fresh state");
       } catch (e) {
         console.error("Error reloading baselines:", e);
       }
