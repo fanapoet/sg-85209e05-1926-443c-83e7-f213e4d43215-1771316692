@@ -187,17 +187,66 @@ export function RewardsNFTsScreen() {
         }
       }
 
-      // Load challenges from localStorage or initialize defaults
-      const savedChallenges = localStorage.getItem("weeklyChallenges");
-      if (savedChallenges) {
-        try {
-          setWeeklyChallenges(JSON.parse(savedChallenges));
-        } catch (e) {
-          console.error("Error loading challenges:", e);
-          initializeDefaultChallenges();
+      // CRITICAL FIX: Load challenges from database if we have telegramId
+      if (telegramId && currentWeeklyPeriodStart) {
+        const year = new Date(currentWeeklyPeriodStart).getFullYear();
+        const weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+        
+        const result = await getWeeklyChallenges(telegramId, year, weekNumber);
+        
+        if (result.success && result.data && result.data.length > 0) {
+          // Map database data to UI format
+          const challengesFromDB = result.data.map(dbChallenge => ({
+            key: dbChallenge.challengeKey,
+            name: dbChallenge.challengeKey === "builder" ? "Master Builder" 
+                : dbChallenge.challengeKey === "recruiter" ? "Top Recruiter" 
+                : "Exchange Guru",
+            icon: dbChallenge.challengeKey === "builder" ? "Hammer" 
+                : dbChallenge.challengeKey === "recruiter" ? "Users" 
+                : "ArrowLeftRight",
+            description: dbChallenge.challengeKey === "builder" ? "Perform 50 upgrades" 
+                       : dbChallenge.challengeKey === "recruiter" ? "Invite 5 friends" 
+                       : "Convert 10 times",
+            target: dbChallenge.targetValue,
+            progress: dbChallenge.currentProgress,
+            reward: dbChallenge.challengeKey === "builder" 
+                   ? { type: "BZ" as const, amount: 10000 }
+                   : dbChallenge.challengeKey === "recruiter"
+                   ? { type: "BB" as const, amount: 0.005 }
+                   : { type: "XP" as const, amount: 5000 },
+            claimed: dbChallenge.claimed
+          }));
+          
+          console.log("✅ [Rewards] Loaded challenges from database:", challengesFromDB);
+          setWeeklyChallenges(challengesFromDB);
+          localStorage.setItem("weeklyChallenges", JSON.stringify(challengesFromDB));
+        } else {
+          // No DB data, load from localStorage or initialize defaults
+          const savedChallenges = localStorage.getItem("weeklyChallenges");
+          if (savedChallenges) {
+            try {
+              setWeeklyChallenges(JSON.parse(savedChallenges));
+            } catch (e) {
+              console.error("Error loading challenges:", e);
+              initializeDefaultChallenges();
+            }
+          } else {
+            initializeDefaultChallenges();
+          }
         }
       } else {
-        initializeDefaultChallenges();
+        // No telegramId or period start, load from localStorage or initialize defaults
+        const savedChallenges = localStorage.getItem("weeklyChallenges");
+        if (savedChallenges) {
+          try {
+            setWeeklyChallenges(JSON.parse(savedChallenges));
+          } catch (e) {
+            console.error("Error loading challenges:", e);
+            initializeDefaultChallenges();
+          }
+        } else {
+          initializeDefaultChallenges();
+        }
       }
 
       setLoading(false);
@@ -242,7 +291,7 @@ export function RewardsNFTsScreen() {
     };
 
     initChallenges();
-  }, []); // Only run once on mount
+  }, [telegramId, currentWeeklyPeriodStart]); // Add dependencies
 
   // Re-load baselines when weekly period resets
   useEffect(() => {
@@ -330,19 +379,26 @@ export function RewardsNFTsScreen() {
       conversions: { total: totalConversions, baseline: baseConversions, progress: converterProgress }
     });
     
-    // Update UI immediately
+    // CRITICAL FIX: Update UI immediately BUT preserve claimed status
     setWeeklyChallenges(prev => 
       prev.map(c => {
+        let newProgress = c.progress;
+        
         if (c.key === "builder") {
-          return { ...c, progress: Math.min(upgradesProgress, c.target) };
+          newProgress = Math.min(upgradesProgress, c.target);
+        } else if (c.key === "recruiter") {
+          newProgress = Math.min(referralsProgress, c.target);
+        } else if (c.key === "converter") {
+          newProgress = Math.min(converterProgress, c.target);
         }
-        if (c.key === "recruiter") {
-          return { ...c, progress: Math.min(referralsProgress, c.target) };
+        
+        // CRITICAL: Only update progress if not claimed
+        // Once claimed, don't change anything until weekly reset
+        if (c.claimed) {
+          return c; // Keep as-is, don't update progress
         }
-        if (c.key === "converter") {
-          return { ...c, progress: Math.min(converterProgress, c.target) };
-        }
-        return c;
+        
+        return { ...c, progress: newProgress };
       })
     );
     
