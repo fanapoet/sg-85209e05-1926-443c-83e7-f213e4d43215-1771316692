@@ -318,7 +318,7 @@ export function RewardsNFTsScreen() {
         console.log("📊 [Rewards] New baselines loaded:", baselines);
         setWeeklyBaselines(baselines);
         
-        // CRITICAL FIX: Also reset the weeklyChallenges array to fresh state
+        // CRITICAL FIX: Reset the weeklyChallenges to fresh state (all unclaimed)
         const freshChallenges = [
           {
             key: "builder",
@@ -353,7 +353,7 @@ export function RewardsNFTsScreen() {
         ];
         setWeeklyChallenges(freshChallenges);
         localStorage.setItem("weeklyChallenges", JSON.stringify(freshChallenges));
-        console.log("✅ [Rewards] Weekly challenges reset to fresh state");
+        console.log("✅ [Rewards] Weekly challenges reset to fresh state with all claimed=false");
       } catch (e) {
         console.error("Error reloading baselines:", e);
       }
@@ -416,12 +416,8 @@ export function RewardsNFTsScreen() {
     
   }, [totalUpgrades, referralCount, totalConversions, loading, weeklyChallenges.length, telegramId, currentWeeklyPeriodStart]);
 
-  // Persist Challenges to LocalStorage
-  useEffect(() => {
-    if (!loading && weeklyChallenges.length > 0) {
-      localStorage.setItem("weeklyChallenges", JSON.stringify(weeklyChallenges));
-    }
-  }, [weeklyChallenges, loading]);
+  // Persist Challenges to LocalStorage - REMOVED: Causes race conditions
+  // Challenges are now saved immediately after claim in handleClaimChallenge
 
   // Check for weekly reset
   useEffect(() => {
@@ -587,12 +583,15 @@ export function RewardsNFTsScreen() {
       if (challenge.reward.type === "BB") addBB(challenge.reward.amount);
       if (challenge.reward.type === "XP") addXP(challenge.reward.amount);
       
-      // Update UI
-      setWeeklyChallenges(prev => 
-        prev.map(c => 
-          c.key === challengeKey ? { ...c, claimed: true } : c
-        )
+      // CRITICAL FIX: Update UI AND localStorage immediately
+      const updatedChallenges = weeklyChallenges.map(c => 
+        c.key === challengeKey ? { ...c, claimed: true } : c
       );
+      
+      setWeeklyChallenges(updatedChallenges);
+      localStorage.setItem("weeklyChallenges", JSON.stringify(updatedChallenges));
+      
+      console.log("✅ [Rewards] Claimed challenge and saved to localStorage:", challengeKey);
     } catch (error) {
       console.error("Error claiming challenge:", error);
     }
