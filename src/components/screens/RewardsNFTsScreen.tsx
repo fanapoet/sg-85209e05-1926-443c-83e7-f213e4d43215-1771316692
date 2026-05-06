@@ -245,6 +245,12 @@ export function RewardsNFTsScreen() {
               const parsed = JSON.parse(savedChallenges);
               const uniqueChallenges = ensureUniqueChallenges(parsed);
               setWeeklyChallenges(uniqueChallenges);
+              
+              // CLEANUP: If we found duplicates, save the cleaned version back
+              if (uniqueChallenges.length !== parsed.length) {
+                console.log("🧹 [Rewards] Cleaned up duplicate challenges from localStorage");
+                localStorage.setItem("weeklyChallenges", JSON.stringify(uniqueChallenges));
+              }
             } catch (e) {
               console.error("Error loading challenges:", e);
               initializeDefaultChallenges();
@@ -261,6 +267,12 @@ export function RewardsNFTsScreen() {
             const parsed = JSON.parse(savedChallenges);
             const uniqueChallenges = ensureUniqueChallenges(parsed);
             setWeeklyChallenges(uniqueChallenges);
+            
+            // CLEANUP: If we found duplicates, save the cleaned version back
+            if (uniqueChallenges.length !== parsed.length) {
+              console.log("🧹 [Rewards] Cleaned up duplicate challenges from localStorage");
+              localStorage.setItem("weeklyChallenges", JSON.stringify(uniqueChallenges));
+            }
           } catch (e) {
             console.error("Error loading challenges:", e);
             initializeDefaultChallenges();
