@@ -139,11 +139,27 @@ export function RewardsNFTsScreen() {
     return Math.max(1, Math.min(daysPassed + 1, 7));
   })();
 
+  // Helper function to ensure unique challenges (no duplicates)
+  const ensureUniqueChallenges = (challenges: WeeklyChallenge[]): WeeklyChallenge[] => {
+    const seen = new Set<string>();
+    return challenges.filter(c => {
+      if (seen.has(c.key)) {
+        console.warn("⚠️ [Rewards] Duplicate challenge detected:", c.key);
+        return false;
+      }
+      seen.add(c.key);
+      return true;
+    });
+  };
+
   // Initialize challenges ONCE
   useEffect(() => {
     if (hasInitialized.current) return;
+    hasInitialized.current = true; // Set immediately to prevent double-init
     
     const initChallenges = async () => {
+      console.log("🔄 [Rewards] Initializing challenges...");
+      
       // Load Owned NFTs from localStorage
       const savedNFTs = localStorage.getItem("ownedNFTs");
       if (savedNFTs) {
@@ -217,15 +233,18 @@ export function RewardsNFTsScreen() {
             claimed: dbChallenge.claimed
           }));
           
-          console.log("✅ [Rewards] Loaded challenges from database:", challengesFromDB);
-          setWeeklyChallenges(challengesFromDB);
-          localStorage.setItem("weeklyChallenges", JSON.stringify(challengesFromDB));
+          const uniqueChallenges = ensureUniqueChallenges(challengesFromDB);
+          console.log("✅ [Rewards] Loaded challenges from database:", uniqueChallenges);
+          setWeeklyChallenges(uniqueChallenges);
+          localStorage.setItem("weeklyChallenges", JSON.stringify(uniqueChallenges));
         } else {
           // No DB data, load from localStorage or initialize defaults
           const savedChallenges = localStorage.getItem("weeklyChallenges");
           if (savedChallenges) {
             try {
-              setWeeklyChallenges(JSON.parse(savedChallenges));
+              const parsed = JSON.parse(savedChallenges);
+              const uniqueChallenges = ensureUniqueChallenges(parsed);
+              setWeeklyChallenges(uniqueChallenges);
             } catch (e) {
               console.error("Error loading challenges:", e);
               initializeDefaultChallenges();
@@ -239,7 +258,9 @@ export function RewardsNFTsScreen() {
         const savedChallenges = localStorage.getItem("weeklyChallenges");
         if (savedChallenges) {
           try {
-            setWeeklyChallenges(JSON.parse(savedChallenges));
+            const parsed = JSON.parse(savedChallenges);
+            const uniqueChallenges = ensureUniqueChallenges(parsed);
+            setWeeklyChallenges(uniqueChallenges);
           } catch (e) {
             console.error("Error loading challenges:", e);
             initializeDefaultChallenges();
@@ -250,7 +271,6 @@ export function RewardsNFTsScreen() {
       }
 
       setLoading(false);
-      hasInitialized.current = true;
     };
 
     const initializeDefaultChallenges = () => {
@@ -286,12 +306,13 @@ export function RewardsNFTsScreen() {
           claimed: false
         }
       ];
+      console.log("✅ [Rewards] Initialized default challenges");
       setWeeklyChallenges(defaultChallenges);
       localStorage.setItem("weeklyChallenges", JSON.stringify(defaultChallenges));
     };
 
     initChallenges();
-  }, [telegramId, currentWeeklyPeriodStart]); // Add dependencies
+  }, []); // EMPTY DEPS - only run once on mount
 
   // Re-load baselines when weekly period resets
   useEffect(() => {
@@ -353,7 +374,7 @@ export function RewardsNFTsScreen() {
         ];
         setWeeklyChallenges(freshChallenges);
         localStorage.setItem("weeklyChallenges", JSON.stringify(freshChallenges));
-        console.log("✅ [Rewards] Weekly challenges reset to fresh state with all claimed=false");
+        console.log("✅ [Rewards] Weekly challenges reset to fresh state");
       } catch (e) {
         console.error("Error reloading baselines:", e);
       }
@@ -372,35 +393,33 @@ export function RewardsNFTsScreen() {
     const upgradesProgress = Math.max(0, (totalUpgrades || 0) - baseUpgrades);
     const referralsProgress = Math.max(0, (referralCount || 0) - baseReferrals);
     const converterProgress = Math.max(0, (totalConversions || 0) - baseConversions);
-
-    console.log("📊 [Rewards] Progress calculation:", {
-      upgrades: { total: totalUpgrades, baseline: baseUpgrades, progress: upgradesProgress },
-      referrals: { total: referralCount, baseline: baseReferrals, progress: referralsProgress },
-      conversions: { total: totalConversions, baseline: baseConversions, progress: converterProgress }
+    
+    // CRITICAL FIX: Create new array with updated progress, preserve claimed status
+    const updatedChallenges = weeklyChallenges.map(c => {
+      // If already claimed, don't update anything
+      if (c.claimed) return c;
+      
+      // Calculate new progress based on challenge type
+      let newProgress = c.progress;
+      if (c.key === "builder") {
+        newProgress = Math.min(upgradesProgress, c.target);
+      } else if (c.key === "recruiter") {
+        newProgress = Math.min(referralsProgress, c.target);
+      } else if (c.key === "converter") {
+        newProgress = Math.min(converterProgress, c.target);
+      }
+      
+      // Only update if progress actually changed
+      if (newProgress === c.progress) return c;
+      
+      return { ...c, progress: newProgress };
     });
     
-    // CRITICAL FIX: Update UI immediately BUT preserve claimed status
-    setWeeklyChallenges(prev => 
-      prev.map(c => {
-        let newProgress = c.progress;
-        
-        if (c.key === "builder") {
-          newProgress = Math.min(upgradesProgress, c.target);
-        } else if (c.key === "recruiter") {
-          newProgress = Math.min(referralsProgress, c.target);
-        } else if (c.key === "converter") {
-          newProgress = Math.min(converterProgress, c.target);
-        }
-        
-        // CRITICAL: Only update progress if not claimed
-        // Once claimed, don't change anything until weekly reset
-        if (c.claimed) {
-          return c; // Keep as-is, don't update progress
-        }
-        
-        return { ...c, progress: newProgress };
-      })
-    );
+    // Only update state if something changed
+    const hasChanges = updatedChallenges.some((c, i) => c.progress !== weeklyChallenges[i].progress);
+    if (hasChanges) {
+      setWeeklyChallenges(updatedChallenges);
+    }
     
     // Sync to database in background (fire and forget) - only if we have telegramId and period start
     if (telegramId && currentWeeklyPeriodStart) {
@@ -414,7 +433,7 @@ export function RewardsNFTsScreen() {
       ]).catch(err => console.error("Background sync error:", err));
     }
     
-  }, [totalUpgrades, referralCount, totalConversions, loading, weeklyChallenges.length, telegramId, currentWeeklyPeriodStart]);
+  }, [totalUpgrades, referralCount, totalConversions, loading]);
 
   // Persist Challenges to LocalStorage - REMOVED: Causes race conditions
   // Challenges are now saved immediately after claim in handleClaimChallenge
