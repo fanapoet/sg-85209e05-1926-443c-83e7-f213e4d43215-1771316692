@@ -255,6 +255,20 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
         </Button>
       </div>
 
+      <div className="space-y-2">
+        <Button
+          onClick={() => {
+            localStorage.removeItem("weeklyChallenges");
+            localStorage.removeItem("weeklyBaselines");
+            window.location.reload();
+          }}
+          className="w-full"
+          variant="destructive"
+        >
+          🧹 Clear Weekly Challenges Data
+        </Button>
+      </div>
+
       {/* Sync Logs */}
       <div className="bg-purple-900 p-4 rounded-lg">
         <h3 className="font-bold mb-2">📝 Sync Logs (Last 50)</h3>
