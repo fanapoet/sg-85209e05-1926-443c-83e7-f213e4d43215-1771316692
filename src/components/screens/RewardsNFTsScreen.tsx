@@ -112,6 +112,7 @@ export function RewardsNFTsScreen() {
   const [loading, setLoading] = useState(true);
   const hasInitialized = useRef(false);
   const lastProcessedPeriod = useRef<string | null>(null);
+  const claimedChallengesRef = useRef<Set<string>>(new Set());
   
   // Track baselines in state so UI updates when they change
   const [weeklyBaselines, setWeeklyBaselines] = useState<{
@@ -235,6 +236,12 @@ export function RewardsNFTsScreen() {
           
           const uniqueChallenges = ensureUniqueChallenges(challengesFromDB);
           console.log("✅ [Rewards] Loaded challenges from database:", uniqueChallenges);
+          
+          // CRITICAL: Track claimed challenges in ref
+          uniqueChallenges.forEach(c => {
+            if (c.claimed) claimedChallengesRef.current.add(c.key);
+          });
+          
           setWeeklyChallenges(uniqueChallenges);
           localStorage.setItem("weeklyChallenges", JSON.stringify(uniqueChallenges));
         } else {
@@ -351,6 +358,9 @@ export function RewardsNFTsScreen() {
         console.log("📊 [Rewards] New baselines loaded:", baselines);
         setWeeklyBaselines(baselines);
         
+        // CRITICAL: Clear claimed challenges ref on weekly reset
+        claimedChallengesRef.current.clear();
+        
         // CRITICAL FIX: Reset the weeklyChallenges to fresh state (all unclaimed)
         const freshChallenges = [
           {
@@ -393,7 +403,7 @@ export function RewardsNFTsScreen() {
     }
   }, [currentWeeklyPeriodStart]);
 
-  // Update Challenge Progress - Simple direct update
+  // Update Challenge Progress - Use ref to preserve claimed status
   useEffect(() => {
     if (loading || weeklyChallenges.length === 0) return;
     
@@ -406,10 +416,19 @@ export function RewardsNFTsScreen() {
     const referralsProgress = Math.max(0, (referralCount || 0) - baseReferrals);
     const converterProgress = Math.max(0, (totalConversions || 0) - baseConversions);
     
-    // CRITICAL FIX: Create new array with updated progress, preserve claimed status
+    console.log("📊 [Rewards] Progress update:", {
+      totalConversions,
+      baseConversions,
+      converterProgress,
+      claimedChallenges: Array.from(claimedChallengesRef.current)
+    });
+    
+    // CRITICAL FIX: Use ref to check claimed status, not state
     const updatedChallenges = weeklyChallenges.map(c => {
-      // If already claimed, don't update anything
-      if (c.claimed) return c;
+      // Check ref for claimed status (more reliable than state)
+      if (claimedChallengesRef.current.has(c.key)) {
+        return { ...c, claimed: true };
+      }
       
       // Calculate new progress based on challenge type
       let newProgress = c.progress;
@@ -421,17 +440,11 @@ export function RewardsNFTsScreen() {
         newProgress = Math.min(converterProgress, c.target);
       }
       
-      // Only update if progress actually changed
-      if (newProgress === c.progress) return c;
-      
-      return { ...c, progress: newProgress };
+      return { ...c, progress: newProgress, claimed: false };
     });
     
-    // Only update state if something changed
-    const hasChanges = updatedChallenges.some((c, i) => c.progress !== weeklyChallenges[i].progress);
-    if (hasChanges) {
-      setWeeklyChallenges(updatedChallenges);
-    }
+    // Always update to ensure claimed status is applied
+    setWeeklyChallenges(updatedChallenges);
     
     // Sync to database in background (fire and forget) - only if we have telegramId and period start
     if (telegramId && currentWeeklyPeriodStart) {
@@ -601,7 +614,20 @@ export function RewardsNFTsScreen() {
     
     try {
       const challenge = weeklyChallenges.find(c => c.key === challengeKey);
-      if (!challenge || challenge.progress < challenge.target || challenge.claimed) return;
+      if (!challenge || challenge.progress < challenge.target || claimedChallengesRef.current.has(challengeKey)) {
+        console.log("⚠️ [Rewards] Cannot claim:", {
+          found: !!challenge,
+          progress: challenge?.progress,
+          target: challenge?.target,
+          alreadyClaimed: claimedChallengesRef.current.has(challengeKey)
+        });
+        return;
+      }
+      
+      console.log("🎁 [Rewards] Claiming challenge:", challengeKey);
+      
+      // CRITICAL: Add to ref FIRST before any async operations
+      claimedChallengesRef.current.add(challengeKey);
       
       const year = new Date(currentWeeklyPeriodStart).getFullYear();
       const weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
@@ -614,7 +640,7 @@ export function RewardsNFTsScreen() {
       if (challenge.reward.type === "BB") addBB(challenge.reward.amount);
       if (challenge.reward.type === "XP") addXP(challenge.reward.amount);
       
-      // CRITICAL FIX: Update UI AND localStorage immediately
+      // Update UI state
       const updatedChallenges = weeklyChallenges.map(c => 
         c.key === challengeKey ? { ...c, claimed: true } : c
       );
@@ -622,9 +648,11 @@ export function RewardsNFTsScreen() {
       setWeeklyChallenges(updatedChallenges);
       localStorage.setItem("weeklyChallenges", JSON.stringify(updatedChallenges));
       
-      console.log("✅ [Rewards] Claimed challenge and saved to localStorage:", challengeKey);
+      console.log("✅ [Rewards] Claimed challenge successfully:", challengeKey);
     } catch (error) {
-      console.error("Error claiming challenge:", error);
+      console.error("❌ [Rewards] Error claiming challenge:", error);
+      // Remove from ref if claim failed
+      claimedChallengesRef.current.delete(challengeKey);
     }
   };
 
