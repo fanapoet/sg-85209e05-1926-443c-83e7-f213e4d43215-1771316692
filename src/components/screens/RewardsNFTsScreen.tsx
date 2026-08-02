@@ -392,7 +392,11 @@ export function RewardsNFTsScreen() {
     
     try {
       const { year, weekNumber } = getYearAndWeek(currentWeeklyPeriodStart);
+      console.log("🎁 [Rewards] Claiming challenge:", challengeKey, { year, weekNumber, telegramId });
+      
       const result = await claimWeeklyChallenge(telegramId, challengeKey as ChallengeKey, year, weekNumber);
+      
+      console.log("🎁 [Rewards] Claim result:", result);
       
       if (!result.success) throw new Error(result.error || "Claim failed");
       
@@ -400,6 +404,8 @@ export function RewardsNFTsScreen() {
       if (challenge.reward.type === "BZ") addBZ(challenge.reward.amount);
       if (challenge.reward.type === "BB") addBB(challenge.reward.amount);
       if (challenge.reward.type === "XP") addXP(challenge.reward.amount);
+      
+      console.log("🎁 [Rewards] Balance updated:", challenge.reward);
       
       // Refresh challenges from DB to ensure UI matches source of truth
       await loadChallenges();

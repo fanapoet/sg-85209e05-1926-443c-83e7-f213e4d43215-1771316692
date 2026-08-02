@@ -28,6 +28,7 @@ export interface WeeklyChallengeStats {
 
 /**
  * Get weekly challenges from database (by telegram_id)
+ * Returns only the most recent row per challenge_key to handle duplicate rows
  */
 export async function getWeeklyChallenges(
   telegramId: number,
@@ -61,7 +62,8 @@ export async function getWeeklyChallenges(
       query = query.eq("week_number", weekNumber);
     }
 
-    const { data, error } = await query;
+    // Order by updated_at so the most recent row wins
+    const { data, error } = await query.order("updated_at", { ascending: false });
 
     if (error) {
       console.error("❌ [WeeklyChallenge] Fetch error:", error);
@@ -73,7 +75,18 @@ export async function getWeeklyChallenges(
       return { success: true, data: [] };
     }
 
-    const challenges: WeeklyChallengeData[] = data.map(row => ({
+    // Deduplicate by challenge_key, keeping the most recently updated row
+    const seen = new Set<string>();
+    const deduped = data.filter((row: any) => {
+      if (seen.has(row.challenge_key)) {
+        console.warn("⚠️ [WeeklyChallenge] Duplicate row found for", row.challenge_key, "- using most recent");
+        return false;
+      }
+      seen.add(row.challenge_key);
+      return true;
+    });
+
+    const challenges: WeeklyChallengeData[] = deduped.map(row => ({
       challengeKey: row.challenge_key as ChallengeKey,
       baselineValue: row.baseline_value,
       currentProgress: row.current_progress,
@@ -191,22 +204,31 @@ export async function claimWeeklyChallenge(
     // Get existing challenge to preserve baseline/progress
     const { data: existing } = await supabase
       .from("user_weekly_challenges")
-      .select("baseline_value, current_progress, target_value, completed")
+      .select("baseline_value, current_progress, target_value, completed, claimed")
       .eq("telegram_id", telegramId)
       .eq("challenge_key", challengeKey)
       .eq("year", year)
       .eq("week_number", weekNumber)
+      .order("updated_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
+    // Already claimed - don't allow double claim
+    if (existing?.claimed) {
+      console.log("⚠️ [WeeklyChallenge] Already claimed:", challengeKey);
+      return { success: false, error: "Already claimed" };
+    }
+
     const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
+    const targetValue = existing?.target_value ?? (challengeKey === "builder" ? 50 : challengeKey === "recruiter" ? 5 : 10);
 
     const record = {
       user_id: profile.id,
       telegram_id: telegramId,
       challenge_key: challengeKey,
       baseline_value: existing?.baseline_value ?? 0,
-      current_progress: existing?.current_progress ?? existing?.target_value ?? 10,
-      target_value: existing?.target_value ?? (challengeKey === "builder" ? 50 : challengeKey === "recruiter" ? 5 : 10),
+      current_progress: targetValue,
+      target_value: targetValue,
       completed: true,
       claimed: true,
       week_start_date: weekStartDate,
