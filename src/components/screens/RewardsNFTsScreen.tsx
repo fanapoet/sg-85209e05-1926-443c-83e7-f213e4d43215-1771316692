@@ -383,9 +383,6 @@ export function RewardsNFTsScreen() {
       if (challenge.reward.type === "BB") addBB(challenge.reward.amount);
       if (challenge.reward.type === "XP") addXP(challenge.reward.amount);
       
-      // Trigger a manual sync so the balance change persists to DB
-      await manualSync();
-      
       // Refresh challenges from DB to ensure UI matches source of truth
       await loadChallenges();
     } catch (error) {
