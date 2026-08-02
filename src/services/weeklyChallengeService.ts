@@ -505,14 +505,3 @@ export async function syncWeeklyChallenges(
     return { success: false, error: errorMsg };
   }
 }
-
-export {
-  getWeeklyChallenges,
-  updateChallengeProgress,
-  claimWeeklyChallenge,
-  resetWeeklyChallenges,
-  syncWeeklyChallenges,
-  initializeChallenges
-};
-
-export type { ChallengeKey, WeeklyChallengeData, WeeklyChallengeStats };
