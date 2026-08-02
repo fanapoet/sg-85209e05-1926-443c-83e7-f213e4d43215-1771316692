@@ -130,10 +130,10 @@ export async function updateChallengeProgress(
       return { success: false, error: "Profile not found" };
     }
 
-    // Get existing challenge to get baseline
+    // Get the most recent existing row
     const { data: existingRows, error: existingError } = await supabase
       .from("user_weekly_challenges")
-      .select("baseline_value, claimed")
+      .select("id, baseline_value, claimed")
       .eq("telegram_id", telegramId)
       .eq("challenge_key", challengeKey)
       .eq("year", year)
@@ -141,36 +141,55 @@ export async function updateChallengeProgress(
       .order("updated_at", { ascending: false })
       .limit(1);
 
+    if (existingError) {
+      console.error("❌ [WeeklyChallenge] Fetch existing error:", existingError);
+      return { success: false, error: existingError.message };
+    }
+
     const existing = existingRows?.[0];
     const baseline = existing?.baseline_value ?? currentValue;
     const progress = Math.max(0, currentValue - baseline);
     const completed = progress >= targetValue;
-    const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
 
-    const record = {
-      user_id: profile.id,
-      telegram_id: telegramId,
-      challenge_key: challengeKey,
-      baseline_value: baseline,
-      current_progress: progress,
-      target_value: targetValue,
-      completed,
-      claimed: existing?.claimed ?? false,
-      week_start_date: weekStartDate,
-      year,
-      week_number: weekNumber,
-      updated_at: new Date().toISOString()
-    };
+    if (existing) {
+      // Update only progress/completed — NEVER touch claimed
+      const { error } = await supabase
+        .from("user_weekly_challenges")
+        .update({
+          current_progress: progress,
+          completed,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", existing.id);
 
-    const { error } = await supabase
-      .from("user_weekly_challenges")
-      .upsert(record, {
-        onConflict: "user_id,challenge_key,week_start_date"
-      });
+      if (error) {
+        console.error("❌ [WeeklyChallenge] Update error:", error);
+        return { success: false, error: error.message };
+      }
+    } else {
+      // Insert new unclaimed row
+      const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
+      const { error } = await supabase
+        .from("user_weekly_challenges")
+        .insert({
+          user_id: profile.id,
+          telegram_id: telegramId,
+          challenge_key: challengeKey,
+          baseline_value: baseline,
+          current_progress: progress,
+          target_value: targetValue,
+          completed,
+          claimed: false,
+          week_start_date: weekStartDate,
+          year,
+          week_number: weekNumber,
+          updated_at: new Date().toISOString()
+        });
 
-    if (error) {
-      console.error("❌ [WeeklyChallenge] Update error:", error);
-      return { success: false, error: error.message };
+      if (error) {
+        console.error("❌ [WeeklyChallenge] Insert error:", error);
+        return { success: false, error: error.message };
+      }
     }
 
     return { success: true };
@@ -505,7 +524,7 @@ export async function syncWeeklyChallenges(
 
     const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
 
-    // Get existing challenges to preserve baselines and claimed status
+    // Get existing challenges to preserve baselines
     const { data: existingRows, error: fetchError } = await supabase
       .from("user_weekly_challenges")
       .select("*")
@@ -529,68 +548,54 @@ export async function syncWeeklyChallenges(
 
     const getExisting = (key: ChallengeKey) => existingMap.get(key);
 
-    const challenges = [
-      {
-        user_id: profile.id,
-        telegram_id: telegramId,
-        challenge_key: "builder",
-        baseline_value: getExisting("builder")?.baseline_value ?? currentStats.totalUpgrades,
-        current_progress: Math.max(0, currentStats.totalUpgrades - (getExisting("builder")?.baseline_value ?? currentStats.totalUpgrades)),
-        target_value: 50,
-        completed: (currentStats.totalUpgrades - (getExisting("builder")?.baseline_value ?? currentStats.totalUpgrades)) >= 50,
-        claimed: getExisting("builder")?.claimed ?? false,
-        week_start_date: weekStartDate,
-        year,
-        week_number: weekNumber
-      },
-      {
-        user_id: profile.id,
-        telegram_id: telegramId,
-        challenge_key: "recruiter",
-        baseline_value: getExisting("recruiter")?.baseline_value ?? currentStats.referralCount,
-        current_progress: Math.max(0, currentStats.referralCount - (getExisting("recruiter")?.baseline_value ?? currentStats.referralCount)),
-        target_value: 5,
-        completed: (currentStats.referralCount - (getExisting("recruiter")?.baseline_value ?? currentStats.referralCount)) >= 5,
-        claimed: getExisting("recruiter")?.claimed ?? false,
-        week_start_date: weekStartDate,
-        year,
-        week_number: weekNumber
-      },
-      {
-        user_id: profile.id,
-        telegram_id: telegramId,
-        challenge_key: "converter",
-        baseline_value: getExisting("converter")?.baseline_value ?? currentStats.totalConversions,
-        current_progress: Math.max(0, currentStats.totalConversions - (getExisting("converter")?.baseline_value ?? currentStats.totalConversions)),
-        target_value: 10,
-        completed: (currentStats.totalConversions - (getExisting("converter")?.baseline_value ?? currentStats.totalConversions)) >= 10,
-        claimed: getExisting("converter")?.claimed ?? false,
-        week_start_date: weekStartDate,
-        year,
-        week_number: weekNumber
+    for (const key of ["builder", "recruiter", "converter"] as ChallengeKey[]) {
+      const existing = getExisting(key);
+      const baseline = existing?.baseline_value ?? (key === "builder" ? currentStats.totalUpgrades : key === "recruiter" ? currentStats.referralCount : currentStats.totalConversions);
+      const currentValue = key === "builder" ? currentStats.totalUpgrades : key === "recruiter" ? currentStats.referralCount : currentStats.totalConversions;
+      const progress = Math.max(0, currentValue - baseline);
+      const completed = progress >= (key === "builder" ? 50 : key === "recruiter" ? 5 : 10);
+
+      if (existing) {
+        // Update only progress/completed — NEVER touch claimed
+        const { error } = await supabase
+          .from("user_weekly_challenges")
+          .update({
+            baseline_value: baseline,
+            current_progress: progress,
+            completed,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", existing.id);
+
+        if (error) {
+          console.error(`❌ [WeeklyChallenge-Sync] Update ${key} error:`, error);
+        }
+      } else {
+        // Insert new unclaimed row
+        const { error } = await supabase
+          .from("user_weekly_challenges")
+          .insert({
+            user_id: profile.id,
+            telegram_id: telegramId,
+            challenge_key: key,
+            baseline_value: baseline,
+            current_progress: progress,
+            target_value: key === "builder" ? 50 : key === "recruiter" ? 5 : 10,
+            completed,
+            claimed: false,
+            week_start_date: weekStartDate,
+            year,
+            week_number: weekNumber,
+            updated_at: new Date().toISOString()
+          });
+
+        if (error) {
+          console.error(`❌ [WeeklyChallenge-Sync] Insert ${key} error:`, error);
+        }
       }
-    ];
-
-    console.log("📝 [WeeklyChallenge-Sync] Upserting challenges:", JSON.stringify(challenges, null, 2));
-
-    const { data: upsertData, error } = await supabase
-      .from("user_weekly_challenges")
-      .upsert(challenges, {
-        onConflict: "user_id,challenge_key,week_start_date"
-      });
-
-    if (error) {
-      const errorDetails = {
-        message: error.message,
-        details: error.details,
-        hint: error.hint,
-        code: error.code
-      };
-      console.error("❌ [WeeklyChallenge-Sync] Upsert failed:", JSON.stringify(errorDetails, null, 2));
-      return { success: false, error: JSON.stringify(errorDetails) };
     }
 
-    console.log(`✅ [WeeklyChallenge-Sync] Successfully synced ${challenges.length} challenges`);
+    console.log(`✅ [WeeklyChallenge-Sync] Successfully synced 3 challenges`);
     return { success: true };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : JSON.stringify(error);
