@@ -13,7 +13,7 @@ position: 1
 Roadmap to make BunBun TMA fully functional. Prioritized by user-facing impact.
 
 ## Checklist
-- [ ] P0: Fix weekly challenges (Supabase as source of truth, remove localStorage races)
+- [x] P0: Fix weekly challenges (Supabase as source of truth, remove localStorage races)
 - [ ] P1: Remove localStorage as database for critical state
 - [ ] P2: Fix conversion history loading from DB
 - [ ] P3: Harden Telegram auth and remove mock fallbacks
