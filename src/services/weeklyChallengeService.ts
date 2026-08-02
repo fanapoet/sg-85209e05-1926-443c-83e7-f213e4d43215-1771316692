@@ -130,7 +130,7 @@ export async function updateChallengeProgress(
     const baseline = existing?.baseline_value ?? currentValue;
     const progress = Math.max(0, currentValue - baseline);
     const completed = progress >= targetValue;
-    const weekStartDate = new Date().toISOString().split("T")[0];
+    const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
 
     const record = {
       user_id: profile.id,
@@ -233,7 +233,7 @@ export async function resetWeeklyChallenges(
       return { success: false, error: "Profile not found" };
     }
 
-    const weekStartDate = new Date().toISOString().split("T")[0];
+    const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
 
     const challenges = [
       {
@@ -318,7 +318,7 @@ export async function initializeChallenges(
       return { success: false, error: "Profile not found" };
     }
 
-    const weekStartDate = new Date().toISOString().split("T")[0];
+    const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
 
     const challenges = [
       {
@@ -420,7 +420,7 @@ export async function syncWeeklyChallenges(
       return { success: false, error: errorMsg };
     }
 
-    const weekStartDate = new Date().toISOString().split("T")[0];
+    const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
 
     // Get existing challenges to preserve baselines
     const { data: existing, error: fetchError } = await supabase

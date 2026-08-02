@@ -378,11 +378,15 @@ export function RewardsNFTsScreen() {
       
       if (!result.success) throw new Error(result.error || "Claim failed");
       
+      // Update balances BEFORE refreshing from DB so UI updates immediately
       if (challenge.reward.type === "BZ") addBZ(challenge.reward.amount);
       if (challenge.reward.type === "BB") addBB(challenge.reward.amount);
       if (challenge.reward.type === "XP") addXP(challenge.reward.amount);
       
-      // Refresh from DB to ensure UI matches source of truth
+      // Trigger a manual sync so the balance change persists to DB
+      await manualSync();
+      
+      // Refresh challenges from DB to ensure UI matches source of truth
       await loadChallenges();
     } catch (error) {
       console.error("Error claiming challenge:", error);
