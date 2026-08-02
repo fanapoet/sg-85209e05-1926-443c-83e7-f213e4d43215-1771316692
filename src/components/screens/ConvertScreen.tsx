@@ -248,7 +248,7 @@ export function ConvertScreen() {
       if (conversionType === "bz-to-bb") {
         if (subtractBZ(amount)) {
           addBB(preview.output);
-          incrementConversions(amount);
+          incrementConversions(1);
           
           saveTransaction({
             id: txId,

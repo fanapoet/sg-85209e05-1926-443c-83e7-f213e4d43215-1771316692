@@ -131,15 +131,17 @@ export async function updateChallengeProgress(
     }
 
     // Get existing challenge to get baseline
-    const { data: existing } = await supabase
+    const { data: existingRows, error: existingError } = await supabase
       .from("user_weekly_challenges")
       .select("baseline_value, claimed")
       .eq("telegram_id", telegramId)
       .eq("challenge_key", challengeKey)
       .eq("year", year)
       .eq("week_number", weekNumber)
-      .maybeSingle();
+      .order("updated_at", { ascending: false })
+      .limit(1);
 
+    const existing = existingRows?.[0];
     const baseline = existing?.baseline_value ?? currentValue;
     const progress = Math.max(0, currentValue - baseline);
     const completed = progress >= targetValue;
@@ -365,6 +367,7 @@ export async function resetWeeklyChallenges(
 /**
  * Initialize weekly challenges for a new week
  * Creates rows with baseline = current stats, progress = 0
+ * Skips if rows already exist
  */
 export async function initializeChallenges(
   telegramId: number,
@@ -382,6 +385,20 @@ export async function initializeChallenges(
     if (profileError || !profile) {
       console.error("❌ [WeeklyChallenge] Profile not found:", profileError);
       return { success: false, error: "Profile not found" };
+    }
+
+    // Check if rows already exist
+    const { data: existingRows } = await supabase
+      .from("user_weekly_challenges")
+      .select("challenge_key")
+      .eq("telegram_id", telegramId)
+      .eq("year", year)
+      .eq("week_number", weekNumber)
+      .limit(1);
+
+    if (existingRows && existingRows.length > 0) {
+      console.log("ℹ️ [WeeklyChallenge] Already initialized for this week");
+      return { success: true, data: [] };
     }
 
     const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
@@ -489,18 +506,28 @@ export async function syncWeeklyChallenges(
     const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
 
     // Get existing challenges to preserve baselines and claimed status
-    const { data: existing, error: fetchError } = await supabase
+    const { data: existingRows, error: fetchError } = await supabase
       .from("user_weekly_challenges")
       .select("*")
       .eq("telegram_id", telegramId)
       .eq("year", year)
-      .eq("week_number", weekNumber);
+      .eq("week_number", weekNumber)
+      .order("updated_at", { ascending: false });
 
     if (fetchError) {
       console.error("❌ [WeeklyChallenge-Sync] Fetch error:", JSON.stringify(fetchError));
     }
 
-    const getExisting = (key: ChallengeKey) => existing?.find((c: any) => c.challenge_key === key);
+    // Deduplicate by challenge_key, keeping most recent row
+    const existingMap = new Map<ChallengeKey, any>();
+    existingRows?.forEach((row: any) => {
+      const key = row.challenge_key as ChallengeKey;
+      if (!existingMap.has(key)) {
+        existingMap.set(key, row);
+      }
+    });
+
+    const getExisting = (key: ChallengeKey) => existingMap.get(key);
 
     const challenges = [
       {
