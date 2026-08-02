@@ -167,6 +167,7 @@ export async function updateChallengeProgress(
 
 /**
  * Claim weekly challenge reward (by telegram_id)
+ * Uses upsert to create row if it doesn't exist
  */
 export async function claimWeeklyChallenge(
   telegramId: number,
@@ -187,16 +188,38 @@ export async function claimWeeklyChallenge(
       return { success: false, error: "Profile not found" };
     }
 
-    const { error } = await supabase
+    // Get existing challenge to preserve baseline/progress
+    const { data: existing } = await supabase
       .from("user_weekly_challenges")
-      .update({ 
-        claimed: true,
-        updated_at: new Date().toISOString()
-      })
+      .select("baseline_value, current_progress, target_value, completed")
       .eq("telegram_id", telegramId)
       .eq("challenge_key", challengeKey)
       .eq("year", year)
-      .eq("week_number", weekNumber);
+      .eq("week_number", weekNumber)
+      .maybeSingle();
+
+    const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
+
+    const record = {
+      user_id: profile.id,
+      telegram_id: telegramId,
+      challenge_key: challengeKey,
+      baseline_value: existing?.baseline_value ?? 0,
+      current_progress: existing?.current_progress ?? existing?.target_value ?? 10,
+      target_value: existing?.target_value ?? (challengeKey === "builder" ? 50 : challengeKey === "recruiter" ? 5 : 10),
+      completed: true,
+      claimed: true,
+      week_start_date: weekStartDate,
+      year,
+      week_number: weekNumber,
+      updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabase
+      .from("user_weekly_challenges")
+      .upsert(record, {
+        onConflict: "user_id,challenge_key,week_start_date"
+      });
 
     if (error) {
       console.error("❌ [WeeklyChallenge] Claim error:", error);

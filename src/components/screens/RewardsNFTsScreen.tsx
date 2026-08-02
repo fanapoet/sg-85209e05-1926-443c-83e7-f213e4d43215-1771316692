@@ -404,10 +404,7 @@ export function RewardsNFTsScreen() {
       // Refresh challenges from DB to ensure UI matches source of truth
       await loadChallenges();
       
-      toast({
-        title: "🎁 Challenge Claimed",
-        description: `+${challenge.reward.type === "BB" ? challenge.reward.amount.toFixed(3) : challenge.reward.amount.toLocaleString()} ${challenge.reward.type}`
-      });
+      console.log("✅ [Rewards] Claimed challenge successfully:", challengeKey);
     } catch (error) {
       console.error("❌ [Rewards] Error claiming challenge:", error);
       // Revert UI if claim failed
