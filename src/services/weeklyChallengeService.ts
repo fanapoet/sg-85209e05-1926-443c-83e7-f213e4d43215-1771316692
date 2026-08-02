@@ -422,7 +422,7 @@ export async function syncWeeklyChallenges(
 
     const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
 
-    // Get existing challenges to preserve baselines
+    // Get existing challenges to preserve baselines and claimed status
     const { data: existing, error: fetchError } = await supabase
       .from("user_weekly_challenges")
       .select("*")
@@ -434,18 +434,18 @@ export async function syncWeeklyChallenges(
       console.error("❌ [WeeklyChallenge-Sync] Fetch error:", JSON.stringify(fetchError));
     }
 
-    console.log("📊 [WeeklyChallenge-Sync] Existing challenges:", existing);
+    const getExisting = (key: ChallengeKey) => existing?.find((c: any) => c.challenge_key === key);
 
     const challenges = [
       {
         user_id: profile.id,
         telegram_id: telegramId,
         challenge_key: "builder",
-        baseline_value: existing?.find((c: any) => c.challenge_key === "builder")?.baseline_value || currentStats.totalUpgrades,
-        current_progress: Math.max(0, currentStats.totalUpgrades - (existing?.find((c: any) => c.challenge_key === "builder")?.baseline_value || currentStats.totalUpgrades)),
+        baseline_value: getExisting("builder")?.baseline_value ?? currentStats.totalUpgrades,
+        current_progress: Math.max(0, currentStats.totalUpgrades - (getExisting("builder")?.baseline_value ?? currentStats.totalUpgrades)),
         target_value: 50,
-        completed: (currentStats.totalUpgrades - (existing?.find((c: any) => c.challenge_key === "builder")?.baseline_value || currentStats.totalUpgrades)) >= 50,
-        claimed: existing?.find((c: any) => c.challenge_key === "builder")?.claimed || false,
+        completed: (currentStats.totalUpgrades - (getExisting("builder")?.baseline_value ?? currentStats.totalUpgrades)) >= 50,
+        claimed: getExisting("builder")?.claimed ?? false,
         week_start_date: weekStartDate,
         year,
         week_number: weekNumber
@@ -454,11 +454,11 @@ export async function syncWeeklyChallenges(
         user_id: profile.id,
         telegram_id: telegramId,
         challenge_key: "recruiter",
-        baseline_value: existing?.find((c: any) => c.challenge_key === "recruiter")?.baseline_value || currentStats.referralCount,
-        current_progress: Math.max(0, currentStats.referralCount - (existing?.find((c: any) => c.challenge_key === "recruiter")?.baseline_value || currentStats.referralCount)),
+        baseline_value: getExisting("recruiter")?.baseline_value ?? currentStats.referralCount,
+        current_progress: Math.max(0, currentStats.referralCount - (getExisting("recruiter")?.baseline_value ?? currentStats.referralCount)),
         target_value: 5,
-        completed: (currentStats.referralCount - (existing?.find((c: any) => c.challenge_key === "recruiter")?.baseline_value || currentStats.referralCount)) >= 5,
-        claimed: existing?.find((c: any) => c.challenge_key === "recruiter")?.claimed || false,
+        completed: (currentStats.referralCount - (getExisting("recruiter")?.baseline_value ?? currentStats.referralCount)) >= 5,
+        claimed: getExisting("recruiter")?.claimed ?? false,
         week_start_date: weekStartDate,
         year,
         week_number: weekNumber
@@ -467,11 +467,11 @@ export async function syncWeeklyChallenges(
         user_id: profile.id,
         telegram_id: telegramId,
         challenge_key: "converter",
-        baseline_value: existing?.find((c: any) => c.challenge_key === "converter")?.baseline_value || currentStats.totalConversions,
-        current_progress: Math.max(0, currentStats.totalConversions - (existing?.find((c: any) => c.challenge_key === "converter")?.baseline_value || currentStats.totalConversions)),
+        baseline_value: getExisting("converter")?.baseline_value ?? currentStats.totalConversions,
+        current_progress: Math.max(0, currentStats.totalConversions - (getExisting("converter")?.baseline_value ?? currentStats.totalConversions)),
         target_value: 10,
-        completed: (currentStats.totalConversions - (existing?.find((c: any) => c.challenge_key === "converter")?.baseline_value || currentStats.totalConversions)) >= 10,
-        claimed: existing?.find((c: any) => c.challenge_key === "converter")?.claimed || false,
+        completed: (currentStats.totalConversions - (getExisting("converter")?.baseline_value ?? currentStats.totalConversions)) >= 10,
+        claimed: getExisting("converter")?.claimed ?? false,
         week_start_date: weekStartDate,
         year,
         week_number: weekNumber

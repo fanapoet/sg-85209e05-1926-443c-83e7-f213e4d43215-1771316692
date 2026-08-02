@@ -1,5 +1,5 @@
 import { useGameState } from "@/contexts/GameStateContext";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -142,6 +142,7 @@ export function RewardsNFTsScreen() {
   const [ownedNFTs, setOwnedNFTs] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [claimingKey, setClaimingKey] = useState<string | null>(null);
+  const claimedKeysRef = useRef<Set<string>>(new Set());
 
   const tgUser = getCurrentTelegramUser();
   const telegramId = tgUser?.id;
@@ -223,6 +224,11 @@ export function RewardsNFTsScreen() {
         progress,
         claimed: db?.claimed ?? false
       };
+    });
+
+    // Keep track of claimed keys to prevent race-condition re-claims
+    merged.forEach(c => {
+      if (c.claimed) claimedKeysRef.current.add(c.key);
     });
 
     setWeeklyChallenges(merged);
@@ -368,8 +374,20 @@ export function RewardsNFTsScreen() {
     if (!telegramId || !currentWeeklyPeriodStart || claimingKey) return;
     
     const challenge = weeklyChallenges.find(c => c.key === challengeKey);
-    if (!challenge || challenge.progress < challenge.target || challenge.claimed) return;
+    if (!challenge || challenge.progress < challenge.target || challenge.claimed || claimedKeysRef.current.has(challengeKey)) {
+      console.log("⚠️ [Rewards] Cannot claim:", { 
+        found: !!challenge, 
+        progress: challenge?.progress, 
+        target: challenge?.target, 
+        claimed: challenge?.claimed,
+        alreadyClaimedThisSession: claimedKeysRef.current.has(challengeKey)
+      });
+      return;
+    }
     
+    // Mark as claimed immediately in UI
+    claimedKeysRef.current.add(challengeKey);
+    setWeeklyChallenges(prev => prev.map(c => c.key === challengeKey ? { ...c, claimed: true } : c));
     setClaimingKey(challengeKey);
     
     try {
@@ -378,15 +396,23 @@ export function RewardsNFTsScreen() {
       
       if (!result.success) throw new Error(result.error || "Claim failed");
       
-      // Update balances BEFORE refreshing from DB so UI updates immediately
+      // Update balances
       if (challenge.reward.type === "BZ") addBZ(challenge.reward.amount);
       if (challenge.reward.type === "BB") addBB(challenge.reward.amount);
       if (challenge.reward.type === "XP") addXP(challenge.reward.amount);
       
       // Refresh challenges from DB to ensure UI matches source of truth
       await loadChallenges();
+      
+      toast({
+        title: "🎁 Challenge Claimed",
+        description: `+${challenge.reward.type === "BB" ? challenge.reward.amount.toFixed(3) : challenge.reward.amount.toLocaleString()} ${challenge.reward.type}`
+      });
     } catch (error) {
-      console.error("Error claiming challenge:", error);
+      console.error("❌ [Rewards] Error claiming challenge:", error);
+      // Revert UI if claim failed
+      claimedKeysRef.current.delete(challengeKey);
+      setWeeklyChallenges(prev => prev.map(c => c.key === challengeKey ? { ...c, claimed: false } : c));
     } finally {
       setClaimingKey(null);
     }
