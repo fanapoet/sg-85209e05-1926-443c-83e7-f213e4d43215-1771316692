@@ -297,6 +297,103 @@ export async function resetWeeklyChallenges(
 }
 
 /**
+ * Initialize weekly challenges for a new week
+ * Creates rows with baseline = current stats, progress = 0
+ */
+export async function initializeChallenges(
+  telegramId: number,
+  year: number,
+  weekNumber: number,
+  currentStats: WeeklyChallengeStats
+): Promise<{ success: boolean; data?: WeeklyChallengeData[]; error?: string }> {
+  try {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("telegram_id", telegramId)
+      .maybeSingle();
+
+    if (profileError || !profile) {
+      console.error("❌ [WeeklyChallenge] Profile not found:", profileError);
+      return { success: false, error: "Profile not found" };
+    }
+
+    const weekStartDate = new Date().toISOString().split("T")[0];
+
+    const challenges = [
+      {
+        user_id: profile.id,
+        telegram_id: telegramId,
+        challenge_key: "builder",
+        baseline_value: currentStats.totalUpgrades,
+        current_progress: 0,
+        target_value: 50,
+        completed: false,
+        claimed: false,
+        week_start_date: weekStartDate,
+        year,
+        week_number: weekNumber
+      },
+      {
+        user_id: profile.id,
+        telegram_id: telegramId,
+        challenge_key: "recruiter",
+        baseline_value: currentStats.referralCount,
+        current_progress: 0,
+        target_value: 5,
+        completed: false,
+        claimed: false,
+        week_start_date: weekStartDate,
+        year,
+        week_number: weekNumber
+      },
+      {
+        user_id: profile.id,
+        telegram_id: telegramId,
+        challenge_key: "converter",
+        baseline_value: currentStats.totalConversions,
+        current_progress: 0,
+        target_value: 10,
+        completed: false,
+        claimed: false,
+        week_start_date: weekStartDate,
+        year,
+        week_number: weekNumber
+      }
+    ];
+
+    const { error } = await supabase
+      .from("user_weekly_challenges")
+      .upsert(challenges, {
+        onConflict: "user_id,challenge_key,week_start_date"
+      });
+
+    if (error) {
+      console.error("❌ [WeeklyChallenge] Initialize error:", error);
+      return { success: false, error: error.message };
+    }
+
+    return {
+      success: true,
+      data: challenges.map(row => ({
+        challengeKey: row.challenge_key as ChallengeKey,
+        baselineValue: row.baseline_value,
+        currentProgress: row.current_progress,
+        targetValue: row.target_value,
+        completed: row.completed,
+        claimed: row.claimed,
+        weekStartDate: row.week_start_date,
+        year: row.year,
+        weekNumber: row.week_number
+      }))
+    };
+  } catch (error) {
+    console.error("❌ [WeeklyChallenge] Initialize exception:", error);
+    return { success: false, error: String(error) };
+  }
+}
+
+/**
  * Sync weekly challenges with current stats (by telegram_id)
  * Called during manual sync
  */
@@ -408,3 +505,14 @@ export async function syncWeeklyChallenges(
     return { success: false, error: errorMsg };
   }
 }
+
+export {
+  getWeeklyChallenges,
+  updateChallengeProgress,
+  claimWeeklyChallenge,
+  resetWeeklyChallenges,
+  syncWeeklyChallenges,
+  initializeChallenges
+};
+
+export type { ChallengeKey, WeeklyChallengeData, WeeklyChallengeStats };

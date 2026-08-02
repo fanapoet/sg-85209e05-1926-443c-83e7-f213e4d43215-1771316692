@@ -22,6 +22,7 @@ import {
 import { 
   getWeeklyChallenges, 
   claimWeeklyChallenge,
+  initializeChallenges,
   type ChallengeKey 
 } from "@/services/weeklyChallengeService";
 import { getCurrentTelegramUser } from "@/services/authService";
@@ -181,7 +182,20 @@ export function RewardsNFTsScreen() {
     }
 
     const { year, weekNumber } = getYearAndWeek(currentWeeklyPeriodStart);
-    const result = await getWeeklyChallenges(telegramId, year, weekNumber);
+    let result = await getWeeklyChallenges(telegramId, year, weekNumber);
+
+    // If no rows exist for this week, initialize them with current stats as baseline
+    if (result.success && (!result.data || result.data.length === 0)) {
+      const initResult = await initializeChallenges(telegramId, year, weekNumber, {
+        totalUpgrades: totalUpgrades || 0,
+        referralCount: referralCount || 0,
+        totalConversions: totalConversions || 0
+      });
+      
+      if (initResult.success && initResult.data) {
+        result = { success: true, data: initResult.data };
+      }
+    }
 
     if (!result.success || !result.data) {
       setWeeklyChallenges([]);
