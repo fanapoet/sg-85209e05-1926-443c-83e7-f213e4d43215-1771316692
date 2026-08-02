@@ -180,7 +180,7 @@ export async function updateChallengeProgress(
 
 /**
  * Claim weekly challenge reward (by telegram_id)
- * Uses upsert to create row if it doesn't exist
+ * Uses explicit update by ID to avoid duplicate-row ambiguity
  */
 export async function claimWeeklyChallenge(
   telegramId: number,
@@ -201,17 +201,23 @@ export async function claimWeeklyChallenge(
       return { success: false, error: "Profile not found" };
     }
 
-    // Get existing challenge to preserve baseline/progress
-    const { data: existing } = await supabase
+    // Get the most recent existing row for this challenge (ordered by updated_at)
+    const { data: existingRows, error: fetchError } = await supabase
       .from("user_weekly_challenges")
-      .select("baseline_value, current_progress, target_value, completed, claimed")
+      .select("id, baseline_value, current_progress, target_value, completed, claimed, week_start_date")
       .eq("telegram_id", telegramId)
       .eq("challenge_key", challengeKey)
       .eq("year", year)
       .eq("week_number", weekNumber)
       .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
+
+    if (fetchError) {
+      console.error("❌ [WeeklyChallenge] Fetch existing error:", fetchError);
+      return { success: false, error: fetchError.message };
+    }
+
+    const existing = existingRows?.[0];
 
     // Already claimed - don't allow double claim
     if (existing?.claimed) {
@@ -219,33 +225,48 @@ export async function claimWeeklyChallenge(
       return { success: false, error: "Already claimed" };
     }
 
-    const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
+    const weekStartDate = existing?.week_start_date || new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
     const targetValue = existing?.target_value ?? (challengeKey === "builder" ? 50 : challengeKey === "recruiter" ? 5 : 10);
 
-    const record = {
-      user_id: profile.id,
-      telegram_id: telegramId,
-      challenge_key: challengeKey,
-      baseline_value: existing?.baseline_value ?? 0,
-      current_progress: targetValue,
-      target_value: targetValue,
-      completed: true,
-      claimed: true,
-      week_start_date: weekStartDate,
-      year,
-      week_number: weekNumber,
-      updated_at: new Date().toISOString()
-    };
+    if (existing) {
+      // Explicit update by ID — no upsert ambiguity
+      const { error } = await supabase
+        .from("user_weekly_challenges")
+        .update({
+          current_progress: targetValue,
+          completed: true,
+          claimed: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", existing.id);
 
-    const { error } = await supabase
-      .from("user_weekly_challenges")
-      .upsert(record, {
-        onConflict: "user_id,challenge_key,week_start_date"
-      });
+      if (error) {
+        console.error("❌ [WeeklyChallenge] Claim update error:", error);
+        return { success: false, error: error.message };
+      }
+    } else {
+      // No row exists — insert claimed row
+      const { error } = await supabase
+        .from("user_weekly_challenges")
+        .insert({
+          user_id: profile.id,
+          telegram_id: telegramId,
+          challenge_key: challengeKey,
+          baseline_value: 0,
+          current_progress: targetValue,
+          target_value: targetValue,
+          completed: true,
+          claimed: true,
+          week_start_date: weekStartDate,
+          year,
+          week_number: weekNumber,
+          updated_at: new Date().toISOString()
+        });
 
-    if (error) {
-      console.error("❌ [WeeklyChallenge] Claim error:", error);
-      return { success: false, error: error.message };
+      if (error) {
+        console.error("❌ [WeeklyChallenge] Claim insert error:", error);
+        return { success: false, error: error.message };
+      }
     }
 
     console.log(`✅ [WeeklyChallenge] Claimed ${challengeKey}`);
