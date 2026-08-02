@@ -266,6 +266,7 @@ export function ConvertScreen() {
         const totalCost = amount + preview.burned;
         if (subtractBB(totalCost)) {
           addBZ(preview.output);
+          incrementConversions(1);
           
           saveTransaction({
             id: txId,

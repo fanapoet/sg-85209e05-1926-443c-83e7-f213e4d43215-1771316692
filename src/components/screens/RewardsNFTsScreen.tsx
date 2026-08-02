@@ -212,18 +212,22 @@ export function RewardsNFTsScreen() {
       const config = CHALLENGE_CONFIG[key];
       const db = dbMap.get(key);
 
+      // CRITICAL: If we already claimed this session, force claimed=true
+      const forceClaimed = claimedKeysRef.current.has(key);
+      const isClaimed = forceClaimed || (db?.claimed ?? false);
+
       const baseline = db?.baselineValue ?? 0;
       const currentValue = key === "builder" ? (totalUpgrades || 0)
                          : key === "recruiter" ? (referralCount || 0)
                          : (totalConversions || 0);
 
-      const progress = db?.claimed ? (db.targetValue || config.target)
+      const progress = isClaimed ? (db?.targetValue || config.target)
                        : Math.min(Math.max(0, currentValue - baseline), config.target);
 
       return {
         ...config,
         progress,
-        claimed: db?.claimed ?? false
+        claimed: isClaimed
       };
     });
 

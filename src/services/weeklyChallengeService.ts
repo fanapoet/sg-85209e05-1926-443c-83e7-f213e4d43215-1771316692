@@ -76,15 +76,29 @@ export async function getWeeklyChallenges(
     }
 
     // Deduplicate by challenge_key, keeping the most recently updated row
-    const seen = new Set<string>();
-    const deduped = data.filter((row: any) => {
-      if (seen.has(row.challenge_key)) {
-        console.warn("⚠️ [WeeklyChallenge] Duplicate row found for", row.challenge_key, "- using most recent");
-        return false;
+    // If timestamps are equal or one row is claimed and the other isn't, prefer claimed
+    const seen = new Map<string, any>();
+    data.forEach((row: any) => {
+      const existing = seen.get(row.challenge_key);
+      if (!existing) {
+        seen.set(row.challenge_key, row);
+        return;
       }
-      seen.add(row.challenge_key);
-      return true;
+      // Prefer claimed row if the other is unclaimed
+      if (row.claimed && !existing.claimed) {
+        seen.set(row.challenge_key, row);
+        return;
+      }
+      if (existing.claimed && !row.claimed) {
+        return;
+      }
+      // Otherwise prefer most recently updated
+      if (new Date(row.updated_at || 0) >= new Date(existing.updated_at || 0)) {
+        seen.set(row.challenge_key, row);
+      }
     });
+
+    const deduped = Array.from(seen.values());
 
     const challenges: WeeklyChallengeData[] = deduped.map(row => ({
       challengeKey: row.challenge_key as ChallengeKey,
@@ -549,7 +563,12 @@ export async function syncWeeklyChallenges(
     const getExisting = (key: ChallengeKey) => existingMap.get(key);
 
     for (const key of ["builder", "recruiter", "converter"] as ChallengeKey[]) {
-      const existing = getExisting(key);
+      // Use deduped map; if no deduped row, check raw rows too
+      let existing = getExisting(key);
+      if (!existing && existingRows && existingRows.length > 0) {
+        existing = existingRows.find((row: any) => row.challenge_key === key);
+      }
+      
       const baseline = existing?.baseline_value ?? (key === "builder" ? currentStats.totalUpgrades : key === "recruiter" ? currentStats.referralCount : currentStats.totalConversions);
       const currentValue = key === "builder" ? currentStats.totalUpgrades : key === "recruiter" ? currentStats.referralCount : currentStats.totalConversions;
       const progress = Math.max(0, currentValue - baseline);
