@@ -111,10 +111,7 @@ const CHALLENGE_CONFIG: Record<ChallengeKey, Omit<WeeklyChallenge, "progress" | 
 function getYearAndWeek(periodStart: string): { year: number; weekNumber: number } {
   const start = new Date(periodStart);
   const year = start.getFullYear();
-  const now = Date.now();
-  const startTime = start.getTime();
-  const weekNumber = Math.floor((now - startTime) / (7 * 24 * 60 * 60 * 1000)) + 1;
-  return { year, weekNumber };
+  return { year, weekNumber: 1 };
 }
 
 export function RewardsNFTsScreen() {
