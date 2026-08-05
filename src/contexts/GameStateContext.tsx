@@ -577,20 +577,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           console.warn("⚠️ [MANUAL SYNC] Skipping task sync - missing auth:", { telegramId, userId });
         }
         
-        // Sync Weekly Challenges
-        if (telegramId && currentWeeklyPeriodStart) {
-          console.log("🏆 [MANUAL SYNC] Syncing weekly challenges...");
-          const year = new Date(currentWeeklyPeriodStart).getFullYear();
-          const weekNumber = 1;
-          const { syncWeeklyChallenges } = await import("@/services/weeklyChallengeService");
-          await syncWeeklyChallenges(
-            telegramId,
-            year,
-            weekNumber,
-            { totalUpgrades, referralCount, totalConversions }
-          );
-          console.log("✅ [MANUAL SYNC] Weekly challenges synced");
-        }
+        // Sync Weekly Challenges removed — ISO calendar week now handles resets automatically
         
         toast({ 
           title: "✅ Sync Successful", 
@@ -947,57 +934,19 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   };
 
   const resetWeeklyPeriod = async () => {
-    if (!telegramId || !userId) return;
+    if (!telegramId) return;
     const now = new Date().toISOString();
     
     console.log("🔄 [Weekly Reset] Resetting weekly rewards period");
     console.log("🔄 [Weekly Reset] New period start:", now);
     
-    // Get FRESH values from database before setting baselines
-    const serverData = await loadPlayerState();
-    const currentTotalUpgrades = serverData ? Number((serverData as any).total_upgrades || 0) : totalUpgrades;
-    const currentTotalConversions = serverData ? Number((serverData as any).total_conversions || 0) : totalConversions;
-    const currentReferralCount = serverData ? Number((serverData as any).referral_count || 0) : referralCount;
-    
-    console.log("🔄 [Weekly Reset] Setting baselines to current totals:", {
-      upgrades: currentTotalUpgrades,
-      conversions: currentTotalConversions,
-      referrals: currentReferralCount
-    });
-    
     try {
-      // 1. Sync to DB first
+      // Update DB period start for daily streak tracking
       await startNewWeeklyPeriod(telegramId, now);
       console.log("✅ [Weekly Reset] Database updated with new period start:", now);
       
-      // 2. Reset weekly challenges with current stats as new baselines
-      const { resetWeeklyChallenges } = await import("@/services/weeklyChallengeService");
-      const year = new Date(now).getFullYear();
-      const weekNumber = 1;
-      await resetWeeklyChallenges(
-        telegramId,
-        year,
-        weekNumber,
-        { 
-          totalUpgrades: currentTotalUpgrades, 
-          referralCount: currentReferralCount, 
-          totalConversions: currentTotalConversions 
-        }
-      );
-      console.log("✅ [Weekly Reset] Weekly challenges reset in database");
-      
-      // 3. Update local state ONLY after DB succeeds
+      // Update local state
       setCurrentWeeklyPeriodStart(now);
-      
-      // 4. Update localStorage baselines with FRESH database values
-      const weeklyBaselines = {
-        upgrades: currentTotalUpgrades,
-        referrals: currentReferralCount,
-        conversions: currentTotalConversions,
-        timestamp: Date.now()
-      };
-      localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
-      console.log("✅ [Weekly Reset] localStorage baselines updated:", weeklyBaselines);
     } catch (error) {
       console.error("❌ [Weekly Reset] Failed to update database:", error);
     }

@@ -108,10 +108,13 @@ const CHALLENGE_CONFIG: Record<ChallengeKey, Omit<WeeklyChallenge, "progress" | 
   }
 };
 
-function getYearAndWeek(periodStart: string): { year: number; weekNumber: number } {
-  const start = new Date(periodStart);
-  const year = start.getFullYear();
-  return { year, weekNumber: 1 };
+function getISOWeek(date: Date): { year: number; weekNumber: number } {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  const weekNumber = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return { year: d.getFullYear(), weekNumber };
 }
 
 export function RewardsNFTsScreen() {
@@ -173,27 +176,27 @@ export function RewardsNFTsScreen() {
     }
   }, []);
 
-  // Load weekly challenges from Supabase only
+  // Load weekly challenges from Supabase using ISO calendar week
   const loadChallenges = useCallback(async () => {
-    if (!telegramId || !currentWeeklyPeriodStart) {
+    if (!telegramId) {
       setWeeklyChallenges([]);
       setLoading(false);
       return;
     }
 
-    const { year, weekNumber } = getYearAndWeek(currentWeeklyPeriodStart);
-    const weekId = `${year}-${weekNumber}`;
+    const { year, weekNumber } = getISOWeek(new Date());
+    const weekId = `${year}-W${weekNumber}`;
 
-    // Clear session claim tracking when the week changes
+    // Clear session claim tracking when the ISO week changes
     if (lastWeekRef.current && lastWeekRef.current !== weekId) {
       claimedKeysRef.current.clear();
-      console.log("[Rewards] Week changed from", lastWeekRef.current, "to", weekId, "- clearing claimed session cache");
+      console.log("[Rewards] ISO week changed from", lastWeekRef.current, "to", weekId, "- clearing claimed session cache");
     }
     lastWeekRef.current = weekId;
 
     let result = await getWeeklyChallenges(telegramId, year, weekNumber);
 
-    // If no rows exist for this week, initialize them with current stats as baseline
+    // If no rows exist for this ISO week, initialize them with current stats as baseline
     if (result.success && (!result.data || result.data.length === 0)) {
       const initResult = await initializeChallenges(telegramId, year, weekNumber, {
         totalUpgrades: totalUpgrades || 0,
@@ -239,7 +242,7 @@ export function RewardsNFTsScreen() {
 
     setWeeklyChallenges(merged);
     setLoading(false);
-  }, [telegramId, currentWeeklyPeriodStart, totalUpgrades, referralCount, totalConversions]);
+  }, [telegramId, totalUpgrades, referralCount, totalConversions]);
 
   useEffect(() => {
     // Always clear session claim tracking on mount to prevent stale ref across sessions/weeks
@@ -248,20 +251,7 @@ export function RewardsNFTsScreen() {
     loadChallenges();
   }, [loadChallenges]);
 
-  // Check for weekly reset
-  useEffect(() => {
-    if (loading) return;
-    if (!currentWeeklyPeriodStart) {
-      resetWeeklyPeriod();
-      return;
-    }
-    const now = new Date();
-    const periodStart = new Date(currentWeeklyPeriodStart);
-    const diffDays = Math.floor((now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays >= 7) {
-      resetWeeklyPeriod();
-    }
-  }, [currentWeeklyPeriodStart, loading, resetWeeklyPeriod]);
+  // Removed rolling 7-day reset effect — ISO calendar week now drives automatic resets
 
   const isStage2Complete = (): boolean => {
     try {
@@ -401,7 +391,7 @@ export function RewardsNFTsScreen() {
     setClaimError(null);
     
     try {
-      const { year, weekNumber } = getYearAndWeek(currentWeeklyPeriodStart);
+      const { year, weekNumber } = getISOWeek(new Date());
       console.log("🎁 [Rewards] Claiming challenge:", challengeKey, { year, weekNumber, telegramId });
       
       const result = await claimWeeklyChallenge(telegramId, challengeKey as ChallengeKey, year, weekNumber);

@@ -327,11 +327,13 @@ export async function resetWeeklyChallenges(
 
     const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
 
-    // Delete ALL existing rows for this user to eliminate stale duplicates from old code
+    // Delete existing rows for this specific ISO week only
     const { error: deleteError } = await supabase
       .from("user_weekly_challenges")
       .delete()
-      .eq("telegram_id", telegramId);
+      .eq("telegram_id", telegramId)
+      .eq("year", year)
+      .eq("week_number", weekNumber);
 
     if (deleteError) {
       console.error("❌ [WeeklyChallenge] Reset delete error:", deleteError);
@@ -437,7 +439,7 @@ export async function initializeChallenges(
 
     const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
 
-    // Delete any stray rows for this user/challenge/week (defensive)
+    // Delete any stray rows for this specific ISO week (defensive)
     await supabase
       .from("user_weekly_challenges")
       .delete()
