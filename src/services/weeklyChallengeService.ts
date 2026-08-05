@@ -75,7 +75,7 @@ export async function getWeeklyChallenges(
       return { success: true, data: [] };
     }
 
-    // Deduplicate by challenge_key, keeping the most recently updated row
+    // Deduplicate by challenge_key, keeping the row from the requested year+week if possible
     const seen = new Map<string, any>();
     data.forEach((row: any) => {
       const existing = seen.get(row.challenge_key);
@@ -83,7 +83,17 @@ export async function getWeeklyChallenges(
         seen.set(row.challenge_key, row);
         return;
       }
-      // Prefer most recently updated row for the current week
+      // Prefer row that matches the queried year+week
+      const rowMatchesQuery = (year === undefined || row.year === year) && (weekNumber === undefined || row.week_number === weekNumber);
+      const existingMatchesQuery = (year === undefined || existing.year === year) && (weekNumber === undefined || existing.week_number === weekNumber);
+      if (rowMatchesQuery && !existingMatchesQuery) {
+        seen.set(row.challenge_key, row);
+        return;
+      }
+      if (existingMatchesQuery && !rowMatchesQuery) {
+        return;
+      }
+      // If both match or both don't, prefer most recently updated
       if (new Date(row.updated_at || 0) >= new Date(existing.updated_at || 0)) {
         seen.set(row.challenge_key, row);
       }

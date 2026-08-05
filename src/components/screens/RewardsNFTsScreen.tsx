@@ -108,6 +108,17 @@ const CHALLENGE_CONFIG: Record<ChallengeKey, Omit<WeeklyChallenge, "progress" | 
   }
 };
 
+function getISOWeekStart(year: number, weekNumber: number): Date {
+  const d = new Date(year, 0, 4);
+  d.setDate(d.getDate() - ((d.getDay() || 7) - 1));
+  d.setDate(d.getDate() + (weekNumber - 1) * 7);
+  return d;
+}
+
+function formatDateShort(date: Date): string {
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function getISOWeek(date: Date): { year: number; weekNumber: number } {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -122,7 +133,6 @@ export function RewardsNFTsScreen() {
     dailyStreak, 
     currentRewardWeek, 
     lastDailyClaimDate,
-    currentWeeklyPeriodStart,
     totalUpgrades, 
     referralCount, 
     totalConversions, 
@@ -370,7 +380,7 @@ export function RewardsNFTsScreen() {
   };
 
   const handleClaimChallenge = async (challengeKey: string) => {
-    if (!telegramId || !currentWeeklyPeriodStart || claimingKey) return;
+    if (!telegramId || claimingKey) return;
     
     const challenge = weeklyChallenges.find(c => c.key === challengeKey);
     if (!challenge || challenge.progress < challenge.target || challenge.claimed || claimedKeysRef.current.has(challengeKey)) {
@@ -481,6 +491,12 @@ export function RewardsNFTsScreen() {
     return ["NFT_SOCIAL", "NFT_TAPPER", "NFT_GOLDEN", "NFT_DIAMOND"].includes(nft.key);
   };
 
+  const { year: isoYear, weekNumber: isoWeekNumber } = getISOWeek(new Date());
+  const weekStart = getISOWeekStart(isoYear, isoWeekNumber);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  const weekRangeText = `${formatDateShort(weekStart)} - ${formatDateShort(weekEnd)}`;
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center min-h-[400px]">
@@ -567,9 +583,14 @@ export function RewardsNFTsScreen() {
 
       <Card className="p-4">
         <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Target className="h-5 w-5 text-primary" />
-            <h3 className="font-semibold">Weekly Challenges</h3>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Target className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Weekly Challenges</h3>
+            </div>
+            <Badge variant="outline" className="text-xs">
+              Week of {weekRangeText}
+            </Badge>
           </div>
 
           {claimError && (
