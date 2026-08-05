@@ -245,6 +245,9 @@ export function RewardsNFTsScreen() {
   }, [telegramId, currentWeeklyPeriodStart, totalUpgrades, referralCount, totalConversions]);
 
   useEffect(() => {
+    // Always clear session claim tracking on mount to prevent stale ref across sessions/weeks
+    claimedKeysRef.current.clear();
+    lastWeekRef.current = null;
     loadChallenges();
   }, [loadChallenges]);
 

@@ -76,7 +76,6 @@ export async function getWeeklyChallenges(
     }
 
     // Deduplicate by challenge_key, keeping the most recently updated row
-    // If timestamps are equal or one row is claimed and the other isn't, prefer claimed
     const seen = new Map<string, any>();
     data.forEach((row: any) => {
       const existing = seen.get(row.challenge_key);
@@ -84,15 +83,7 @@ export async function getWeeklyChallenges(
         seen.set(row.challenge_key, row);
         return;
       }
-      // Prefer claimed row if the other is unclaimed
-      if (row.claimed && !existing.claimed) {
-        seen.set(row.challenge_key, row);
-        return;
-      }
-      if (existing.claimed && !row.claimed) {
-        return;
-      }
-      // Otherwise prefer most recently updated
+      // Prefer most recently updated row for the current week
       if (new Date(row.updated_at || 0) >= new Date(existing.updated_at || 0)) {
         seen.set(row.challenge_key, row);
       }
@@ -336,6 +327,18 @@ export async function resetWeeklyChallenges(
 
     const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
 
+    // Delete existing rows for this user/challenge/week to prevent duplicates
+    const { error: deleteError } = await supabase
+      .from("user_weekly_challenges")
+      .delete()
+      .eq("telegram_id", telegramId)
+      .eq("year", year)
+      .eq("week_number", weekNumber);
+
+    if (deleteError) {
+      console.error("❌ [WeeklyChallenge] Reset delete error:", deleteError);
+    }
+
     const challenges = [
       {
         user_id: profile.id,
@@ -435,6 +438,14 @@ export async function initializeChallenges(
     }
 
     const weekStartDate = new Date(year, 0, 1 + (weekNumber - 1) * 7).toISOString().split("T")[0];
+
+    // Delete any stray rows for this user/challenge/week (defensive)
+    await supabase
+      .from("user_weekly_challenges")
+      .delete()
+      .eq("telegram_id", telegramId)
+      .eq("year", year)
+      .eq("week_number", weekNumber);
 
     const challenges = [
       {
@@ -590,7 +601,15 @@ export async function syncWeeklyChallenges(
           console.error(`❌ [WeeklyChallenge-Sync] Update ${key} error:`, error);
         }
       } else {
-        // Insert new unclaimed row
+        // Delete any stray rows first, then insert new unclaimed row
+        await supabase
+          .from("user_weekly_challenges")
+          .delete()
+          .eq("telegram_id", telegramId)
+          .eq("challenge_key", key)
+          .eq("year", year)
+          .eq("week_number", weekNumber);
+
         const { error } = await supabase
           .from("user_weekly_challenges")
           .insert({
