@@ -145,7 +145,7 @@ export function RewardsNFTsScreen() {
     addBB, 
     addXP,
     purchaseNFT,
-    resetWeeklyPeriod
+    currentWeeklyPeriodStart
   } = useGameState();
   
   const [weeklyChallenges, setWeeklyChallenges] = useState<WeeklyChallenge[]>([]);
