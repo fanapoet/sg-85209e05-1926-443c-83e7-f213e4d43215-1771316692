@@ -383,7 +383,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           let weekNumber = 1;
           if (currentWeeklyPeriodStart) {
             year = new Date(currentWeeklyPeriodStart).getFullYear();
-            weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+            weekNumber = 1;
           }
 
           const challengesResult = await getWeeklyChallenges(authResult.profile.telegram_id, year, weekNumber);
@@ -581,7 +581,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         if (telegramId && currentWeeklyPeriodStart) {
           console.log("🏆 [MANUAL SYNC] Syncing weekly challenges...");
           const year = new Date(currentWeeklyPeriodStart).getFullYear();
-          const weekNumber = Math.floor((Date.now() - new Date(currentWeeklyPeriodStart).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+          const weekNumber = 1;
           const { syncWeeklyChallenges } = await import("@/services/weeklyChallengeService");
           await syncWeeklyChallenges(
             telegramId,
@@ -976,7 +976,8 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       // 3. Reset weekly challenges with current stats as new baselines
       const { resetWeeklyChallenges } = await import("@/services/weeklyChallengeService");
       const year = new Date(now).getFullYear();
-      const weekNumber = Math.floor((Date.now() - new Date(now).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
+      // Match RewardsNFTsScreen which uses weekNumber = 1 for the current period
+      const weekNumber = 1;
       await resetWeeklyChallenges(
         telegramId,
         year,
