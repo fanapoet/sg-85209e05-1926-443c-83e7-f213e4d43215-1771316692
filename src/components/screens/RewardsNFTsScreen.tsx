@@ -214,8 +214,14 @@ export function RewardsNFTsScreen() {
         totalConversions: totalConversions || 0
       });
       
-      if (initResult.success && initResult.data) {
+      if (initResult.success && initResult.data && initResult.data.length > 0) {
         result = { success: true, data: initResult.data };
+      } else if (initResult.success) {
+        // initializeChallenges found existing rows and returned empty data — re-fetch from DB
+        const refetch = await getWeeklyChallenges(telegramId, year, weekNumber);
+        if (refetch.success && refetch.data && refetch.data.length > 0) {
+          result = refetch;
+        }
       }
     }
 

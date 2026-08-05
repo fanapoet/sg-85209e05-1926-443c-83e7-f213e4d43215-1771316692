@@ -375,18 +375,20 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
           console.log("✅ [REWARDS-SYNC] New user - initialized weekly period:", now);
         }
 
-        // Load Weekly Challenges
+        // Load Weekly Challenges using REAL ISO week (not hardcoded 1)
         if (authResult.profile.telegram_id) {
-          const { getWeeklyChallenges, resetWeeklyChallenges } = await import("@/services/weeklyChallengeService");
+          const { getWeeklyChallenges, resetWeeklyChallenges, initializeChallenges } = await import("@/services/weeklyChallengeService");
           
-          let year = new Date().getFullYear();
-          let weekNumber = 1;
-          if (currentWeeklyPeriodStart) {
-            year = new Date(currentWeeklyPeriodStart).getFullYear();
-            weekNumber = 1;
-          }
+          // Compute real ISO week
+          const now = new Date();
+          const d = new Date(now);
+          d.setHours(0, 0, 0, 0);
+          d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+          const yearStart = new Date(d.getFullYear(), 0, 1);
+          const isoWeekNumber = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+          const isoYear = d.getFullYear();
 
-          const challengesResult = await getWeeklyChallenges(authResult.profile.telegram_id, year, weekNumber);
+          const challengesResult = await getWeeklyChallenges(authResult.profile.telegram_id, isoYear, isoWeekNumber);
           
           if (challengesResult.success && challengesResult.data && challengesResult.data.length > 0) {
             console.log("✅ [WEEKLY-CHALLENGES] Loaded from DB:", challengesResult.data);
@@ -398,13 +400,13 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
               timestamp: Date.now()
             };
             localStorage.setItem("weeklyBaselines", JSON.stringify(weeklyBaselines));
-          } else if (currentWeeklyPeriodStart) {
-            // Initialize weekly challenges for new users or new week
-            console.log("🔧 [WEEKLY-CHALLENGES] Initializing new challenges");
-            await resetWeeklyChallenges(
+          } else {
+            // Initialize weekly challenges for new users or new ISO week
+            console.log("🔧 [WEEKLY-CHALLENGES] Initializing new challenges for ISO week", isoWeekNumber);
+            await initializeChallenges(
               authResult.profile.telegram_id,
-              year,
-              weekNumber,
+              isoYear,
+              isoWeekNumber,
               { 
                 totalUpgrades: (serverData as any)?.total_upgrades || 0, 
                 referralCount: 0, 
