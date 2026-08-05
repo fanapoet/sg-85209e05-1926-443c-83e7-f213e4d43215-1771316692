@@ -976,7 +976,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       // 3. Reset weekly challenges with current stats as new baselines
       const { resetWeeklyChallenges } = await import("@/services/weeklyChallengeService");
       const year = new Date(now).getFullYear();
-      const weekNumber = 1; // New week starts at 1
+      const weekNumber = Math.floor((Date.now() - new Date(now).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1;
       await resetWeeklyChallenges(
         telegramId,
         year,
