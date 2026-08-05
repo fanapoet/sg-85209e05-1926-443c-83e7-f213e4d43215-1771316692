@@ -144,6 +144,7 @@ export function RewardsNFTsScreen() {
   const [claimingKey, setClaimingKey] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
   const claimedKeysRef = useRef<Set<string>>(new Set());
+  const lastWeekRef = useRef<string | null>(null);
 
   const tgUser = getCurrentTelegramUser();
   const telegramId = tgUser?.id;
@@ -184,6 +185,15 @@ export function RewardsNFTsScreen() {
     }
 
     const { year, weekNumber } = getYearAndWeek(currentWeeklyPeriodStart);
+    const weekId = `${year}-${weekNumber}`;
+
+    // Clear session claim tracking when the week changes
+    if (lastWeekRef.current && lastWeekRef.current !== weekId) {
+      claimedKeysRef.current.clear();
+      console.log("[Rewards] Week changed from", lastWeekRef.current, "to", weekId, "- clearing claimed session cache");
+    }
+    lastWeekRef.current = weekId;
+
     let result = await getWeeklyChallenges(telegramId, year, weekNumber);
 
     // If no rows exist for this week, initialize them with current stats as baseline
@@ -212,9 +222,8 @@ export function RewardsNFTsScreen() {
       const config = CHALLENGE_CONFIG[key];
       const db = dbMap.get(key);
 
-      // CRITICAL: If we already claimed this session, force claimed=true
-      const forceClaimed = claimedKeysRef.current.has(key);
-      const isClaimed = forceClaimed || (db?.claimed ?? false);
+      // Trust DB claimed state; session ref only used to prevent double-click re-claims during the SAME week
+      const isClaimed = db?.claimed ?? false;
 
       const baseline = db?.baselineValue ?? 0;
       const currentValue = key === "builder" ? (totalUpgrades || 0)
@@ -229,11 +238,6 @@ export function RewardsNFTsScreen() {
         progress,
         claimed: isClaimed
       };
-    });
-
-    // Keep track of claimed keys to prevent race-condition re-claims
-    merged.forEach(c => {
-      if (c.claimed) claimedKeysRef.current.add(c.key);
     });
 
     setWeeklyChallenges(merged);
@@ -390,6 +394,9 @@ export function RewardsNFTsScreen() {
       return;
     }
     
+    // Mark as claimed immediately in UI to prevent double-clicks
+    claimedKeysRef.current.add(challengeKey);
+    setWeeklyChallenges(prev => prev.map(c => c.key === challengeKey ? { ...c, claimed: true, progress: c.target } : c));
     setClaimingKey(challengeKey);
     setClaimError(null);
     
@@ -407,23 +414,20 @@ export function RewardsNFTsScreen() {
         if (challenge.reward.type === "BB") addBB(challenge.reward.amount);
         if (challenge.reward.type === "XP") addXP(challenge.reward.amount);
         
-        // Mark as claimed in UI and ref
-        claimedKeysRef.current.add(challengeKey);
-        setWeeklyChallenges(prev => prev.map(c => c.key === challengeKey ? { ...c, claimed: true, progress: c.target } : c));
-        
         console.log("✅ [Rewards] Claimed challenge and updated balance:", challengeKey, challenge.reward);
       } else if (result.error === "Already claimed") {
-        // Row was already claimed — just sync UI
-        claimedKeysRef.current.add(challengeKey);
-        setWeeklyChallenges(prev => prev.map(c => c.key === challengeKey ? { ...c, claimed: true, progress: c.target } : c));
         console.log("ℹ️ [Rewards] Challenge was already claimed:", challengeKey);
       } else {
-        // Real failure — show error
+        // Real failure — revert UI and show error
+        claimedKeysRef.current.delete(challengeKey);
+        setWeeklyChallenges(prev => prev.map(c => c.key === challengeKey ? { ...c, claimed: false } : c));
         setClaimError(result.error || "Claim failed. Please try again.");
         console.error("❌ [Rewards] Claim failed:", result.error);
       }
     } catch (error) {
       console.error("❌ [Rewards] Error claiming challenge:", error);
+      claimedKeysRef.current.delete(challengeKey);
+      setWeeklyChallenges(prev => prev.map(c => c.key === challengeKey ? { ...c, claimed: false } : c));
       setClaimError(error instanceof Error ? error.message : "Claim failed");
     } finally {
       setClaimingKey(null);
