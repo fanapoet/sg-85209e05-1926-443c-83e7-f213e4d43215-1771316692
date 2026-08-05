@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useGameState } from "@/contexts/GameStateContext";
 import { Button } from "@/components/ui/button";
 import { X } from "lucide-react";
+import { forceResetWeeklyChallenges } from "@/services/weeklyChallengeService";
 
 interface DebugLog {
   timestamp: string;
@@ -257,15 +258,20 @@ export function TelegramDebugPanel({ onClose }: { onClose: () => void }) {
 
       <div className="space-y-2">
         <Button
-          onClick={() => {
-            localStorage.removeItem("weeklyChallenges");
-            localStorage.removeItem("weeklyBaselines");
+          onClick={async () => {
+            if (!gameState.telegramId) return;
+            await forceResetWeeklyChallenges(gameState.telegramId, {
+              totalUpgrades: gameState.totalUpgrades || 0,
+              referralCount: gameState.referralCount || 0,
+              totalConversions: gameState.totalConversions || 0
+            });
+            await gameState.resetWeeklyPeriod();
             window.location.reload();
           }}
           className="w-full"
           variant="destructive"
         >
-          🧹 Clear Weekly Challenges Data
+          🧹 Reset Weekly Challenges for Current Week
         </Button>
       </div>
 

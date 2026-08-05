@@ -965,18 +965,14 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       referrals: currentReferralCount
     });
     
-    // 1. Update local state immediately
-    setCurrentWeeklyPeriodStart(now);
-    
-    // 2. Sync to DB
     try {
+      // 1. Sync to DB first
       await startNewWeeklyPeriod(telegramId, now);
       console.log("✅ [Weekly Reset] Database updated with new period start:", now);
       
-      // 3. Reset weekly challenges with current stats as new baselines
+      // 2. Reset weekly challenges with current stats as new baselines
       const { resetWeeklyChallenges } = await import("@/services/weeklyChallengeService");
       const year = new Date(now).getFullYear();
-      // Match RewardsNFTsScreen which uses weekNumber = 1 for the current period
       const weekNumber = 1;
       await resetWeeklyChallenges(
         telegramId,
@@ -989,6 +985,9 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
         }
       );
       console.log("✅ [Weekly Reset] Weekly challenges reset in database");
+      
+      // 3. Update local state ONLY after DB succeeds
+      setCurrentWeeklyPeriodStart(now);
       
       // 4. Update localStorage baselines with FRESH database values
       const weeklyBaselines = {
