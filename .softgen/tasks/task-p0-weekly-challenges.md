@@ -1,6 +1,6 @@
 ---
 title: P0 — Weekly Challenges Source-of-Truth Refactor
-status: in_progress
+status: done
 priority: urgent
 type: bug
 tags: [weekly-challenges, supabase, rewards, tma]
@@ -13,13 +13,13 @@ position: 1
 Refactor RewardsNFTsScreen and weeklyChallengeService so Supabase is the single source of truth. Remove localStorage races that cause duplicates, repeated claimability, and incorrect 10/10 progress.
 
 ## Checklist
-- [ ] Load weekly challenges from Supabase on mount
-- [ ] Compute progress from DB baseline minus current totals
-- [ ] Claim button disabled when DB says claimed
-- [ ] After claim, re-fetch challenge row from DB
-- [ ] Remove localStorage mutation for weekly challenges state
-- [ ] Fix baseline reset logic in GameStateContext
-- [ ] Validate check_for_errors
+- [x] Load weekly challenges from Supabase on mount
+- [x] Compute progress from DB baseline minus current totals
+- [x] Claim button disabled when DB says claimed
+- [x] After claim, re-fetch challenge row from DB
+- [x] Remove localStorage mutation for weekly challenges state
+- [x] Fix baseline reset logic in GameStateContext
+- [x] Validate check_for_errors
 
 ## Acceptance
 - Only 3 unique challenges display
